@@ -15,9 +15,9 @@ return [
         // 收款平台
         'platform'  =>  'sqbpay',
         // 账号
-        'account'   =>  '188*****423',
+        'account'   =>  '18872410423',
         // 密码
-        'password'  =>  '76********QB',
+        'password'  =>  '7698177hcnSQB',
         // 订单查询参数配置
         'query'     =>  array (
   'date_end' => NULL,
@@ -26,7 +26,7 @@ return [
   'page_size' => 10,
   'upayQueryType' => 0,
   'status' => '2000',
-  'store_sn' => '15**********27',
+  'store_sn' => '1580000008493827',
   'type' => '30',
 ),
     ]

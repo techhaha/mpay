@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>编辑账号</title>
+	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+	<style>
+		.inputTxt {
+			margin-left: 10px;
+		}
+	</style>
+</head>
+
+<body>
+	<form id="edit-account" class="layui-form layui-form-pane" action="" lay-filter="edit-account">
+		<div class="mainBox">
+			<div class="main-container">
+				<div class="layui-form-item" pane>
+					<label class="layui-form-label">账号ID</label>
+					<div class="layui-input-block">
+						<div class="layui-form-mid inputTxt">
+							<?php echo $id ?>
+						</div>
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">收款平台</label>
+					<div class="layui-input-block">
+						<select name="platform">
+							<option value=""></option>
+							<?php foreach ($options as $key => $value) { ?>
+							<option value="<?php echo $key ?>">
+								<?php echo $value ?>
+							</option>
+							<?php } ?>
+						</select>
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">收款账号</label>
+					<div class="layui-input-block">
+						<input type="text" name="account" autocomplete="off" class="layui-input">
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">登陆密码</label>
+					<div class="layui-input-block">
+						<input type="text" name="password" autocomplete="off" class="layui-input">
+					</div>
+				</div>
+				<div class="layui-form-item" pane>
+					<label class="layui-form-label">启用</label>
+					<div class="layui-input-block">
+						<input type="checkbox" name="state" class="layui-input" lay-skin="switch" lay-text="启用|禁用">
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">监听模式</label>
+					<div class="layui-input-block">
+						<select name="pattern">
+							<option value="请选择"></option>
+							<?php include_once '../view/tpl/pattern.html'; ?>
+						</select>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="bottom">
+			<div class="button-container">
+				<button type="submit" class="pear-btn pear-btn-primary pear-btn-sm" lay-submit=""
+					lay-filter="save-account">
+					<i class="layui-icon layui-icon-ok"></i>
+					提交
+				</button>
+				<button type="reset" class="pear-btn pear-btn-sm">
+					<i class="layui-icon layui-icon-refresh"></i>
+					重置
+				</button>
+			</div>
+		</div>
+	</form>
+	<script src="/component/layui/layui.js"></script>
+	<script src="/component/pear/pear.js"></script>
+	<script>
+		layui.use(['form'], function () {
+			let form = layui.form;
+
+			form.val('edit-account', {
+				"platform": "<?php echo $platform ?>",
+				"account": "<?php echo $account ?>",
+				"password": "<?php echo $password ?>",
+				"state": '<?php echo $state ?>' == 1 ? true : false,
+				"pattern": "<?php echo $pattern ?>",
+			});
+
+			form.on('submit(save-account)', function (obj) {
+				let field = obj.field;
+				field.state = 'state' in field ? 1 : 0;
+				field.id = '<?php echo $id ?>';
+				(async () => {
+					const url = '/api/PayManage/editAccount';
+					const info = field;
+					const res = await fetch(url, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) });
+					if (res.status !== 200) {
+						layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+						return false;
+					}
+					const rec_info = await res.json();
+					if (rec_info.code === 0) {
+						layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => {
+							parent.layer.close(parent.layer.getFrameIndex(window.name)); //关闭当前页
+							parent.layui.table.reload("account-table");
+						});
+					} else {
+						layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+					}
+				})()
+				return false;
+			});
+		})
+	</script>
+</body>
+
+</html>

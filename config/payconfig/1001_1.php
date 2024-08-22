@@ -19,15 +19,15 @@ return [
         // 密码
         'password'  =>  '76********QB',
         // 订单查询参数配置
-        'query'     =>  array (
-  'date_end' => NULL,
-  'date_start' => NULL,
-  'page' => 1,
-  'page_size' => 10,
-  'upayQueryType' => 0,
-  'status' => '2000',
-  'store_sn' => '15**********27',
-  'type' => '30',
-),
+        'query'     =>  array(
+            'date_end' => NULL,
+            'date_start' => NULL,
+            'page' => 1,
+            'page_size' => 10,
+            'upayQueryType' => 0,
+            'status' => '2000',
+            'store_sn' => '',
+            'type' => '30',
+        ),
     ]
 ];

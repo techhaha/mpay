@@ -29,6 +29,14 @@ return [
     'href' => '/PayManage/index',
   ],
   [
+    'id' => 'pluginManage',
+    'title' => '插件管理',
+    'icon' => 'layui-icon layui-icon-console',
+    'type' => 1,
+    'openType' => '_iframe',
+    'href' => '/Plugin/index',
+  ],
+  [
     'id' => 'userCenter',
     'title' => '用户中心',
     'icon' => 'layui-icon layui-icon-console',

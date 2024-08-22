@@ -60,6 +60,8 @@ class PayManageController extends BaseController
     public function addAccount()
     {
         $info = $this->request->post();
+        $pid = $this->request->session('pid');
+        $info['pid'] = $pid;
         $res = PayAccount::create($info);
         if ($res) {
             return \json(\backMsg(0, '添加成功'));

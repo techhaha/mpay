@@ -19,6 +19,7 @@ class UserController extends BaseController
         $userinfo = self::checkUser($login_info);
         if ($userinfo['code'] === 0) {
             Session::set('userid', $userinfo['data']->id);
+            Session::set('pid', $userinfo['data']->pid);
             Session::set('nickname', $userinfo['data']->nickname);
             Session::set('userrole', $userinfo['data']->role);
             Session::set('islogin', true);

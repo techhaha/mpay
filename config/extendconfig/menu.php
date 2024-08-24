@@ -52,21 +52,21 @@ return [
     'openType' => '_iframe',
     'href' => '/System/index',
   ],
-  [
-    'id' => 'pay',
-    'title' => '支付管理',
-    'icon' => 'layui-icon layui-icon-console',
-    'type' => 0,
-    'href' => '',
-    'children' =>    [
-      [
-        'id' => 'pay_qrcode_list',
-        'title' => '收款账户',
-        'icon' => 'layui-icon layui-icon-console',
-        'type' => 1,
-        'openType' => '_iframe',
-        'href' => '/PayQrcode/index',
-      ],
-    ],
-  ],
+  // [
+  //   'id' => 'pay',
+  //   'title' => '支付管理',
+  //   'icon' => 'layui-icon layui-icon-console',
+  //   'type' => 0,
+  //   'href' => '',
+  //   'children' =>    [
+  //     [
+  //       'id' => 'pay_qrcode_list',
+  //       'title' => '收款账户',
+  //       'icon' => 'layui-icon layui-icon-console',
+  //       'type' => 1,
+  //       'openType' => '_iframe',
+  //       'href' => '/PayQrcode/index',
+  //     ],
+  //   ],
+  // ],
 ];

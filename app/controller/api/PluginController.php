@@ -1,85 +1,26 @@
 <?php
-declare (strict_types = 1);
+
+declare(strict_types=1);
 
 namespace app\controller\api;
 
-use think\Request;
+use app\BaseController;
+use app\model\Platform;
 
-class PluginController
+class PluginController extends BaseController
 {
-    /**
-     * 显示资源列表
-     *
-     * @return \think\Response
-     */
     public function index()
     {
         //
     }
-
-    /**
-     * 显示创建资源表单页.
-     *
-     * @return \think\Response
-     */
-    public function create()
+    public function getPluginList()
     {
-        //
-    }
-
-    /**
-     * 保存新建的资源
-     *
-     * @param  \think\Request  $request
-     * @return \think\Response
-     */
-    public function save(Request $request)
-    {
-        //
-    }
-
-    /**
-     * 显示指定的资源
-     *
-     * @param  int  $id
-     * @return \think\Response
-     */
-    public function read($id)
-    {
-        //
-    }
-
-    /**
-     * 显示编辑资源表单页.
-     *
-     * @param  int  $id
-     * @return \think\Response
-     */
-    public function edit($id)
-    {
-        //
-    }
-
-    /**
-     * 保存更新的资源
-     *
-     * @param  \think\Request  $request
-     * @param  int  $id
-     * @return \think\Response
-     */
-    public function update(Request $request, $id)
-    {
-        //
-    }
-
-    /**
-     * 删除指定资源
-     *
-     * @param  int  $id
-     * @return \think\Response
-     */
-    public function delete($id)
-    {
-        //
+        $query = $this->request->get();
+        $data = Platform::order('id', 'desc')->paginate(['list_rows' => $query['limit'], 'page' => $query['page']]);
+        if ($data) {
+            return json(['code' => 0, 'msg' => 'OK', 'count' => $data->total(), 'data' => $data->items()]);
+        } else {
+            return json(['code' => 1, 'msg' => '无数据记录', 'count' => 0, 'data' => []]);
+        }
     }
 }

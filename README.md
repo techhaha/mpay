@@ -29,9 +29,12 @@
 
 #### 安装教程1
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+![输入图片说明](public/admin/data/1.png)
+![输入图片说明](public/admin/data/2.png)
+![输入图片说明](public/admin/data/3.png)
+![输入图片说明](public/admin/data/4.png)
+![输入图片说明](public/admin/data/5.png)
+![输入图片说明](public/admin/data/6.png)
 
 #### 使用说明
 

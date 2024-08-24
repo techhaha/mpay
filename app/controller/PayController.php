@@ -215,27 +215,28 @@ class PayController
             return '参数错误';
         }
         $is_user = User::checkUser($pid, $sign);
+        $path = '../runtime/order.json';
         if ($is_user) {
             $orders = Order::scope('activeOrder')->field('id,pid,aid,cid')->select();
-            $old_info = file_get_contents('order.json');
+            $old_info = file_get_contents($path);
             $num = count($orders);
             if ($num > 0) {
                 $info = ['code' => 1, 'msg' => "有{$num}个新订单"];
                 $order_list = ['code' => 1, 'msg' => "有{$num}个新订单", 'orders' => $orders];
                 if ($old_info !== json_encode($order_list)) {
-                    file_put_contents('order.json', json_encode($order_list));
+                    file_put_contents($path, json_encode($order_list));
                 }
                 return json($info);
             } else {
                 $info = ['code' => 0, 'msg' => '没有新订单'];
                 if ($old_info !== json_encode($info, 320)) {
-                    file_put_contents('order.json', json_encode($info, 320));
+                    file_put_contents($path, json_encode($info, 320));
                 }
                 return json($info);
             }
         } else {
             $info = ['code' => 2, 'msg' => '签名错误'];
-            file_put_contents('order.json', json_encode($info, 320));
+            file_put_contents($path, json_encode($info, 320));
             return json($info);
         }
     }

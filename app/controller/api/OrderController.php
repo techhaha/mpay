@@ -10,6 +10,7 @@ use app\model\User;
 
 class OrderController extends BaseController
 {
+    // 查询订单
     public function getOrders()
     {
         $query = $this->request->get();

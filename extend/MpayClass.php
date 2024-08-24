@@ -4,23 +4,24 @@ class MpayClass
 {
     private $pid;
     private $key;
-    private $host = 'http://localhost:60';
+    private $host = env('WEB_HOST', 'http://localhost');
     private $check_neworder_url;
     private $submit_records_url;
     function __construct($config)
     {
         $this->pid = $config['pid'];
         $this->key = $config['key'];
-        $this->check_neworder_url = $this->host . '/order.json';
+        $this->check_neworder_url = $this->host . '/order.php';
         $this->submit_records_url = $this->host . '/payHeart';
     }
+    // 查询新订单
     public function orderHeart()
     {
         $url = $this->check_neworder_url . "?pid={$this->pid}&sign={$this->getSign()}";
         $res = $this->getHttpResponse($url);
-        // { "code":1, "msg":"有2个新订单", "orders":[aids] }
         return $res;
     }
+    // 提交收款明细
     public function upRecords($records, $aid)
     {
         $header = ['Content-Type: application/json;charset=UTF-8'];

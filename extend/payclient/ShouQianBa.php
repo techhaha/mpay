@@ -17,7 +17,7 @@ class ShouQianBa
         $this->username = $config['username'];
         $this->password = $config['password'];
         // 检查token目录
-        $dir_path = 'token/shouqianba';
+        $dir_path = '../runtime/token/shouqianba';
         if (!is_dir($dir_path)) {
             if (!mkdir($dir_path, 755, true)) {
                 echo '目录创建失败';

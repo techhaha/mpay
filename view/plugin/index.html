@@ -107,7 +107,7 @@
                 const state = obj.elem.checked == true ? 1 : 0;
                 const id = obj.value;
                 const field = { state: state, id: id };
-                layer.msg(id + ', ' + state);
+                plugin.enable(obj, field);
                 return false;
             });
 
@@ -123,6 +123,20 @@
                         val.className = unselect;
                     }
                 });
+            }
+            // 启用
+            plugin.enable = async (obj, field) => {
+                const res = await fetch('/api/Plugin/pluginEnable', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(field) });
+                if (res.status !== 200) {
+                    layer.msg('请求失败，请重试！', { tips: 2, time: 1200 }, () => { obj.elem.checked = !obj.elem.checked });
+                    return false;
+                }
+                const rec_info = await res.json();
+                if (rec_info.code === 0) {
+                    layer.tips(rec_info.msg, obj.othis, { tips: 1, time: 1200 });
+                } else {
+                    layer.msg(rec_info.msg, { icon: 2, time: 1200 }, () => { obj.elem.checked = !obj.elem.checked });
+                }
             }
         });
     </script>

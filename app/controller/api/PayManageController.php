@@ -8,6 +8,7 @@ use app\BaseController;
 use app\model\PayAccount;
 use app\model\PayChannel;
 use app\model\Platform;
+use app\model\User;
 use think\facade\View;
 
 class PayManageController extends BaseController
@@ -29,6 +30,8 @@ class PayManageController extends BaseController
         $info = $this->request->post();
         $up_res = PayAccount::update($info);
         if ($up_res) {
+            $acc = PayAccount::find($info['id']);
+            $this->createAccountConfig($acc);
             return json(\backMsg(0, '修改成功'));
         } else {
             return json(\backMsg(1, '修改失败'));
@@ -62,8 +65,9 @@ class PayManageController extends BaseController
         $info = $this->request->post();
         $pid = $this->request->session('pid');
         $info['pid'] = $pid;
-        $res = PayAccount::create($info);
-        if ($res) {
+        $acc = PayAccount::create($info);
+        if ($acc) {
+            $this->createAccountConfig($acc);
             return \json(\backMsg(0, '添加成功'));
         } else {
             return \json(\backMsg(1, '添加失败'));
@@ -103,37 +107,24 @@ class PayManageController extends BaseController
         }
     }
     // 生成账号配置
-    public function createAccountConfig()
+    private function createAccountConfig($acc)
     {
-        $query = [
-            "date_end" => null,
-            "date_start" => null,
-            "page" => 1,
-            "page_size" => 10,
-            "upayQueryType" => 0,
-            "status" => "2000",
-            "store_sn" => "",
-            "type" => "30"
-        ];
-
+        $platform = Platform::where('platform', $acc->getData('platform'))->find();
+        $user = User::where('pid', $acc->pid)->find();
+        $query = \unserialize($platform->query);
         $data = [
-            'pid'       =>  1001,
-            'key'       =>  '154556b80a3f02ab6b57d4199cd6ebdf',
-            'aid'       =>  1,
-            'platform'  =>  'sqbpay',
-            'account'   =>  '18872410423',
-            'password'  =>  '7698177hcnSQB',
+            'pid'       =>  $user->pid,
+            'key'       =>  $user->secret_key,
+            'aid'       =>  $acc->id,
+            'platform'  =>  $acc->getData('platform'),
+            'account'   =>  $acc->account,
+            'password'  =>  $acc->password,
             'query'     =>  \var_export($query, \true)
         ];
         $config = View::fetch('tpl/account_config', $data);
         $name = "{$data['pid']}_{$data['aid']}";
         $path = "../config/payconfig/{$name}.php";
-        $res = \file_put_contents($path, $config);
-        if ($res) {
-            return \json(\backMsg(msg: '创建成功'));
-        } else {
-            return \json(\backMsg(1, '创建成功'));
-        }
+        \file_put_contents($path, $config);
     }
     // 生成平台列表配置
     public function crtPlfConfig()

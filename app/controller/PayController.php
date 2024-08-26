@@ -208,7 +208,7 @@ class PayController
             }
         }
     }
-    // [定时任务]监听新订单
+    // [定时任务]监听新订单,生成JSON文件信息
     public function checkOrder($pid = '', $sign = '')
     {
         if (!($pid && $sign)) {
@@ -240,7 +240,7 @@ class PayController
             return json($info);
         }
     }
-    // [定时任务]监听收款通知
+    // 获取收款通知，提交收款订单明细
     public function checkPayResult(Request $request)
     {
         $req_info = $request->get();

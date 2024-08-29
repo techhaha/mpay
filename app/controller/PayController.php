@@ -218,6 +218,9 @@ class PayController
         $path = '../runtime/order.json';
         if ($is_user) {
             $orders = Order::scope('activeOrder')->field('id,pid,aid,cid')->select();
+            if (!file_exists($path)) {
+                file_put_contents($path, '[]');
+            }
             $old_info = file_get_contents($path);
             $num = count($orders);
             if ($num > 0) {

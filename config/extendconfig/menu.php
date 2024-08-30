@@ -5,7 +5,7 @@
 
 return [
   [
-    'id' => 'index',
+    'id' => 'console',
     'title' => '平台首页',
     'icon' => 'layui-icon layui-icon-console',
     'type' => 1,

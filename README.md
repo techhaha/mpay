@@ -35,6 +35,7 @@
 ![输入图片说明](public/admin/data/4.png)
 ![输入图片说明](public/admin/data/5.png)
 ![输入图片说明](public/admin/data/6.png)
+![输入图片说明](public/admin/data/7.png)
 
 #### 使用说明
 

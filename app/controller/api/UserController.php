@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace app\controller\api;
 
 use app\BaseController;
-use think\Request;
 use think\facade\Session;
 use app\model\User;
 
@@ -13,9 +12,9 @@ class UserController extends BaseController
 {
     protected $middleware = ['Auth' => ['except' => ['login']]];
 
-    public function login(Request $request)
+    public function login()
     {
-        $login_info = $request->post();
+        $login_info = $this->request->post();
         $userinfo = self::checkUser($login_info);
         if ($userinfo['code'] === 0) {
             Session::set('userid', $userinfo['data']->id);
@@ -33,6 +32,25 @@ class UserController extends BaseController
         Session::clear();
         return json(\backMsg(0, '注销成功'));
     }
+    public function editUser()
+    {
+        $userid = \session('userid');
+        $info = $this->request->post();
+        $res = User::update($info, ['id' => $userid]);
+        if (!$res) {
+            return json(\backMsg(1, '修改失败'));
+        }
+        return json(\backMsg(0, '重置成功'));
+    }
+    public function resetKey()
+    {
+        $userid = \session('userid');
+        $res = User::update(['secret_key' => $this->generateKey()], ['id' => $userid]);
+        if (!$res) {
+            return json(\backMsg(1, '重置失败'));
+        }
+        return json(\backMsg(0, '重置成功'));
+    }
     private function checkUser(array $login_info): array
     {
         $username = $login_info['username'];
@@ -46,6 +64,16 @@ class UserController extends BaseController
             }
         } else {
             return \backMsg(2, '用户不存在');
+        }
+    }
+    private function generateKey()
+    {
+        $bytes = openssl_random_pseudo_bytes(16, $strong);
+        if ($strong) {
+            $key = bin2hex($bytes);
+            return md5($key);
+        } else {
+            return false;
         }
     }
 }

@@ -6,6 +6,7 @@ namespace app\controller;
 
 use app\BaseController;
 use think\facade\View;
+use app\model\User;
 
 class UserController extends BaseController
 {
@@ -13,6 +14,9 @@ class UserController extends BaseController
     // 用户中心
     public function index()
     {
+        $userinfo = User::find(\session('userid'))->toArray();
+        View::assign($userinfo);
+        View::assign('url', $this->request->domain());
         return View::fetch();
     }
     // 登陆视图
@@ -21,6 +25,13 @@ class UserController extends BaseController
         if (session('?islogin')) {
             return redirect('/Console/index');
         }
+        return View::fetch();
+    }
+    // 修改用户
+    public function setUser()
+    {
+        $userinfo = User::find(\session('userid'))->toArray();
+        View::assign($userinfo);
         return View::fetch();
     }
 }

@@ -44,6 +44,8 @@ class Order extends BaseModel
             'param'         => serialize(self::getParams($data)),
             // 等待/过期：0, 支付成功：1
             'state'         => 0,
+            // 开启监听：1, 关闭监听：0
+            'patt'          => $channel['patt'],
             // 订单创建时间
             'create_time'   => self::getFormatTime($my_time),
             // 订单关闭时间
@@ -109,9 +111,6 @@ class Order extends BaseModel
         $order->qrcode = $a_list->payChannel[0]->qrcode ?? '···';
         return $order->toArray();
     }
-
-
-
     // 选择收款通道
     private static function setChannel($pid): array
     {
@@ -120,7 +119,8 @@ class Order extends BaseModel
         if (!$channel_info || !$aids) {
             return [];
         }
-        $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id];
+        $patt = PayAccount::find($channel_info->account_id);
+        $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->pattern];
         PayChannel::update(['last_time' => self::getFormatTime(), 'id' => $channel['cid']]);
         return $channel;
     }

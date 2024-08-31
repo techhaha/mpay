@@ -109,9 +109,11 @@ class PayController
         if ($order_id) {
             $act_order = Order::where('order_id', $order_id)->find();
             if ($act_order) {
+                $passtime = strtotime($act_order->close_time) - time();
                 $data = [];
                 if ($act_order->state === 0) {
                     $data['order_id'] = $act_order->order_id;
+                    $data['passtime'] = $passtime > 0 ? $passtime : 0;
                     $data['state'] = $act_order->state;
                     return json($data);
                 } elseif ($act_order->state === 1) {
@@ -125,6 +127,7 @@ class PayController
                     $res_return_url = $act_order->return_url . '?' . http_build_query($notify);
                     // 响应消息
                     $data['order_id'] = $act_order->order_id;
+                    $data['passtime'] = $passtime > 0 ? $passtime : 0;
                     $data['state'] = $act_order->state;
                     $data['return_url'] = $res_return_url;
                     return json($data);
@@ -245,21 +248,19 @@ class PayController
         // 检测本账号订单
         $orders = [];
         foreach ($order_list as $key => $val) {
-            if ($pid == $val['pid'] && $aid == $val['aid']) {
+            if ($pid == $val['pid'] && $aid == $val['aid'] && $val['patt'] == 1) {
                 $orders[] = $order_list[$key];
             }
         }
         if (!$orders) {
             return \json(['code' => 0, 'msg' => '非本账号订单']);
         }
-        // 收款平台
-        $platform = ['sqbpay' => 'ShouQianBa', 'storepay' => 'ZhiHuiJingYing', 'mqpay' => 'MaQian', 'ysepay' => 'Ysepay'];
         // 登陆账号
         $config = ['username' => $pay_config['account'], 'password' => $pay_config['password']];
         // 收款查询
         $query = $pay_config['query'];
         // 实例监听客户端
-        $payclient_name = $platform[$pay_config['platform']];
+        $payclient_name = $pay_config['payclass'];
         $payclient_path = "\\payclient\\{$payclient_name}";
         $Payclient = new $payclient_path($config);
         // 获取支付明细
@@ -281,7 +282,7 @@ class PayController
         $is_user = User::checkUser($pid, $sign);
         $path = '../runtime/order.json';
         if ($is_user) {
-            $orders = Order::scope('activeOrder')->field('id,pid,aid,cid')->select();
+            $orders = Order::scope('activeOrder')->field('id,pid,aid,cid,patt')->select();
             if (!file_exists($path)) {
                 file_put_contents($path, '[]');
             }

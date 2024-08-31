@@ -6,7 +6,7 @@ return [
     // 用户账号配置
     'user' => [
         'pid'       =>  1001,
-        'key'       =>  '7ImzF6Rf8OciQcmRJv8oTNBwIp6uqF0p'
+        'key'       =>  '953c4d682d9ab148277b76a06e215ce7'
     ],
     // 收款平台账号配置
     'pay' => [
@@ -14,10 +14,12 @@ return [
         'aid'       =>  40,
         // 收款平台
         'platform'  =>  'mqpay',
+        // 收款平台
+        'payclass'  =>  'MaQian',
         // 账号
-        'account'   =>  '258000000',
+        'account'   =>  '18657945333',
         // 密码
-        'password'  =>  '123456',
+        'password'  =>  'Aa12345678',
         // 订单查询参数配置
         'query'     =>  array (
   'terminalType' => '',

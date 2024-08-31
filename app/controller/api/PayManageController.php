@@ -119,6 +119,7 @@ class PayManageController extends BaseController
             'platform'  =>  $acc->getData('platform'),
             'account'   =>  $acc->account,
             'password'  =>  $acc->password,
+            'payclass'  =>  $platform->class_name,
             'query'     =>  \var_export($query, \true)
         ];
         $config = View::fetch('tpl/account_config', $data);

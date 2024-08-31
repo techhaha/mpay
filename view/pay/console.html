@@ -76,7 +76,7 @@
         .msg>p {
             color: red;
             font-weight: 700;
-            line-height: 1.5em;
+            line-height: 2em;
         }
 
         .msg>p:nth-child(1) {
@@ -98,7 +98,7 @@
 
         .note {
             color: red;
-            font-size: 24px;
+            font-size: 22px;
         }
     </style>
 </head>
@@ -135,10 +135,10 @@
                 <div class="qrcode"><img id="qrcode" src="/static/img/loading.gif">
                 </div>
                 <div class="msg">
-                    <p>请付款 <span id="s_money" class="note">
+                    <p>请付款 <span class="note">
                             <?php echo htmlentities($really_price); ?>
-                        </span> 元,注意不能多付或少付</p>
-                    <p>付款后，请等待5秒查看</p>
+                        </span> 元，注意不能多付或少付</p>
+                    <p>付款后，请等待 5 秒查看</p>
                     <p id="divTime"></p>
                 </div>
                 <div class="shanxinzha">
@@ -147,13 +147,11 @@
 
             </div>
         </div>
-
-
     </div>
     <script src="/static/js/layui.min.js"></script>
     <script src="/static/js/awesome-qr.min.js"></script>
     <script>
-        const payCode = '<?php echo $payUrl; ?>';
+        const payCode = '<?php echo htmlentities($payUrl); ?>';
         const payType = '<?php echo htmlentities($type); ?>';
         const order = '<?php echo htmlentities($order_id); ?>';
         const QR = AwesomeQR.AwesomeQR;
@@ -170,18 +168,16 @@
             }
             // 生成二维码
             document.getElementById('qrcode').src = await getQrcode(payCode, QR);
-            // 订单倒计时
-            const intDiff = <?php echo strtotime($close_time) - time() > 0 ? strtotime($close_time) - time() : 0; ?>;
-            const timerId = timer(intDiff);
+            // 订单过期时间
+            let passtime = 0;
             // 订单状态查询
-            let orderTimer = null;
+            let orderTimer = 0;
             const queryOrder = async (url) => {
                 if (orderTimer) { clearTimeout(orderTimer); }
                 const res = await fetch(url);
                 const jsonData = await res.json();
                 orderTimer = setTimeout(() => { queryOrder(url) }, 1000);
                 if (jsonData.state === 1) {
-                    clearInterval(timerId);
                     clearTimeout(orderTimer);
                     document.getElementById('divTime').innerHTML = '<small class="note">订单支付成功</small>';
                     document.getElementById('qrcode').src = '/static/img/pay_ok.png';// 输出支付成功提示图片
@@ -189,13 +185,13 @@
                         location.href = jsonData.return_url;
                     }, 1500);
                 }
-                if (jsonData.state === 2) {
+                passtime = jsonData.passtime;
+                if (passtime <= 0) {
                     clearTimeout(orderTimer);
                 }
+                timer(passtime);
             }
-            if (intDiff > 0) {
-                queryOrder(`/getOrderState/${order}`);
-            }
+            queryOrder(`/getOrderState/${order}`);
 
         })();
         // 生成二维码
@@ -208,30 +204,19 @@
             })
             return qrcodeUrl;
         }
-        // 计时
-        function timer(intDiff) {
-            const timerId = setInterval(() => {
-                let day = 0, hour = 0, minute = 0, second = 0;//时间默认值       
-                if (intDiff > 0) {
-                    day = Math.floor(intDiff / (60 * 60 * 24));
-                    hour = Math.floor(intDiff / (60 * 60)) - (day * 24);
-                    minute = Math.floor(intDiff / 60) - (day * 24 * 60) - (hour * 60);
-                    second = Math.floor(intDiff) - (day * 24 * 60 * 60) - (hour * 60 * 60) - (minute * 60);
-                }
-                if (minute <= 9) minute = '0' + minute;
-                if (second <= 9) second = '0' + second;
-                if (hour <= 0 && minute <= 0 && second <= 0) {
-                    document.getElementById('divTime').innerHTML = '<small class="note">订单二维码已过期</small>';
-                    document.getElementById('qrcode').src = '/static/img/qrcode_timeout.png';// 输出过期二维码提示图片
-                } else {
-                    document.getElementById('divTime').innerHTML = `二维码有效时间: <small class="note">${minute}</small>分<small style="color:red; font-size:24px">${second}</small> 秒,失效勿付`;
-                }
-                if (intDiff < 0) {
-                    clearInterval(timerId);
-                }
-                intDiff--;
-            }, 1000);
-            return timerId;
+        // 倒计时
+        function timer(passtime) {
+            let minute = 0, second = 0; // 时间默认值       
+            if (passtime > 0) {
+                minute = Math.floor(passtime / 60);
+                second = Math.floor(passtime) - (minute * 60);
+            }
+            if (passtime <= 0) {
+                document.getElementById('divTime').innerHTML = '<small class="note">订单二维码已过期</small>';
+                document.getElementById('qrcode').src = '/static/img/qrcode_timeout.png';// 输出过期二维码提示图片
+            } else {
+                document.getElementById('divTime').innerHTML = `二维码有效时间：<small class="note">${minute}</small>分<small class="note">${second}</small> 秒，失效勿付`;
+            }
         }
     </script>
 </body>

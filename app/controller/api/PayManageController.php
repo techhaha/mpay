@@ -65,6 +65,10 @@ class PayManageController extends BaseController
         $info = $this->request->post();
         $pid = $this->request->session('pid');
         $info['pid'] = $pid;
+        $check_acc = PayAccount::where(['account' => $info['account'], 'pid' => $pid])->find();
+        if ($check_acc) {
+            return \json(\backMsg(1, '账号已存在'));
+        }
         $acc = PayAccount::create($info);
         if ($acc) {
             $this->createAccountConfig($acc);

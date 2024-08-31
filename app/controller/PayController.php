@@ -211,7 +211,7 @@ class PayController
             }
         }
     }
-    // 获取收款通知，提交收款订单明细
+    // [定时任务]获取收款明细，提交收款通知[本地版]
     public function checkPayResult(Request $request)
     {
         $req_info = $request->get();

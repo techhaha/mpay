@@ -120,7 +120,7 @@ class Order extends BaseModel
             return [];
         }
         $patt = PayAccount::find($channel_info->account_id);
-        $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->pattern];
+        $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];
         PayChannel::update(['last_time' => self::getFormatTime(), 'id' => $channel['cid']]);
         return $channel;
     }

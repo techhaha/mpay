@@ -20,12 +20,7 @@
 					<label class="layui-form-label">收款平台</label>
 					<div class="layui-input-block">
 						<select name="platform">
-							<option value=""></option>
-							<?php foreach ($options as $key => $value) { ?>
-							<option value="<?php echo $key ?>">
-								<?php echo $value ?>
-							</option>
-							<?php } ?>
+							<option value="">收款平台</option>
 						</select>
 					</div>
 				</div>
@@ -72,6 +67,18 @@
 		layui.use(['form'], function () {
 			let form = layui.form;
 
+			// 渲染插件选项
+			(async () => {
+				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
+				let option_str = `<option value="">收款平台</option>`;
+				data.forEach(val => {
+					option_str += `<option value="${val.platform}">${val.name}</option>`;
+				});
+				const select = document.querySelector('select[name="platform"]');
+				select.innerHTML = option_str;
+				form.render('select');
+			})()
+			
 			form.on('submit(add-account)', function (obj) {
 				const field = obj.field;
 				(async () => {

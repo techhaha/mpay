@@ -17,13 +17,13 @@ class ShouQianBa
         $this->username = $config['username'];
         $this->password = $config['password'];
         // 检查token目录
-        $dir_path = runtime_path() . 'token/shouqianba';
+        $dir_path = runtime_path() . 'token/sqbpay';
         if (!is_dir($dir_path)) {
             if (!mkdir($dir_path, 755, true)) {
                 echo '目录创建失败';
             }
         }
-        $this->token_path = $dir_path . '/' . md5($this->username . $this->password . 'ShouQianBa') . '.json';
+        $this->token_path = $dir_path . '/' . md5($this->username . $this->password . 'sqbpay') . '.json';
         if (!file_exists($this->token_path)) {
             // 失效Token刷新
             $token_info = ['token' => 'Y2FjZmRiMi04MjRjLTQ2NDgtYTU0Ny1lNzg2MDllMTQ1ZTI6MTcxOTQ1Mzg0MzU3OTozNjAwMDAw.txcnX60Za8', 'expire_time' => 1719453843579];

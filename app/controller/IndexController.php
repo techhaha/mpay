@@ -16,6 +16,6 @@ class IndexController
     }
     public function test()
     {
-        return runtime_path();
+        return request()->domain();
     }
 }

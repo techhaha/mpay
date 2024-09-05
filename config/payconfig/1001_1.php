@@ -6,7 +6,7 @@ return [
     // 用户账号配置
     'user' => [
         'pid'       =>  1001,
-        'key'       =>  '7ImzF6Rf8OciQcmRJv8oTNBwIp6uqF0p'
+        'key'       =>  '953c4d682d9ab148277b76a06e215ce7'
     ],
     // 收款平台账号配置
     'pay' => [
@@ -14,20 +14,22 @@ return [
         'aid'       =>  1,
         // 收款平台
         'platform'  =>  'sqbpay',
+        // 收款平台
+        'payclass'  =>  'ShouQianBa',
         // 账号
-        'account'   =>  '188*****423',
+        'account'   =>  '18872410423',
         // 密码
-        'password'  =>  '76********QB',
+        'password'  =>  '7698177hcnSQB',
         // 订单查询参数配置
-        'query'     =>  array(
-            'date_end' => NULL,
-            'date_start' => NULL,
-            'page' => 1,
-            'page_size' => 10,
-            'upayQueryType' => 0,
-            'status' => '2000',
-            'store_sn' => '',
-            'type' => '30',
-        ),
+        'query'     =>  array (
+  'date_end' => NULL,
+  'date_start' => NULL,
+  'page' => 1,
+  'page_size' => 10,
+  'upayQueryType' => 0,
+  'status' => '2000',
+  'store_sn' => '',
+  'type' => '30',
+),
     ]
 ];

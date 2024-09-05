@@ -4,15 +4,16 @@ class MpayClass
 {
     private $pid;
     private $key;
-    private $host = 'https://mpay.zhaidashi.cn/';
+    private $host;
     private $check_neworder_url;
     private $submit_records_url;
     function __construct($config)
     {
         $this->pid = $config['pid'];
         $this->key = $config['key'];
-        $this->check_neworder_url = $this->host . 'order.php';
-        $this->submit_records_url = $this->host . 'payHeart';
+        $this->host = $config['host'];
+        $this->check_neworder_url = $this->host . '/order.php';
+        $this->submit_records_url = $this->host . '/payHeart';
     }
     // 查询新订单
     public function orderHeart()

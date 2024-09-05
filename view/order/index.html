@@ -64,11 +64,6 @@
 						<div class="layui-input-inline">
 							<select name="platform">
 								<option value="">收款平台</option>
-								<?php foreach ($options as $key => $value) { ?>
-								<option value="<?php echo $key ?>">
-									<?php echo $value ?>
-								</option>
-								<?php } ?>
 							</select>
 						</div>
 					</div>
@@ -128,7 +123,7 @@
 			let dropdown = layui.dropdown;
 			let laydate = layui.laydate;
 			let util = layui.util;
-
+			// 渲染时间选择器
 			laydate.render({
 				elem: '#create_time',
 				range: ['input[name="create_time_start"]', 'input[name="create_time_end"]'],
@@ -190,8 +185,18 @@
 					}
 				}]
 			});
-
-
+			// 渲染插件选项
+			(async () => {
+				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
+				let option_str = `<option value="">收款平台</option>`;
+				data.forEach(val => {
+					option_str += `<option value="${val.platform}">${val.name}</option>`;
+				});
+				const select = document.querySelector('select[name="platform"]');
+				select.innerHTML = option_str;
+				form.render('select');
+			})()
+			// 表格列参数
 			let cols = [[
 				{ type: 'checkbox' },
 				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 165, templet: '<div><a href="javascript:;" class="layui-font-blue" lay-event="showOrder">{{= d.order_id }}</a></div>' },
@@ -206,7 +211,7 @@
 				{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: '<div>{{# return`${d.payAccount.platform} [${d.aid}:${d.cid}]` }}</div>' },
 				{ title: '操作', align: 'center', width: 120, fixed: 'right', templet: '<div><strong><a href="javascript:;" data-id="{{= d.id }}" class="layui-font-green {{= d.state==1 ? "orderSet-paid" : "orderSet-paying" }}">设置</a></strong></div>' }
 			]]
-
+			// 表格渲染
 			table.render({
 				id: 'orders-table',
 				elem: '#orders-table',

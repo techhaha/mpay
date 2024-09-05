@@ -13,10 +13,7 @@ class OrderController extends BaseController
     public function index()
     {
         $servertime = date('Y-m-d H:i:s', time());
-        // 加载配置文件
-        $option = \think\facade\Config::load("extendconfig/platform", 'extendconfig');
         View::assign('servertime', $servertime);
-        View::assign('options', $option);
         return View::fetch();
     }
     public function showOrder()

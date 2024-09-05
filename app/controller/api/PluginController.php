@@ -31,4 +31,10 @@ class PluginController extends BaseController
             return json(\backMsg(1, '失败'));
         }
     }
+    // 插件选项
+    public function pluginOption()
+    {
+        $option = Platform::field('platform,name')->where('state', 1)->select();
+        return json($option);
+    }
 }

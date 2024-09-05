@@ -15,9 +15,6 @@ class PayManageController extends BaseController
 {
     public function index()
     {
-        // 加载配置文件
-        $option = \think\facade\Config::load("extendconfig/platform", 'extendconfig');
-        View::assign('options', $option);
         return View::fetch();
     }
     // 编辑账号
@@ -25,11 +22,8 @@ class PayManageController extends BaseController
     {
         $id = $this->request->get('id');
         $account = PayAccount::find($id);
-        // 加载配置文件
-        $option = \think\facade\Config::load("extendconfig/platform", 'extendconfig');
         View::assign([
             'id' => $id,
-            'options' => $option,
             'platform' => $account->getData('platform'),
             'account' => $account->account,
             'password' => $account->password,
@@ -41,9 +35,6 @@ class PayManageController extends BaseController
     // 添加账号
     public function addAccount()
     {
-        // 加载配置文件
-        $option = \think\facade\Config::load("extendconfig/platform", 'extendconfig');
-        View::assign(['options' => $option]);
         return View::fetch();
     }
     // 添加收款终端

@@ -17,11 +17,6 @@
 						<div class="layui-input-inline">
 							<select name="platform">
 								<option value="">收款平台</option>
-								<?php foreach ($options as $key => $value) { ?>
-								<option value="<?php echo $key ?>">
-									<?php echo $value ?>
-								</option>
-								<?php } ?>
 							</select>
 						</div>
 					</div>
@@ -92,6 +87,18 @@
 			let common = layui.common;
 			let util = layui.util;
 
+			// 渲染插件选项
+			(async () => {
+				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
+				let option_str = `<option value="">收款平台</option>`;
+				data.forEach(val => {
+					option_str += `<option value="${val.platform}">${val.name}</option>`;
+				});
+				const select = document.querySelector('select[name="platform"]');
+				select.innerHTML = option_str;
+				form.render('select');
+			})()
+			
 			let cols = [[
 				{ type: 'checkbox' },
 				{ title: '平 台', field: 'platform', align: 'center', templet: '' },

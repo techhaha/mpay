@@ -234,6 +234,8 @@ class PayController
         } else {
             return '监听收款配置文件名错误';
         }
+        // 当前站点
+        $user_config['host'] = \request()->domain();
         // 实例化支付类
         $Mpay = new \MpayClass($user_config);
         // 获取订单

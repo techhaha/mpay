@@ -14,4 +14,8 @@ class IndexController
         }
         return View::fetch();
     }
+    public function test()
+    {
+        return runtime_path();
+    }
 }

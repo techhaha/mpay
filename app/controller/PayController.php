@@ -280,7 +280,7 @@ class PayController
             return '参数错误';
         }
         $is_user = User::checkUser($pid, $sign);
-        $path = '../runtime/order.json';
+        $path = runtime_path() . 'order.json';
         if ($is_user) {
             $orders = Order::scope('activeOrder')->field('id,pid,aid,cid,patt')->select();
             if (!file_exists($path)) {

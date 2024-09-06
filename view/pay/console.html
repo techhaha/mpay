@@ -5,7 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>收银台</title>
-    <link rel="stylesheet" href="/static/css/layui.min.css">
+    <link rel="stylesheet" href="/component/pear/css/pear.css" />
     <style>
         body {
             background: #f7f7f7;
@@ -148,7 +148,7 @@
             </div>
         </div>
     </div>
-    <script src="/static/js/layui.min.js"></script>
+    <script src="/component/layui/layui.js"></script>
     <script src="/static/js/awesome-qr.min.js"></script>
     <script>
         const payCode = '<?php echo htmlentities($payUrl); ?>';
@@ -179,6 +179,7 @@
                 orderTimer = setTimeout(() => { queryOrder(url) }, 1000);
                 if (jsonData.state === 1) {
                     clearTimeout(orderTimer);
+                    layer.closeAll();
                     document.getElementById('divTime').innerHTML = '<small class="note">订单支付成功</small>';
                     document.getElementById('qrcode').src = '/static/img/pay_ok.png';// 输出支付成功提示图片
                     setTimeout(() => {
@@ -192,8 +193,65 @@
                 timer(passtime);
             }
             queryOrder(`/getOrderState/${order}`);
-
         })();
+        // <?php if ($patt == 0 && $passtime > 0) { ?>
+        // 验证支付结果
+        const id = '<?php echo htmlentities($id);?>';
+        const reVali = () => {
+            setTimeout(() => {
+                layer.confirm('是否已支付？', { icon: 3, title: '提示' },
+                    (index) => {
+                        (async () => {
+                            const res = await validatePayResult(id, 1);
+                            if (res) { reVali() }
+                        })()
+                        layer.close(index);
+                    }, (index) => {
+                        reVali();
+                        layer.close(index);
+                    })
+            }, 5000);
+        }
+        setTimeout(() => {
+            layer.confirm('是否已支付？', { icon: 3, title: '提示' },
+                (index) => {
+                    (async () => {
+                        const res = await validatePayResult(id, 1);
+                        if (res) { reVali() }
+                    })()
+                    layer.close(index);
+                },
+                (index) => {
+                    reVali();
+                    layer.close(index);
+                })
+        }, 10000);
+        // 验证支付结果
+        async function validatePayResult(id, patt) {
+            const lay = layer.load(1, { shade: [0.1, '#393D49'] });
+            let data = { id: id, patt: patt };
+            const res1 = await fetch(`/validatePayResult`, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            const rec1_info = await res1.json();
+            const info = await new Promise((resolve, reject) => {
+                setTimeout(() => {
+                    data.patt = 0;
+                    fetch(`/validatePayResult`, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+                        .then((res2) => { return res2.json() }).then((rec2_info) => {
+                            if (rec2_info.code == 0) {
+                                layer.close(lay);
+                                layer.msg('验证失败，稍后重新验证！');
+                                resolve(true);
+                            } else {
+                                layer.close(lay);
+                                layer.msg(rec2_info.msg);
+                                resolve(false);
+                            }
+                        });
+                }, 5000);
+            })
+            return info;
+        }
+        // <?php } ?>
         // 生成二维码
         async function getQrcode(text, QR) {
             const qrcodeUrl = await new Promise((resolve) => {

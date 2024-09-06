@@ -90,10 +90,12 @@ class PayController
     public function console($order_id = '')
     {
         if ($order_id) {
-            $act_order = Order::where('order_id', $order_id)->field(['out_trade_no', 'name', 'really_price', 'close_time', 'type', 'order_id', 'cid'])->find();
+            $act_order = Order::where('order_id', $order_id)->find();
             if ($act_order) {
                 $qrcode = PayChannel::where('id', $act_order->cid)->value('qrcode');
                 View::assign($act_order->toArray());
+                $passtime = strtotime($act_order->close_time) - time();
+                View::assign('passtime', $passtime > 0 ? $passtime : 0);
                 View::assign('payUrl', $qrcode);
                 return View::fetch();
             } else {
@@ -137,6 +139,22 @@ class PayController
             }
         } else {
             return '订单号参数错误';
+        }
+    }
+    // 验证支付结果
+    public function validatePayResult(Request $request)
+    {
+        $data = $request->post();
+        $order = Order::find($data['id']);
+        if (\strtotime($order->close_time) < \time()) {
+            return \json(\backMsg(1, '订单已关闭'));
+        }
+        $up_data = ['id' => $data['id'], 'patt' => $data['patt']];
+        $up_res = Order::update($up_data);
+        if ($up_res) {
+            return \json(\backMsg(0, '更新成功'));
+        } else {
+            return \json(\backMsg(1, '更新失败'));
         }
     }
     // 处理收款通知

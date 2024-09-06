@@ -16,6 +16,8 @@ Route::rule('checkOrder/[:pid]/[:sign]', 'Pay/checkOrder');
 Route::rule('payHeart/[:pid]/[:aid]/[:sign]', 'Pay/payHeart');
 // 监听收款通知
 Route::rule('checkPayResult', 'Pay/checkPayResult');
+// 验证支付结果
+Route::rule('validatePayResult', 'Pay/validatePayResult');
 
 // API多级控制器
 Route::rule('api/:controller/:methon', 'api.:controller/:methon');

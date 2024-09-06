@@ -6,6 +6,7 @@ namespace app\controller\api;
 
 use app\BaseController;
 use app\model\Platform;
+use think\facade\View;
 
 class PluginController extends BaseController
 {
@@ -34,7 +35,29 @@ class PluginController extends BaseController
     // 插件选项
     public function pluginOption()
     {
-        $option = Platform::field('platform,name')->where('state', 1)->select();
+        // 加载平台配置
+        $platform = \think\facade\Config::load("extendconfig/platform", 'extendconfig');
+        $option = [];
+        foreach ($platform as $key => $value) {
+            $option[] = ['platform' => $key, 'name' => $value];
+        }
         return json($option);
+    }
+    // 生成插件配置
+    public function crtPlfConfig()
+    {
+        $info = Platform::where('state', 1)->field('platform, name')->select()->toArray();
+        $data = [];
+        foreach ($info as $value) {
+            $data[$value['platform']] = $value['name'];
+        }
+        $config = View::fetch('tpl/platform_config', $data);
+        $path = "../config/extendconfig/platform.php";
+        $res = \file_put_contents($path, $config);
+        if ($res) {
+            return \json(\backMsg(msg: '创建成功'));
+        } else {
+            return \json(\backMsg(1, '创建成功'));
+        }
     }
 }

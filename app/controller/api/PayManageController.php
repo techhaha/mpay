@@ -131,21 +131,4 @@ class PayManageController extends BaseController
         $path = "../config/payconfig/{$name}.php";
         \file_put_contents($path, $config);
     }
-    // 生成平台列表配置
-    public function crtPlfConfig()
-    {
-        $info = Platform::where('state', 1)->field('platform, name')->select()->toArray();
-        $data = [];
-        foreach ($info as $value) {
-            $data[$value['platform']] = $value['name'];
-        }
-        $config = View::fetch('tpl/platform_config', $data);
-        $path = "../config/extendconfig/platform.php";
-        $res = \file_put_contents($path, $config);
-        if ($res) {
-            return \json(\backMsg(msg: '创建成功'));
-        } else {
-            return \json(\backMsg(1, '创建成功'));
-        }
-    }
 }

@@ -194,41 +194,28 @@
             }
             queryOrder(`/getOrderState/${order}`);
         })();
-        // <?php if ($patt == 0 && $passtime > 0) { ?>
+        /* <?php if ($patt == 0 && $passtime > 0) { ?> */
         // 验证支付结果
         const id = '<?php echo htmlentities($id);?>';
-        const reVali = () => {
+        const reVali = (step) => {
             setTimeout(() => {
-                layer.confirm('是否已支付？', { icon: 3, title: '提示' },
+                layer.confirm('是否已支付？', { icon: 3, title: '提示', closeBtn: 0 },
                     (index) => {
                         (async () => {
                             const res = await validatePayResult(id, 1);
-                            if (res) { reVali() }
+                            if (res) { reVali(8000) }
                         })()
                         layer.close(index);
                     }, (index) => {
-                        reVali();
+                        reVali(5000);
                         layer.close(index);
                     })
-            }, 5000);
+            }, step);
         }
-        setTimeout(() => {
-            layer.confirm('是否已支付？', { icon: 3, title: '提示' },
-                (index) => {
-                    (async () => {
-                        const res = await validatePayResult(id, 1);
-                        if (res) { reVali() }
-                    })()
-                    layer.close(index);
-                },
-                (index) => {
-                    reVali();
-                    layer.close(index);
-                })
-        }, 10000);
+        reVali(10000);
         // 验证支付结果
         async function validatePayResult(id, patt) {
-            const lay = layer.load(1, { shade: [0.1, '#393D49'] });
+            const lay = layer.load(2);
             let data = { id: id, patt: patt };
             const res1 = await fetch(`/validatePayResult`, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
             const rec1_info = await res1.json();
@@ -251,7 +238,7 @@
             })
             return info;
         }
-        // <?php } ?>
+        /* <?php } ?> */
         // 生成二维码
         async function getQrcode(text, QR) {
             const qrcodeUrl = await new Promise((resolve) => {

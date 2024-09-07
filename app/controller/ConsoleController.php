@@ -37,7 +37,7 @@ class ConsoleController extends BaseController
         // 时间段
         $month_start = date('Y-m-01 00:00:00');
         $month_end = date('Y-m-d 23:59:59', strtotime('last day of this month'));
-        $week_start = date('Y-m-d 00:00:00', strtotime('this monday'));
+        $week_start = date('Y-m-d 00:00:00', strtotime('monday this week'));
         $week_end = date('Y-m-d 23:59:59', strtotime('next monday') - 1);
         $yesterday_start = date('Y-m-d 00:00:00', strtotime('yesterday'));
         $yesterday_end = date('Y-m-d 23:59:59', strtotime('yesterday'));

@@ -61,7 +61,7 @@ class PayController
         } else {
             return '请使用POST方式提交';
         }
-        $key = User::where('pid', $req_data['pid'])->where('state', 1)->value('key');
+        $key = User::where('pid', $req_data['pid'])->where('state', 1)->value('secret_key');
         if (!$key) {
             return '用户禁用或不存在';
         }

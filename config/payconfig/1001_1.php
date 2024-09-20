@@ -17,9 +17,9 @@ return [
         // 收款平台
         'payclass'  =>  'ShouQianBa',
         // 账号
-        'account'   =>  '18872410423',
+        'account'   =>  '188******23',
         // 密码
-        'password'  =>  '7698177hcnSQB',
+        'password'  =>  '76********SQB',
         // 订单查询参数配置
         'query'     =>  array (
   'date_end' => NULL,

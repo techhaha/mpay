@@ -26,10 +26,10 @@
 		}
 
 		.order-container>div>div {
-			min-height: 350px;
+			min-height: 485px;
 		}
 
-		.order-tite {
+		.header-tite {
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
@@ -61,10 +61,12 @@
 			padding-left: 15px;
 			padding-right: 15px;
 		}
-		.order-channel:hover{
+
+		.order-channel:hover {
 			background-color: whitesmoke;
 			border-radius: 5px;
 		}
+
 		.order-channel>div:nth-child(2) {
 			min-width: 80px;
 			text-align: right;
@@ -109,43 +111,9 @@
 			color: #a1acb8;
 		}
 
-		.neworder-item {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			padding: 5px 10px;
-		}
-
-		.neworder-item~.neworder-item:hover {
-			background-color: whitesmoke;
-			border-radius: 5px;
-		}
-
-		.neworder-colname {
-			min-height: 2.2em;
-			color: #566a7f;
-			font-weight: 700;
-		}
-
-		.neworder-colname>div {
-			text-align: center;
-		}
-
-		.neworder-colname>div:nth-child(1) {
-			min-width: 135px;
-		}
-
-		.neworder-colname>div:nth-child(2) {
-			min-width: 100px;
-		}
-
-		.neworder-colname>div:nth-child(3) {
-			min-width: 36px;
-		}
-
-		.neworder-item>span:nth-child(2) {
-			min-width: 100px;
-			text-align: right;
+		.neworder table tr {
+			height: 24px;
+			line-height: 24px;
 		}
 	</style>
 </head>
@@ -228,8 +196,13 @@
 					</div>
 					<div class="layui-col-xs12 layui-col-sm12 layui-col-md6">
 						<div class="layui-card">
-							<div class="layui-card-header">
-								<spqn>近7天收益</spqn>
+							<div class="layui-card-header header-tite">
+								<div>收益趋势</div>
+								<div class="layui-btn-group">
+									<button type="button" class="layui-btn layui-btn-primary layui-btn-xs">7天</button>
+									<button type="button" class="layui-btn layui-btn-primary layui-btn-xs">15天</button>
+									<button type="button" class="layui-btn layui-btn-primary layui-btn-xs">30天</button>
+								</div>
 							</div>
 							<div class="layui-card-body">
 								<div class="layui-tab custom-tab layui-tab-brief" lay-filter="docDemoTabBrief">
@@ -240,11 +213,29 @@
 							</div>
 						</div>
 					</div>
+					<div class="layui-col-xs12 layui-col-sm12 layui-col-md6">
+						<div class="layui-card">
+							<div class="layui-card-header header-tite">
+								<div>订单趋势</div>
+								<div class="layui-btn-group">
+									<button type="button" class="layui-btn layui-btn-primary layui-btn-xs">7天</button>
+									<button type="button" class="layui-btn layui-btn-primary layui-btn-xs">15天</button>
+									<button type="button" class="layui-btn layui-btn-primary layui-btn-xs">30天</button>
+								</div>
+							</div>
+							<div class="layui-card-body">
+								<div class="layui-tab custom-tab layui-tab-brief">
+									<div style="background-color:#ffffff;min-height:220px;padding: 10px">
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
 					<div class="layui-col-xs12">
 						<div class="layui-row layui-col-space16 order-container">
 							<div class="layui-col-xs12 layui-col-sm6">
 								<div class="layui-card">
-									<div class="layui-card-header order-tite">
+									<div class="layui-card-header header-tite">
 										<spqn>订单统计</spqn><button type="button"
 											class="layui-btn layui-btn-primary layui-btn-xs"
 											id="order-data"><span>今年</span><i
@@ -332,61 +323,13 @@
 							<div class="layui-col-xs12 layui-col-sm6">
 								<div class="layui-card">
 
-									<div class="layui-card-header order-tite">
+									<div class="layui-card-header header-tite">
 										<spqn>最新订单</spqn><button type="button"
 											class="layui-btn layui-btn-primary layui-btn-xs"
 											id="order-new">全部订单</button>
 									</div>
-									<div class="layui-card-body">
-										<div class="neworder-list">
-											<div class="neworder-item neworder-colname">
-												<div>订单号</div>
-												<div>金额</div>
-												<div>状态</div>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>168</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>68</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>268</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>68</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>5668</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>5668</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-											<div class="neworder-item">
-												<span><a href="javascript:;" class="layui-font-blue"
-														lay-event="showOrder">H2024090710110110</a></span>
-												<span><strong>5668</strong> 元</span>
-												<span class="layui-badge layui-bg-green">成功</span>
-											</div>
-										</div>
+									<div class="layui-card-body neworder">
+										<table id="orders-table" lay-filter="orders-table"></table>
 									</div>
 								</div>
 							</div>
@@ -458,9 +401,10 @@
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
 	<script>
-		layui.use(['layer', 'echarts', 'element', 'count', 'dropdown'], function () {
+		layui.use(['layer', 'echarts', 'element', 'count', 'dropdown', 'table'], function () {
 			var $ = layui.jquery,
 				layer = layui.layer,
+				table = layui.table,
 				element = layui.element,
 				count = layui.count,
 				dropdown = layui.dropdown,
@@ -491,8 +435,23 @@
 				}
 			});
 
-			var echartsRecords = echarts.init(document.getElementById('echarts-records'), 'walden');
+			// 表格列参数
+			let cols = [[
+				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 165 },
+				{ title: '金额', field: 'money', align: 'center' },
+				{ title: '状态', field: 'state', align: 'center' },
+			]]
+			// 表格渲染
+			table.render({
+				id: 'orders-table',
+				elem: '#orders-table',
+				url: '/api/Order/getOrders?page=1&limit=8',
+				cols: cols,
+				skin: 'line',
+			});
 
+
+			var echartsRecords = echarts.init(document.getElementById('echarts-records'), 'walden');
 			const colorList = ["#9E87FF", '#73DDFF', '#fe9a8b', '#F56948', '#9E87FF']
 			var option = {
 				backgroundColor: '#fff',
@@ -577,7 +536,6 @@
 
 			};
 			echartsRecords.setOption(option);
-
 			window.onresize = function () {
 				echartsRecords.resize();
 			}

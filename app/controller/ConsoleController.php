@@ -29,6 +29,8 @@ class ConsoleController extends BaseController
         $orders = Order::where([['state', '=', 1], ['create_time', '>', date('Y-m-d 00:00:00', strtotime('-32 days'))]])->select();
         $income = $this->getRevenueData($orders);
         View::assign($income);
+        $servertime = date('Y-m-d H:i:s', time());
+        View::assign('servertime', $servertime);
         return View::fetch();
     }
     // 获取收入数据总览

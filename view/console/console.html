@@ -26,7 +26,7 @@
 		}
 
 		.order-container>div>div {
-			min-height: 485px;
+			min-height: 425px;
 		}
 
 		.header-tite {
@@ -36,7 +36,7 @@
 		}
 
 		.order-total {
-			margin: 18px;
+			margin: 28px 18px;
 		}
 
 		.order-total>div {
@@ -60,6 +60,7 @@
 			align-items: center;
 			padding-left: 15px;
 			padding-right: 15px;
+			margin-top: 15px;
 		}
 
 		.order-channel:hover {
@@ -111,9 +112,16 @@
 			color: #a1acb8;
 		}
 
-		.neworder table tr {
-			height: 24px;
-			line-height: 24px;
+		div[lay-table-id="orders-table"] {
+			margin-top: 0px !important;
+		}
+
+		.neworder div[class="layui-table-header"] table th {
+			padding: 0px;
+		}
+
+		.neworder div[class="layui-table-body layui-table-main"] table td {
+			padding: 3px 0px;
 		}
 	</style>
 </head>
@@ -241,7 +249,7 @@
 											id="order-data"><span>今年</span><i
 												class="layui-icon layui-icon-down layui-font-12"></i></button>
 									</div>
-									<div class="layui-card-body">
+									<div id="app" class="layui-card-body">
 										<div class="layui-row order-total">
 											<div class="layui-col-xs6">
 												<p>1433</p>
@@ -268,8 +276,8 @@
 														<p>全渠道统计</p>
 													</div>
 												</div>
-												<div><strong>99</strong> 笔</div>
-												<div><strong>120</strong> 元</div>
+												<div><strong @click="add(100)">{{ data.ordernum }}</strong> 笔</div>
+												<div><strong>{{ data.totalmoney }}</strong> 元</div>
 											</div>
 											<div class="layui-col-xs12 order-channel">
 												<div class="info-channel">
@@ -400,6 +408,7 @@
 	</div>
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
+	<script src="/static/js/vue.global.js"></script>
 	<script>
 		layui.use(['layer', 'echarts', 'element', 'count', 'dropdown', 'table'], function () {
 			var $ = layui.jquery,
@@ -437,9 +446,10 @@
 
 			// 表格列参数
 			let cols = [[
-				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 165 },
-				{ title: '金额', field: 'money', align: 'center' },
-				{ title: '状态', field: 'state', align: 'center' },
+				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 160 },
+				{ title: '金额', field: 'money', align: 'center', minWidth: 70 },
+				{ title: '状态', field: 'state', align: 'center', minWidth: 70, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
+				{ title: '创建时间', field: 'create_time', align: 'center', minWidth: 155 }
 			]]
 			// 表格渲染
 			table.render({
@@ -449,7 +459,6 @@
 				cols: cols,
 				skin: 'line',
 			});
-
 
 			var echartsRecords = echarts.init(document.getElementById('echarts-records'), 'walden');
 			const colorList = ["#9E87FF", '#73DDFF', '#fe9a8b', '#F56948', '#9E87FF']
@@ -541,6 +550,22 @@
 			}
 
 		});
+	</script>
+	<script>
+		const { createApp, ref } = Vue
+
+		createApp({
+			setup() {
+				const data = ref({ ordernum: 100, totalmoney: 1500 });
+				function add(num) {
+					data.value.ordernum += num;
+				}
+				return {
+					data,
+					add
+				}
+			}
+		}).mount('#app')
 	</script>
 </body>
 

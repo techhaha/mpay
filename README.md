@@ -47,7 +47,7 @@
 项目采用 THINKPHP8 + layui 2.9 + PearAdmin后台UI 开发
 
 
-#### 安装教程1
+#### 安装教程
 
 ![输入图片说明](public/admin/data/1.png)
 ![输入图片说明](public/admin/data/2.png)

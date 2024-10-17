@@ -53,7 +53,8 @@ class PayManageController extends BaseController
     {
         $ids = $this->request->post('ids');
         $res = PayAccount::destroy($ids);
-        if ($res) {
+        $res2 = PayChannel::destroy($ids);
+        if ($res && $res2) {
             return \json(\backMsg(0, '已删除'));
         } else {
             return \json(\backMsg(1, '失败'));

@@ -14,5 +14,6 @@ class BaseModel extends Model
 {
     use SoftDelete;
     protected $deleteTime = 'delete_time';
+    protected $autoWriteTimestamp = 'timestamp';
     
 }

@@ -245,7 +245,7 @@
 				}
 				const rec_info = await res.json();
 				if (rec_info.code === 0) {
-					layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('orders-table') });
+					layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('account-table') });
 				} else {
 					layer.msg(rec_info.msg, { icon: 2, time: 1200 });
 				}

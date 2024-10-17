@@ -252,11 +252,11 @@
 									<div id="app" class="layui-card-body">
 										<div class="layui-row order-total">
 											<div class="layui-col-xs6">
-												<p>1433</p>
+												<p>{{ data.ordernum }}</p>
 												<p>总订单(笔)</p>
 											</div>
 											<div class="layui-col-xs6">
-												<p>12900</p>
+												<p>{{ data.totalmoney }}</p>
 												<p>总金额(元)</p>
 											</div>
 										</div>
@@ -276,8 +276,8 @@
 														<p>全渠道统计</p>
 													</div>
 												</div>
-												<div><strong @click="add(100)">{{ data.ordernum }}</strong> 笔</div>
-												<div><strong>{{ data.totalmoney }}</strong> 元</div>
+												<div><strong>{{ data.wxpay.num }}</strong> 笔</div>
+												<div><strong>{{ data.wxpay.money }}</strong> 元</div>
 											</div>
 											<div class="layui-col-xs12 order-channel">
 												<div class="info-channel">
@@ -294,8 +294,8 @@
 														<p>全渠道统计</p>
 													</div>
 												</div>
-												<div><strong>50</strong> 笔</div>
-												<div><strong>490</strong> 元</div>
+												<div><strong>{{ data.alipay.num }}</strong> 笔</div>
+												<div><strong>{{ data.alipay.money }}</strong> 元</div>
 											</div>
 											<div class="layui-col-xs12 order-channel">
 												<div class="info-channel">
@@ -321,8 +321,8 @@
 														<p>全渠道统计</p>
 													</div>
 												</div>
-												<div><strong>31</strong> 笔</div>
-												<div><strong>68</strong> 元</div>
+												<div><strong>{{ data.unionpay.num }}</strong> 笔</div>
+												<div><strong>{{ data.unionpay.money }}</strong> 元</div>
 											</div>
 										</div>
 									</div>
@@ -428,19 +428,24 @@
 				elem: '#order-data',
 				data: [{
 					title: '今年',
-					id: 'this-year',
+					id: 0,
 				}, {
 					title: '近30天',
-					id: 'near-30days',
+					id: 1,
 				}, {
 					title: '近半年',
-					id: 'near-halfyear',
+					id: 2,
 				}, {
 					title: '近一年',
-					id: 'near-year',
+					id: 3,
 				}],
 				click: function (obj) {
 					this.elem.find('span').text(obj.title);
+					(async () => {
+						const data = await fetch(`/api/Console/orderinfo?time=${obj.id}`).then(res => res.json());
+						const updateOrderInfo = new CustomEvent("updateOrderInfo", { detail: data });
+						window.dispatchEvent(updateOrderInfo);
+					})()
 				}
 			});
 
@@ -459,7 +464,7 @@
 				cols: cols,
 				skin: 'line',
 			});
-
+			// 折线图
 			var echartsRecords = echarts.init(document.getElementById('echarts-records'), 'walden');
 			const colorList = ["#9E87FF", '#73DDFF', '#fe9a8b', '#F56948', '#9E87FF']
 			var option = {
@@ -556,14 +561,15 @@
 
 		createApp({
 			setup() {
-				const data = ref({ ordernum: 100, totalmoney: 1500 });
-				function add(num) {
-					data.value.ordernum += num;
-				}
-				return {
-					data,
-					add
-				}
+				const data = ref({ ordernum: 0, totalmoney: 0, wxpay: { num: 0, money: 0 }, alipay: { num: 0, money: 0 }, unionpay: { num: 0, money: 0 } });
+				(async () => {
+					const info = await fetch(`/api/Console/orderinfo?time=0`).then(res => res.json());
+					data.value = info;
+				})()
+				window.addEventListener("updateOrderInfo", (event) => {
+					data.value = event.detail;
+				});
+				return { data }
 			}
 		}).mount('#app')
 	</script>

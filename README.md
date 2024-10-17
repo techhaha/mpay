@@ -23,7 +23,7 @@
 这样，只要账户、密码没有问题，就不存在监听掉线的情况，也就非常稳定了。
 
 
-博客文章介绍 [记录我的第一个thinkphp项目，实现聚合码支付收款回调，无需挂机](https://blog.csdn.net/weixin_44177222/article/details/141722951?fromshare=blogdetail&sharetype=blogdetail&sharerId=141722951&sharerefer=PC&sharesource=weixin_44177222&sharefrom=from_link)
+ **博客文章介绍**  [记录我的第一个thinkphp项目，实现聚合码支付收款回调，无需挂机](https://blog.csdn.net/weixin_44177222/article/details/141722951?fromshare=blogdetail&sharetype=blogdetail&sharerId=141722951&sharerefer=PC&sharesource=weixin_44177222&sharefrom=from_link)
 
 
 目前已支持的收款平台： **收钱吧** 、 **码钱** 、 **小Y经营** 、 **数字门店** 等。

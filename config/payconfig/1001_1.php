@@ -19,7 +19,7 @@ return [
         // 账号
         'account'   =>  '188******23',
         // 密码
-        'password'  =>  '76********SQB',
+        'password'  =>  '7*******B',
         // 订单查询参数配置
         'query'     =>  array (
   'date_end' => NULL,

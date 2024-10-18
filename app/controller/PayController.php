@@ -273,7 +273,7 @@ class PayController
             }
         }
         if (!$orders) {
-            return \json(['code' => 0, 'msg' => '非本账号订单']);
+            return \json(['code' => 0, 'msg' => '非本账号订单或监听模式不对']);
         }
         // 登陆账号
         $config = ['username' => $pay_config['account'], 'password' => $pay_config['password']];

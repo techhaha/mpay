@@ -1,8 +1,6 @@
 .gitignore
-composer.phar
-composer.lock
 /.idea
 /.vscode
-/vendor
 /.history
 /.gitee
+

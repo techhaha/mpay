@@ -44,14 +44,14 @@ return [
     'openType' => '_iframe',
     'href' => '/User/index',
   ],
-  [
-    'id' => 'system',
-    'title' => '系统设置',
-    'icon' => 'layui-icon layui-icon-console',
-    'type' => 1,
-    'openType' => '_iframe',
-    'href' => '/System/index',
-  ],
+  // [
+  //   'id' => 'system',
+  //   'title' => '系统设置',
+  //   'icon' => 'layui-icon layui-icon-console',
+  //   'type' => 1,
+  //   'openType' => '_iframe',
+  //   'href' => '/System/index',
+  // ],
   // [
   //   'id' => 'pay',
   //   'title' => '支付管理',

@@ -27,9 +27,17 @@ class PayAccount extends BaseModel
     // 获取器
     public function getPlatformAttr($value)
     {
-        // 加载平台配置
-        $platform = \think\facade\Config::load("extendconfig/platform", 'extendconfig');
-        return $platform[$value];
+        $payplugin_path = config_path() . '/extendconfig/payplugin.php';
+        if (!file_exists($payplugin_path)) {
+            return [];
+        }
+        // 加载插件配置
+        $payplugin_config = require_once $payplugin_path;
+        $option = [];
+        foreach ($payplugin_config as $config) {
+            $option[$config['platform']] =  $config['name'];
+        }
+        return $option[$value];
     }
     public function getPatternAttr($value)
     {

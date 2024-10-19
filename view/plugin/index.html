@@ -43,7 +43,7 @@
         <button class="layui-btn layui-btn-primary layui-bg-gray layui-btn-sm" grp-btn lay-event="showWaitInstall">待安装</button>
 	</script>
     <script type="text/html" id="plugin-state">
-		<input type="checkbox" name="state" value="{{d.id}}" lay-skin="switch" lay-text="启用|禁用" lay-filter="pluginEnable" {{ d.state == 1 ? 'checked' : '' }} />
+		<input type="checkbox" name="state" value="{{d.platform}}" lay-skin="switch" lay-text="启用|禁用" lay-filter="pluginEnable" {{ d.state == 1 ? 'checked' : '' }} />
 	</script>
     <script type="text/html" id="plugin-action">
 		<a href="javascript:;" class="layui-font-green" lay-event="createConfig">配置</a><div class="divider-vl"></div>
@@ -105,8 +105,8 @@
             // 启用状态
             form.on('switch(pluginEnable)', function (obj) {
                 const state = obj.elem.checked == true ? 1 : 0;
-                const id = obj.value;
-                const field = { state: state, id: id };
+                const platform = obj.value;
+                const field = { state: state, platform: platform };
                 plugin.enable(obj, field);
                 return false;
             });

@@ -116,20 +116,39 @@ class PayManageController extends BaseController
     {
         $platform = Platform::where('platform', $acc->getData('platform'))->find();
         $user = User::where('pid', $acc->pid)->find();
-        $query = \unserialize($platform->query);
-        $data = [
-            'pid'       =>  $user->pid,
-            'key'       =>  $user->secret_key,
-            'aid'       =>  $acc->id,
-            'platform'  =>  $acc->getData('platform'),
-            'account'   =>  $acc->account,
-            'password'  =>  $acc->password,
-            'payclass'  =>  $platform->class_name,
-            'query'     =>  \var_export($query, \true)
-        ];
-        $config = View::fetch('tpl/account_config', $data);
-        $name = "{$data['pid']}_{$data['aid']}";
-        $path = "../config/payconfig/{$name}.php";
+        $query = var_export(\unserialize($platform->query), \true);
+        $config = <<<EOF
+<?php
+// +----------------------------------------------------------------------
+// | 支付监听配置，一个文件，一个账号
+// +----------------------------------------------------------------------
+
+return [
+    // 用户账号配置
+    'user' => [
+        'pid'       =>  {$user->pid},
+        'key'       =>  '$user->secret_key'
+    ],
+    // 收款平台账号配置
+    'pay' => [
+        // 账号id
+        'aid'       =>  $acc->id,
+        // 收款平台
+        'platform'  =>  '{$acc->getData('platform')}',
+        // 插件类名
+        'payclass'  =>  '{$platform->class_name}',
+        // 账号
+        'account'   =>  '{$acc->account}',
+        // 密码
+        'password'  =>  '{$acc->password}',
+        // 订单查询参数配置
+        'query'     =>  {$query},
+    ]
+];
+
+EOF;
+        $name = "{$user->pid}_{$acc->id}";
+        $path = config_path() . "/payconfig/{$name}.php";
         \file_put_contents($path, $config);
     }
 }

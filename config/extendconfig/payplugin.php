@@ -45,7 +45,7 @@ return array (
     'price' => '99.00',
     'describe' => '码钱商管平台',
     'website' => 'https://m.hkrt.cn/',
-    'state' => 0,
+    'state' => 1,
     'query' => 'a:12:{s:12:"terminalType";s:0:"";s:7:"payType";s:0:"";s:7:"payMode";s:0:"";s:11:"tradeStatus";s:1:"1";s:7:"tradeNo";s:0:"";s:7:"storeId";s:0:"";s:4:"page";i:1;s:4:"rows";i:10;s:7:"endDate";N;s:7:"endTime";N;s:9:"startDate";N;s:9:"startTime";N;}',
   ),
   4 => 
@@ -56,7 +56,7 @@ return array (
     'price' => '99.00',
     'describe' => '数字支付，更安全，更高效',
     'website' => 'https://customer.lakala.com/',
-    'state' => 0,
+    'state' => 1,
     'query' => '',
   ),
   5 => 

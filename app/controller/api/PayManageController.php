@@ -7,9 +7,7 @@ namespace app\controller\api;
 use app\BaseController;
 use app\model\PayAccount;
 use app\model\PayChannel;
-use app\model\Platform;
 use app\model\User;
-use think\facade\View;
 
 class PayManageController extends BaseController
 {

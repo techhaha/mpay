@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>收款管理</title>
+	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+</head>
+
+<body class="pear-container">
+	<div class="layui-card">
+		<div class="layui-card-body">
+			<form class="layui-form layui-form-pane" action="" id="serch-form">
+				<div class="layui-form-item">
+					<div class="layui-inline">
+						<label class="layui-form-label">收款平台</label>
+						<div class="layui-input-inline">
+							<select name="platform">
+								<option value="">收款平台</option>
+							</select>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">启用</label>
+						<div class="layui-input-inline">
+							<select name="state">
+								<option value="">请选择</option>
+								<option value="1">启用</option>
+								<option value="0">禁用</option>
+							</select>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">监听模式</label>
+						<div class="layui-input-inline">
+							<select name="pattern">
+								<option value="">请选择</option>
+								<?php include_once '../view/tpl/pattern.html'; ?>
+							</select>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">收款账号</label>
+						<div class="layui-input-inline">
+							<input type="text" name="account" autocomplete="off" class="layui-input" placeholder="请输入">
+						</div>
+					</div>
+					<div class="layui-inline">
+						<button type="submit" class="pear-btn pear-btn-md pear-btn-primary" lay-submit
+							lay-filter="query">
+							<i class="layui-icon layui-icon-search"></i>
+							查询
+						</button>
+						<button type="button" lay-on="reset" class="pear-btn pear-btn-md">
+							<i class="layui-icon layui-icon-refresh"></i>
+							重置
+						</button>
+					</div>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="layui-card">
+		<div class="layui-card-body">
+			<table id="account-table" lay-filter="account-table"></table>
+		</div>
+	</div>
+	<script type="text/html" id="account-toolbar">
+		<button class="pear-btn pear-btn-primary pear-btn-md" lay-event="addAccount">
+			<i class="layui-icon layui-icon-add-1"></i>
+			添加
+		</button>
+		<button class="pear-btn pear-btn-danger pear-btn-md" lay-event="delAccount">
+			<i class="layui-icon layui-icon-delete"></i>
+			删除
+		</button>
+	</script>
+	<script type="text/html" id="account-state">
+		<input type="checkbox" name="state" value="{{d.id}}" lay-skin="switch" lay-text="启用|禁用" lay-filter="accountEnable" {{ d.state == 1 ? 'checked' : '' }} />
+	</script>
+	<script src="/component/layui/layui.js"></script>
+	<script src="/component/pear/pear.js"></script>
+	<script>
+		layui.use(['table', 'form', 'common', 'util'], function () {
+			let table = layui.table;
+			let form = layui.form;
+			let common = layui.common;
+			let util = layui.util;
+
+			// 渲染插件选项
+			(async () => {
+				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
+				let option_str = `<option value="">收款平台</option>`;
+				data.forEach(val => {
+					option_str += `<option value="${val.platform}">${val.name}</option>`;
+				});
+				const select = document.querySelector('select[name="platform"]');
+				select.innerHTML = option_str;
+				form.render('select');
+			})()
+			
+			let cols = [[
+				{ type: 'checkbox' },
+				{ title: '平 台', field: 'platform', align: 'center', templet: '' },
+				{ title: '账 号', field: 'account', align: 'center' },
+				{ title: '密 码', field: 'password', align: 'center' },
+				{ title: '启用状态', field: 'state', align: 'center', templet: '#account-state' },
+				{ title: '监听模式', field: 'pattern', align: 'center' },
+				{ title: '终端数量', field: 'channel', align: 'center', templet: '<div><a href="javascript:;" lay-event="channelList"><span class="layui-badge layui-bg-green">{{= d.channel }}</span></a></div>' },
+				{ title: '操作', align: 'center', fixed: 'right', templet: '<div><a href="javascript:;" class="layui-font-green" lay-event="edit"><strong>编辑</strong></a></div>' }
+			]]
+
+			table.render({
+				id: 'account-table',
+				elem: '#account-table',
+				url: '/api/PayManage/getPayAccount',
+				page: true,
+				cols: cols,
+				skin: 'line',
+				toolbar: '#account-toolbar',
+				defaultToolbar: [{
+					title: '刷新',
+					layEvent: 'refresh',
+					icon: 'layui-icon-refresh',
+				}, 'filter', 'print', 'exports']
+			});
+
+			// 事件处理
+
+			// 表格单元格事件
+			table.on('tool(account-table)', function (obj) {
+				const id = obj.data.id;
+				if (obj.event === 'edit') {
+					account.editAccount(id);
+				} else if (obj.event === 'channelList') {
+					account.channelList(id);
+				}
+			});
+			// 表格头部按钮事件
+			table.on('toolbar(account-table)', function (obj) {
+				if (obj.event === 'refresh') {
+					table.reload('account-table');
+				} else if (obj.event === 'addAccount') {
+					account.addAccount();
+				} else if (obj.event === 'delAccount') {
+					layer.confirm('确定删除账户?', { icon: 3, title: '提示' },
+						function (index) {
+							const pagedata = table.checkStatus(obj.config.id)
+							let select_id = [];
+							pagedata.data.forEach(val => {
+								select_id.push(val.id);
+							});
+							httpJSON('/api/PayManage/delAccount', { ids: select_id })
+							layer.close(index);
+						});
+				}
+			});
+			// 表单自定义事件监听
+			form.on('submit(query)', function (obj) {
+				const field = obj.field;
+				let new_field = {};
+				for (const key in field) {
+					if (field.hasOwnProperty.call(field, key)) {
+						const value = field[key];
+						if (value) {
+							new_field[key] = value;
+						}
+					}
+				}
+				table.reload('account-table', { where: new_field });
+				return false;
+			});
+			// 启用状态
+			form.on('switch(accountEnable)', function (obj) {
+				const state = obj.elem.checked == true ? 1 : 0;
+				const id = obj.value;
+				const field = { state: state, id: id };
+				account.accountEnable(obj, field);
+				return false;
+			});
+			// 监听重置按钮
+			util.on({
+				reset: function () {
+					document.querySelector('#serch-form').reset();
+					table.reload('account-table', { where: {} });
+				}
+			});
+
+			// 操作方法
+			let account = {};
+
+			// 编辑
+			account.editAccount = function (id) {
+				layer.open({
+					id: 'iframe-edit-account',
+					type: 2,
+					title: '收款账号编辑',
+					shade: 0.1,
+					area: [common.isModile() ? '100%' : '500px', common.isModile() ? '100%' : '600px'],
+					content: `/PayManage/editAccount?id=${id}`,
+				});
+			}
+			// 终端列表
+			account.channelList = function (id) {
+				layer.open({
+					id: 'iframe-channel-list',
+					type: 2,
+					title: '收款终端',
+					shade: 0.1,
+					area: [common.isModile() ? '100%' : '500px', common.isModile() ? '100%' : '700px'],
+					content: `/PayManage/channelList?id=${id}`,
+				});
+			}
+			// 添加账号
+			account.addAccount = function () {
+				layer.open({
+					id: 'iframe-add-account',
+					type: 2,
+					title: '添加账号',
+					shade: 0.1,
+					area: [common.isModile() ? '100%' : '500px', common.isModile() ? '100%' : '500px'],
+					content: `/PayManage/addAccount`,
+				});
+			}
+			// 账户启用
+			account.accountEnable = async (obj, field) => {
+				const res = await fetch('/api/PayManage/accountEnable', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(field) });
+				if (res.status !== 200) {
+					layer.msg('请求失败，请重试！', { tips: 2, time: 1200 }, () => { obj.elem.checked = !obj.elem.checked });
+					return false;
+				}
+				const rec_info = await res.json();
+				if (rec_info.code === 0) {
+					layer.tips(rec_info.msg, obj.othis, { tips: 1, time: 1200 });
+				} else {
+					layer.msg(rec_info.msg, { icon: 2, time: 1200 }, () => { obj.elem.checked = !obj.elem.checked });
+				}
+			}
+			// 请求封装
+			async function httpJSON(url, info) {
+				const res = await fetch(url, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) });
+				if (res.status !== 200) {
+					layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+					return false;
+				}
+				const rec_info = await res.json();
+				if (rec_info.code === 0) {
+					layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('account-table') });
+				} else {
+					layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+				}
+			}
+		})
+	</script>
+</body>
+
+</html>

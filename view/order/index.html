@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>订单明细</title>
+	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+</head>
+
+<body class="pear-container">
+	<div class="layui-card">
+		<div class="layui-card-body">
+			<form class="layui-form layui-form-pane" action="" id="serch-form">
+				<div class="layui-form-item">
+					<div class="layui-inline">
+						<label class="layui-form-label">订单号</label>
+						<div class="layui-input-block">
+							<input type="text" name="order_id" autocomplete="off" class="layui-input" placeholder="请输入">
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">商户订单号</label>
+						<div class="layui-input-inline">
+							<input type="text" name="out_trade_no" autocomplete="off" class="layui-input"
+								placeholder="请输入">
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">用户ID</label>
+						<div class="layui-input-inline">
+							<input type="text" name="pid" autocomplete="off" class="layui-input" placeholder="请输入">
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">商品</label>
+						<div class="layui-input-inline">
+							<input type="text" name="name" autocomplete="off" class="layui-input" placeholder="请输入">
+						</div>
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<div class="layui-inline">
+						<label class="layui-form-label">支付状态</label>
+						<div class="layui-input-inline">
+							<select name="state">
+								<option value="">请选择</option>
+								<option value="1">支付成功</option>
+								<option value="0">等待/过期</option>
+							</select>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">支付平台</label>
+						<div class="layui-input-inline">
+							<select name="type">
+								<option value="">请选择</option>
+								<option value="wxpay">微信支付</option>
+								<option value="alipay">支付宝</option>
+							</select>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">收款平台</label>
+						<div class="layui-input-inline">
+							<select name="platform">
+								<option value="">收款平台</option>
+							</select>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<label class="layui-form-label">创建时间</label>
+						<div class="layui-inline" id="create_time">
+							<div class="layui-input-inline">
+								<input type="text" name="create_time_start" autocomplete="off" placeholder="开始"
+									class="layui-input">
+							</div>
+							<div class="layui-form-mid">-</div>
+							<div class="layui-input-inline">
+								<input type="text" name="create_time_end" autocomplete="off" placeholder="结束"
+									class="layui-input">
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="layui-form-item" style="text-align:right;">
+					<div class="layui-form-item layui-inline">
+						<button type="submit" class="pear-btn pear-btn-md pear-btn-primary" lay-submit
+							lay-filter="order-query">
+							<i class="layui-icon layui-icon-search"></i>
+							查询
+						</button>
+						<button type="button" lay-on="reset" class="pear-btn pear-btn-md">
+							<i class="layui-icon layui-icon-refresh"></i>
+							重置
+						</button>
+					</div>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="layui-card">
+		<div class="layui-card-body">
+			<table id="orders-table" lay-filter="orders-table"></table>
+		</div>
+	</div>
+	<script type="text/html" id="order-toolbar">
+		<button class="pear-btn pear-btn-danger pear-btn-md" lay-event="batchRemove">
+			<i class="layui-icon layui-icon-delete"></i>
+			批量删除
+		</button>
+		<button class="pear-btn pear-btn-warming pear-btn-md" lay-event="batchTimeout">
+			<i class="icon pear-icon pear-icon-history"></i>
+			清空过期
+		</button>
+	</script>
+	<script src="/component/layui/layui.js"></script>
+	<script src="/component/pear/pear.js"></script>
+	<script>
+		layui.use(['table', 'form', 'common', 'dropdown', 'laydate', 'util'], function () {
+			let table = layui.table;
+			let form = layui.form;
+			let common = layui.common;
+			let dropdown = layui.dropdown;
+			let laydate = layui.laydate;
+			let util = layui.util;
+			// 渲染时间选择器
+			laydate.render({
+				elem: '#create_time',
+				range: ['input[name="create_time_start"]', 'input[name="create_time_end"]'],
+				rangeLinked: true,
+				type: 'datetime',
+				fullPanel: true,
+				weekStart: 1,
+				shortcuts: [{
+					text: "今天",
+					value: function () {
+						let now = new Date(); let today = new Date(); today.setHours(0, 0, 0, 0);
+						return [today, now];
+					}
+				}, {
+					text: "昨天",
+					value: function () {
+						let yesterday_start = new Date();
+						yesterday_start.setDate(yesterday_start.getDate() - 1);
+						yesterday_start.setHours(0, 0, 0, 0);
+						let yesterday_end = new Date()
+						yesterday_end.setDate(yesterday_end.getDate() - 1);
+						yesterday_end.setHours(23, 59, 59, 999);
+						return [yesterday_start, yesterday_end];
+					}
+				}, {
+					text: "近七天",
+					value: function () {
+						let today = new Date();
+						let endOfDayToday = new Date(today);
+						endOfDayToday.setDate(endOfDayToday.getDate() - 1);
+						endOfDayToday.setHours(23, 59, 59, 999);
+						let startSevenDaysAgo = new Date(today);
+						startSevenDaysAgo.setDate(startSevenDaysAgo.getDate() - 7);
+						startSevenDaysAgo.setHours(0, 0, 0, 0);
+						return [startSevenDaysAgo, endOfDayToday];
+					}
+				}, {
+					text: "本月",
+					value: function () {
+						let today = new Date();
+						let year = today.getFullYear();
+						let month = today.getMonth();
+						let startOfMonth = new Date(year, month, 1);
+						startOfMonth.setHours(0, 0, 0, 0);
+						return [startOfMonth, today];
+					}
+				}, {
+					text: "上个月",
+					value: function () {
+						let today = new Date();
+						let year = today.getFullYear();
+						let month = today.getMonth();
+						let startOfMonth = new Date(year, month - 1, 1);
+						startOfMonth.setHours(0, 0, 0, 0);
+						let thisMonthFirstDay = new Date(year, month, 1);
+						let endOfMonth = new Date(thisMonthFirstDay - 1);
+						endOfMonth.setHours(23, 59, 59, 999);
+						return [startOfMonth, endOfMonth];
+					}
+				}]
+			});
+			// 渲染插件选项
+			(async () => {
+				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
+				let option_str = `<option value="">收款平台</option>`;
+				data.forEach(val => {
+					option_str += `<option value="${val.platform}">${val.name}</option>`;
+				});
+				const select = document.querySelector('select[name="platform"]');
+				select.innerHTML = option_str;
+				form.render('select');
+			})()
+			// 表格列参数
+			let cols = [[
+				{ type: 'checkbox' },
+				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 165, templet: '<div><a href="javascript:;" class="layui-font-blue" lay-event="showOrder">{{= d.order_id }}</a></div>' },
+				// { title: '用户', field: 'pid', align: 'center', width: 85 },
+				{ title: '商家订单号', field: 'out_trade_no', align: 'center', minWidth: 180 },
+				{ title: '商品', field: 'name', align: 'center', minWidth: 180 },
+				{ title: '订单金额', field: 'money', align: 'center', minWidth: 85 },
+				{ title: '成交金额', field: 'really_price', align: 'center', minWidth: 85 },
+				{ title: '支付状态', field: 'state', align: 'center', minWidth: 85, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
+				{ title: '支付时间', field: 'pay_time', align: 'center', minWidth: 160, templet: '<div>{{= d.pay_time == d.create_time ? "- -" : d.pay_time}}</div>' },
+				{ title: '支付平台', field: 'type', align: 'center', width: 120, templet: '<div>{{# if(d.type=="wxpay"){return`<img src="/static/img/wxpay.ico"width="15"><span>微信支付</span>`}if(d.type=="alipay"){return`<img src="/static/img/alipay.ico"width="15"><span>支付宝</span>`} }}</div>' },
+				{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: '<div>{{# return`${d.payAccount.platform} [${d.aid}:${d.cid}]` }}</div>' },
+				{ title: '操作', align: 'center', width: 120, fixed: 'right', templet: '<div><strong><a href="javascript:;" data-id="{{= d.id }}" class="layui-font-green {{= d.state==1 ? "orderSet-paid" : "orderSet-paying" }}">设置</a></strong></div>' }
+			]]
+			// 表格渲染
+			table.render({
+				id: 'orders-table',
+				elem: '#orders-table',
+				url: '/api/Order/getOrders',
+				page: true,
+				cols: cols,
+				skin: 'line',
+				toolbar: '#order-toolbar',
+				defaultToolbar: [{
+					title: '刷新',
+					layEvent: 'refresh',
+					icon: 'layui-icon-refresh',
+				}, 'filter', 'print', 'exports'],
+				done: function () {
+					dropdown.render({
+						elem: '.orderSet-paying',
+						data: [{ title: '改已支付', type: 1 }, { type: '-' }, { title: '手动补单', type: 3 }, { title: '删除订单', type: 0 }],
+						click: function (data, othis) {
+							order.setOrder(data, this.elem);
+						}
+					});
+					dropdown.render({
+						elem: '.orderSet-paid',
+						data: [{ title: '改未支付', type: 2 }, { type: '-' }, { title: '重新通知', type: 4 }, { title: '删除订单', type: 0 }],
+						click: function (data, othis) {
+							order.setOrder(data, this.elem);
+						}
+					});
+				},
+			});
+
+			// 事件处理
+
+			// 表格单元格事件
+			table.on('tool(orders-table)', function (obj) {
+				if (obj.event === 'showOrder') {
+					order.showOrder(obj.data.id);
+				}
+			});
+			// 表格头部按钮事件
+			table.on('toolbar(orders-table)', function (obj) {
+				if (obj.event === 'refresh') {
+					table.reload('orders-table');
+				} else if (obj.event === 'batchRemove') {
+					layer.confirm('批量删除订单?', { icon: 3, title: '提示' },
+						function (index) {
+							const pagedata = table.checkStatus(obj.config.id)
+							let select_id = [];
+							pagedata.data.forEach(val => {
+								select_id.push(val.id);
+							});
+							httpJSON('/api/Order/batchRemove', { ids: select_id });
+							layer.close(index);
+						});
+				} else if (obj.event === 'batchTimeout') {
+					layer.confirm('确定清空超时订单?', { icon: 3, title: '提示' },
+						function (index) {
+							httpJSON('/api/Order/batchTimeout', { action: 'batchTimeout' })
+							layer.close(index);
+						});
+				}
+			});
+			// 表单自定义事件监听
+			form.on('submit(order-query)', function (obj) {
+				const field = obj.field;
+				let new_field = {};
+				for (const key in field) {
+					if (field.hasOwnProperty.call(field, key)) {
+						const value = field[key];
+						if (value) {
+							new_field[key] = value;
+						}
+					}
+				}
+				table.reload('orders-table', { where: new_field });
+				return false;
+			});
+			// 监听重置按钮
+			util.on({
+				reset: function () {
+					document.querySelector('#serch-form').reset();
+					table.reload('orders-table', { where: {} });
+				}
+			});
+
+			// 操作方法
+			let order = {};
+
+			// 操作菜单
+			order.setOrder = function (data, elem) {
+				const dotype = data.type;
+				const id = elem.attr("data-id");
+				if (dotype == 1 || dotype == 2) {
+					// 更改支付状态
+					const state = dotype == 1 ? 1 : 0;
+					httpJSON('/api/Order/changeOrderState', { id: id, state: state })
+				} else if (dotype == 3) {
+					// 手动补单
+					layer.confirm('无论是否真实支付，直接确认支付?', { icon: 3, title: '提示' },
+						function (index) {
+							const state = 1;
+							httpJSON('/api/Order/doPayOrder', { id: id, state: state })
+							layer.close(index);
+						});
+				} else if (dotype == 4) {
+					// 重新通知
+					httpJSON('/api/Order/redoPayOrder', { id: id })
+				} else if (dotype == 0) {
+					//删除订单
+					layer.confirm('确定删除订单?', { icon: 3, title: '提示' },
+						function (index) {
+							httpJSON('/api/Order/deleteOrder', { id: id })
+							layer.close(index);
+						});
+				}
+			}
+			// 订单详细
+			order.showOrder = function (id) {
+				layer.open({
+					id: 'iframe-show-order',
+					type: 2,
+					title: '订单详细',
+					shade: 0.1,
+					area: [common.isModile() ? '100%' : '500px', common.isModile() ? '100%' : '800px'],
+					content: `/Order/showOrder?id=${id}`,
+				});
+			}
+			async function httpJSON(url, info) {
+				const res = await fetch(url, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) });
+				if (res.status !== 200) {
+					layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+					return false;
+				}
+				const rec_info = await res.json();
+				if (rec_info.code === 0) {
+					layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('orders-table') });
+				} else {
+					layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+				}
+			}
+		})
+	</script>
+</body>
+
+</html>

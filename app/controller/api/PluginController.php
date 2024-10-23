@@ -13,7 +13,7 @@ class PluginController extends BaseController
     // 获取插件列表
     public function getPluginList()
     {
-        $plugin_config = $this->getPluginConfig();
+        $plugin_config = self::getPluginConfig();
         if ($plugin_config) {
             return json(['code' => 0, 'msg' => 'OK', 'count' => \count($plugin_config), 'data' => $plugin_config]);
         } else {
@@ -38,7 +38,7 @@ class PluginController extends BaseController
                 $config[$key] = $value;
             }
         }
-        $plugin_config = $this->getPluginConfig();
+        $plugin_config = self::getPluginConfig();
         $plugin_platform = $config['platform'] ?: '';
         foreach ($plugin_config as $value) {
             if ($plugin_platform == $value['platform']) {
@@ -52,7 +52,7 @@ class PluginController extends BaseController
     // 删除插件
     public function delPlugin($plugin_name = '')
     {
-        $plugin_config = $this->getPluginConfig();
+        $plugin_config = self::getPluginConfig();
         $keys = [];
         foreach ($plugin_config as $index => $value) {
             if ($value['platform'] == $plugin_name) {
@@ -69,12 +69,12 @@ class PluginController extends BaseController
     // 修改插件
     public function setPlugin($platform = '', $option = [])
     {
-        $config = $this->getPluginConfig();
+        $config = self::getPluginConfig();
         if (!$platform) {
-            return 1; //'请选择插件'
+            return 1; // 请选择插件
         }
         if (!$option) {
-            return 2; //请添加插件配置
+            return 2; // 请添加插件配置
         }
         foreach ($config as $index => $options) {
             if ($options['platform'] == $platform) {
@@ -103,39 +103,35 @@ class PluginController extends BaseController
     public function pluginOption()
     {
         // 加载平台配置
-        $config = $this->getPluginConfig();
+        $config = self::getPluginConfig();
         $option = [];
         foreach ($config as $value) {
             $option[] = ['platform' => $value['platform'], 'name' => $value['name']];
         }
         return json($option);
     }
-    // 生成插件配置
-    public function crtPlfConfig()
+    // 获取指定插件配置
+    public static function getPluginInfo($platform = '')
     {
-        $info = Platform::where('state', 1)->field('platform, name')->select()->toArray();
-        $data = [];
-        foreach ($info as $value) {
-            $data[$value['platform']] = $value['name'];
+        $config = self::getPluginConfig();
+        $info = [];
+        foreach ($config as $item) {
+            if ($item['platform'] == $platform) {
+                $info = $item;
+                break;
+            }
         }
-        $config = View::fetch('tpl/platform_config', $data);
-        $path = "../config/extendconfig/platform.php";
-        $res = \file_put_contents($path, $config);
-        if ($res) {
-            return \json(\backMsg(msg: '创建成功'));
-        } else {
-            return \json(\backMsg(1, '创建成功'));
-        }
+        return $info;
     }
     // 获取插件配置
-    private function getPluginConfig(): array
+    private static function getPluginConfig(): array
     {
         $payplugin_path = config_path() . '/extendconfig/payplugin.php';
         if (!file_exists($payplugin_path)) {
             return [];
         }
         // 加载插件配置
-        $payplugin_config = require_once $payplugin_path;
+        $payplugin_config = require $payplugin_path;
         return $payplugin_config;
     }
     // 保存插件配置

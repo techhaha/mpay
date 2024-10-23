@@ -97,45 +97,49 @@ class ShouQianBa
     public function payQuery(array $query): array
     {
         $token = $this->getToken();
-        $url = $this->host . $this->find_transactions . '?client_version=7.0.0&token=' . $token;
-        $header = ['Content-Type: application/json;charset=UTF-8'];
-        // 构建订单查询
-        $now = time();
-        $begin_time = ($now - 175) * 1000;
-        $end_time = $now * 1000;
-        $query['date_start'] = $begin_time;
-        $query['date_end'] = $end_time;
-        // 查询订单列表
-        $res_order = $this->getHttpResponse($url, $header, json_encode($query));
-        $arr_res = json_decode($res_order, true);
-        $list = [];
-        if ($arr_res['code'] === 50000) {
-            $list = $arr_res['data']['records'];
-        }
-        // 重构订单流水，返回数组
-        $moneyList = [];
-        if ($list) {
-            $order_no = [];
-            $payway = [];
-            $price = [];
-            $channel = [];
-            $payways = [2 => 'alipay', 3 => 'wxpay'];
-            foreach ($list as $value) {
-                // 平台订单流水号
-                $order_no[] = $value['order_sn'];
-                // 支付类型
-                $payway[] = $payways[$value['payway']];
-                // 收款金额
-                $price[] = $value['original_amount'] / 100;
-                // 收款渠道(二维码编号)
-                $channel[] = $value['terminal_device_fingerprint'];
+        if ($token) {
+            $url = $this->host . $this->find_transactions . '?client_version=7.0.0&token=' . $token;
+            $header = ['Content-Type: application/json;charset=UTF-8'];
+            // 构建订单查询
+            $now = time();
+            $begin_time = ($now - 175) * 1000;
+            $end_time = $now * 1000;
+            $query['date_start'] = $begin_time;
+            $query['date_end'] = $end_time;
+            // 查询订单列表
+            $res_order = $this->getHttpResponse($url, $header, json_encode($query));
+            $arr_res = json_decode($res_order, true);
+            $list = [];
+            if ($arr_res['code'] === 50000) {
+                $list = $arr_res['data']['records'];
             }
-            $moneyList['order_no'] = $order_no;
-            $moneyList['payway'] = $payway;
-            $moneyList['price'] = $price;
-            $moneyList['channel'] = $channel;
+            // 重构订单流水，返回数组
+            $moneyList = [];
+            if ($list) {
+                $order_no = [];
+                $payway = [];
+                $price = [];
+                $channel = [];
+                $payways = [2 => 'alipay', 3 => 'wxpay'];
+                foreach ($list as $value) {
+                    // 平台订单流水号
+                    $order_no[] = $value['order_sn'];
+                    // 支付类型
+                    $payway[] = $payways[$value['payway']];
+                    // 收款金额
+                    $price[] = $value['original_amount'] / 100;
+                    // 收款渠道(二维码编号)
+                    $channel[] = $value['terminal_device_fingerprint'];
+                }
+                $moneyList['order_no'] = $order_no;
+                $moneyList['payway'] = $payway;
+                $moneyList['price'] = $price;
+                $moneyList['channel'] = $channel;
+            }
+            return $moneyList;
+        } else {
+            return [];
         }
-        return $moneyList;
     }
     // 请求外部资源
     private function getHttpResponse($url, $header = [], $post = null, $timeout = 10)

@@ -106,6 +106,7 @@
 				{ title: '密 码', field: 'password', align: 'center' },
 				{ title: '启用状态', field: 'state', align: 'center', templet: '#account-state' },
 				{ title: '监听模式', field: 'pattern', align: 'center' },
+				{ title: '监听地址', field: 'payurl', align: 'center', templet: `<div>{{# return window.location.origin + '/checkPayResult?pid='+d.pid+'&aid='+d.id }}</div>` },
 				{ title: '终端数量', field: 'channel', align: 'center', templet: '<div><a href="javascript:;" lay-event="channelList"><span class="layui-badge layui-bg-green">{{= d.channel }}</span></a></div>' },
 				{ title: '操作', align: 'center', fixed: 'right', templet: '<div><a href="javascript:;" class="layui-font-green" lay-event="edit"><strong>编辑</strong></a></div>' }
 			]]

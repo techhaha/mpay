@@ -3,6 +3,7 @@
 namespace app\controller;
 
 use think\facade\View;
+use payclient\LaKaLa;
 
 class IndexController
 {
@@ -16,6 +17,8 @@ class IndexController
     }
     public function test()
     {
-        return request()->domain();
+        $key = "0383d7088b6947b68e4a626af119e2bd";
+
+        return $key;
     }
 }

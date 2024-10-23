@@ -112,9 +112,9 @@ class PayManageController extends BaseController
     // 生成账号配置
     private function createAccountConfig($acc)
     {
-        $platform = Platform::where('platform', $acc->getData('platform'))->find();
+        $platform = \app\controller\api\PluginController::getPluginInfo($acc->getData('platform'));
         $user = User::where('pid', $acc->pid)->find();
-        $query = var_export(\unserialize($platform->query), \true);
+        $query = var_export($platform['query'], \true);
         $config = <<<EOF
 <?php
 // +----------------------------------------------------------------------
@@ -125,7 +125,7 @@ return [
     // 用户账号配置
     'user' => [
         'pid'       =>  {$user->pid},
-        'key'       =>  '$user->secret_key'
+        'key'       =>  '{$user->secret_key}'
     ],
     // 收款平台账号配置
     'pay' => [
@@ -134,7 +134,7 @@ return [
         // 收款平台
         'platform'  =>  '{$acc->getData('platform')}',
         // 插件类名
-        'payclass'  =>  '{$platform->class_name}',
+        'payclass'  =>  '{$platform['class_name']}',
         // 账号
         'account'   =>  '{$acc->account}',
         // 密码

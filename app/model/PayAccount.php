@@ -32,7 +32,7 @@ class PayAccount extends BaseModel
             return [];
         }
         // 加载插件配置
-        $payplugin_config = require_once $payplugin_path;
+        $payplugin_config = require $payplugin_path;
         $option = [];
         foreach ($payplugin_config as $config) {
             $option[$config['platform']] =  $config['name'];

@@ -19,7 +19,7 @@
 <body class="pear-container">
     <div style="padding: 8px;">
         <div class="layui-row layui-col-space16">
-            <div class="layui-col-md4">
+            <div class="layui-col-md6">
                 <div class="layui-card">
                     <div class="userset"><a href="javascript:;" lay-on="setUser" title="设置">
                             <span class="icon pear-icon pear-icon-setting" style="font-size: 20px;"></span></a></div>
@@ -81,11 +81,22 @@
                                     </div>
                                 </div>
                             </div>
+                            <div class="layui-form-item" pane>
+                                <label class="layui-form-label">订单监控</label>
+                                <div class="layui-input-block">
+                                    <div class="layui-form-mid layui-elip" style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                        <?php echo $orderurl ?>
+                                        <a href="javascript:;" lay-on="copyinfo" data-info="<?php echo $orderurl ?>"
+                                            style="float: right;" title="复制"><span
+                                                class="icon pear-icon pear-icon-survey"></span></a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="layui-col-md8">
+            <div class="layui-col-md6">
                 <div class="layui-card">
                     <div class="layui-card-header">
                         我的文章

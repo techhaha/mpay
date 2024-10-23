@@ -10,7 +10,7 @@ use app\model\User;
 
 class UserController extends BaseController
 {
-    protected $middleware = ['Auth' => ['except' => ['login']]];
+    protected $middleware = ['Auth' => ['except' => ['login', 'resetKey']]];
 
     public function login()
     {

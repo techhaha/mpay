@@ -73,9 +73,10 @@ CREATE TABLE `mpay_pay_account` (
   `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
   `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
   `pattern` tinyint(4) NOT NULL DEFAULT '0' COMMENT '账号监听模式',
+  `params` varchar(255) NOT NULL DEFAULT '' COMMENT '自定义查询',
   `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -84,6 +85,7 @@ CREATE TABLE `mpay_pay_account` (
 
 LOCK TABLES `mpay_pay_account` WRITE;
 /*!40000 ALTER TABLE `mpay_pay_account` DISABLE KEYS */;
+INSERT INTO `mpay_pay_account` VALUES (1,1001,'sqbpay','18872410423','7698177hcnSQB',1,0,'{}',NULL);
 /*!40000 ALTER TABLE `mpay_pay_account` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -103,7 +105,7 @@ CREATE TABLE `mpay_pay_channel` (
   `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
   `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -112,40 +114,8 @@ CREATE TABLE `mpay_pay_channel` (
 
 LOCK TABLES `mpay_pay_channel` WRITE;
 /*!40000 ALTER TABLE `mpay_pay_channel` DISABLE KEYS */;
+INSERT INTO `mpay_pay_channel` VALUES (1,1,'24101820013292761382','https://qr.shouqianba.com/24101820013292761382','2024-10-19 02:23:37',1,NULL);
 /*!40000 ALTER TABLE `mpay_pay_channel` ENABLE KEYS */;
-UNLOCK TABLES;
-
---
--- Table structure for table `mpay_platform`
---
-
-DROP TABLE IF EXISTS `mpay_platform`;
-/*!40101 SET @saved_cs_client     = @@character_set_client */;
-/*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `mpay_platform` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `platform` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '标记',
-  `name` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '名称',
-  `class_name` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '类名',
-  `price` decimal(10,2) NOT NULL DEFAULT '0.00' COMMENT '价格',
-  `describe` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '说明',
-  `website` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '官网',
-  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用状态',
-  `query` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT 'API查询',
-  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `delete_time` timestamp NULL DEFAULT NULL,
-  PRIMARY KEY (`id`) USING BTREE
-) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;
-/*!40101 SET character_set_client = @saved_cs_client */;
-
---
--- Dumping data for table `mpay_platform`
---
-
-LOCK TABLES `mpay_platform` WRITE;
-/*!40000 ALTER TABLE `mpay_platform` DISABLE KEYS */;
-INSERT INTO `mpay_platform` VALUES (1,'sqbpay','收钱吧','ShouQianBa',99.00,'主流移动支付全能收 信用卡,花呗都能用,生意帮手收钱吧,移动收款就用它!','https://www.shouqianba.com/',1,'a:8:{s:8:\"date_end\";N;s:10:\"date_start\";N;s:4:\"page\";i:1;s:9:\"page_size\";i:10;s:13:\"upayQueryType\";i:0;s:6:\"status\";s:4:\"2000\";s:8:\"store_sn\";s:0:\"\";s:4:\"type\";s:2:\"30\";}','2024-08-16 02:25:05',NULL),(2,'storepay','数字门店','ZhiHuiJingYing',99.00,'数字门店','https://store.zhihuijingyingba.com/',1,'a:7:{s:6:\"pageNo\";i:1;s:8:\"pageSize\";i:10;s:9:\"payClient\";i:4;s:6:\"status\";i:2;s:2:\"_t\";N;s:16:\"createTime_begin\";N;s:14:\"createTime_end\";N;}','2024-08-17 06:31:16',NULL),(3,'ysepay','小Y经营','Ysepay',99.00,'为商户和消费者提供安全、便捷、高效的支付产品与服务助力商户提升运营效率，实现数字化运营','https://xym.ysepay.com/',1,'a:10:{s:7:\"storeNo\";s:0:\"\";s:7:\"bizType\";i:3;s:7:\"payType\";s:0:\"\";s:11:\"orderStatus\";i:3;s:5:\"trmNo\";s:0:\"\";s:12:\"operatorUser\";s:0:\"\";s:13:\"codeBoardCode\";s:0:\"\";s:8:\"pageSize\";i:10;s:6:\"pageNo\";i:1;s:7:\"orderNo\";s:0:\"\";}','2024-08-17 06:31:19',NULL),(4,'mqpay','码钱','MaQian',99.00,'码钱商管平台','https://m.hkrt.cn/',1,'a:12:{s:12:\"terminalType\";s:0:\"\";s:7:\"payType\";s:0:\"\";s:7:\"payMode\";s:0:\"\";s:11:\"tradeStatus\";s:1:\"1\";s:7:\"tradeNo\";s:0:\"\";s:7:\"storeId\";s:0:\"\";s:4:\"page\";i:1;s:4:\"rows\";i:10;s:7:\"endDate\";N;s:7:\"endTime\";N;s:9:\"startDate\";N;s:9:\"startTime\";N;}','2024-08-17 06:32:29',NULL),(5,'lklpay','拉卡拉','LaKaLa',99.00,'数字支付，更安全，更高效','https://customer.lakala.com/',1,'','2024-10-17 08:17:47',NULL),(6,'sftpay','盛付通','ShengPay',99.00,'轻松生活 放心支付','https://b.shengpay.com/',1,'','2024-10-17 08:18:35',NULL);
-/*!40000 ALTER TABLE `mpay_platform` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -189,4 +159,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2024-10-19  9:31:50
+-- Dump completed on 2024-10-23 17:17:20

@@ -23,7 +23,7 @@ return array(
       'status' => '2000',
       'store_sn' => '',
       'type' => '30',
-    ),
+    )
   ),
   1 =>
   array(
@@ -43,7 +43,7 @@ return array(
       '_t' => NULL,
       'createTime_begin' => NULL,
       'createTime_end' => NULL,
-    ),
+    )
   ),
   2 =>
   array(
@@ -66,7 +66,7 @@ return array(
       'pageSize' => 10,
       'pageNo' => 1,
       'orderNo' => '',
-    ),
+    )
   ),
   3 =>
   array(
@@ -91,7 +91,7 @@ return array(
       'endTime' => NULL,
       'startDate' => NULL,
       'startTime' => NULL,
-    ),
+    )
   ),
   4 =>
   array(
@@ -124,12 +124,7 @@ return array(
       'size' => 10,
       'merchantNos' => NULL,
       'merInnerNos' => NULL,
-    ),
-    'param' => [
-      'openEntity' => '822581058121GYW',
-      'merchantNos' => '822581058121GYW',
-      'merInnerNos' => '4002022071722760372',
-    ],
+    )
   ),
   5 =>
   array(
@@ -140,6 +135,6 @@ return array(
     'describe' => '轻松生活 放心支付',
     'website' => 'https://b.shengpay.com/',
     'state' => 0,
-    'query' => '',
+    'query' => ''
   ),
 );

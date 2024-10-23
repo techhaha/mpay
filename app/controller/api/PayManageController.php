@@ -29,7 +29,10 @@ class PayManageController extends BaseController
         $up_res = PayAccount::update($info);
         if ($up_res) {
             $acc = PayAccount::find($info['id']);
-            $this->createAccountConfig($acc);
+            $state =  $this->createAccountConfig($acc);
+            if (!$state) {
+                return json(\backMsg(1, '自字义参数错误'));
+            }
             return json(\backMsg(0, '修改成功'));
         } else {
             return json(\backMsg(1, '修改失败'));
@@ -64,13 +67,17 @@ class PayManageController extends BaseController
         $info = $this->request->post();
         $pid = $this->request->session('pid');
         $info['pid'] = $pid;
+        $info['params'] = '{}';
         $check_acc = PayAccount::where(['account' => $info['account'], 'pid' => $pid])->find();
         if ($check_acc) {
             return \json(\backMsg(1, '账号已存在'));
         }
         $acc = PayAccount::create($info);
         if ($acc) {
-            $this->createAccountConfig($acc);
+            $state =  $this->createAccountConfig($acc);
+            if (!$state) {
+                return json(\backMsg(1, '自字义参数错误'));
+            }
             return \json(\backMsg(0, '添加成功'));
         } else {
             return \json(\backMsg(1, '添加失败'));
@@ -112,9 +119,14 @@ class PayManageController extends BaseController
     // 生成账号配置
     private function createAccountConfig($acc)
     {
+        $params = \json_decode($acc->params, \true);
+        if ($params === null) {
+            return false; // 自定义参数错误
+        }
         $platform = \app\controller\api\PluginController::getPluginInfo($acc->getData('platform'));
         $user = User::where('pid', $acc->pid)->find();
-        $query = var_export($platform['query'], \true);
+        $query_tpl = $platform['query'];
+        $query = var_export(\array_merge($query_tpl, $params), \true);
         $config = <<<EOF
 <?php
 // +----------------------------------------------------------------------
@@ -148,5 +160,6 @@ EOF;
         $name = "{$user->pid}_{$acc->id}";
         $path = config_path() . "/payconfig/{$name}.php";
         \file_put_contents($path, $config);
+        return true;
     }
 }

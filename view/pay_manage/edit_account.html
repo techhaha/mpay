@@ -59,6 +59,12 @@
 						</select>
 					</div>
 				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">查询参数</label>
+					<div class="layui-input-block">
+						<textarea name="params" placeholder="填写账号自定义订单查询参数,JSON格式" class="layui-textarea"></textarea>
+					</div>
+				</div>
 			</div>
 		</div>
 		<div class="bottom">
@@ -93,12 +99,13 @@
 				form.render('select');
 				// 初始化表单
 				form.val('edit-account', {
-				"platform": "<?php echo $platform ?>",
-				"account": "<?php echo $account ?>",
-				"password": "<?php echo $password ?>",
-				"state": '<?php echo $state ?>' == 1 ? true : false,
-				"pattern": "<?php echo $pattern ?>",
-			});
+					"platform": "<?php echo $platform ?>",
+					"account": "<?php echo $account ?>",
+					"password": "<?php echo $password ?>",
+					"state": '<?php echo $state ?>' == 1 ? true : false,
+					"pattern": "<?php echo $pattern ?>",
+					"params": `<?php echo $params ?>`,
+				});
 			})()
 			form.on('submit(save-account)', function (obj) {
 				let field = obj.field;

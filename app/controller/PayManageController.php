@@ -28,7 +28,8 @@ class PayManageController extends BaseController
             'account' => $account->account,
             'password' => $account->password,
             'state' => $account->state,
-            'pattern' => $account->getData('pattern')
+            'pattern' => $account->getData('pattern'),
+            'params' => $account->params,
         ]);
         return View::fetch();
     }

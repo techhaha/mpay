@@ -21,3 +21,6 @@ Route::rule('validatePayResult', 'Pay/validatePayResult');
 
 // API多级控制器
 Route::rule('api/:controller/:methon', 'api.:controller/:methon');
+
+// 开发文档
+Route::rule('doc', 'Index/doc');

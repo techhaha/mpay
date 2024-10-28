@@ -85,7 +85,7 @@ CREATE TABLE `mpay_pay_account` (
 
 LOCK TABLES `mpay_pay_account` WRITE;
 /*!40000 ALTER TABLE `mpay_pay_account` DISABLE KEYS */;
-INSERT INTO `mpay_pay_account` VALUES (1,1001,'sqbpay','18872410423','7698177hcnSQB',1,0,'{}',NULL);
+INSERT INTO `mpay_pay_account` VALUES (1,1001,'sqbpay','18******423','76******QB',1,0,'{}',NULL);
 /*!40000 ALTER TABLE `mpay_pay_account` ENABLE KEYS */;
 UNLOCK TABLES;
 

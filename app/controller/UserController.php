@@ -16,7 +16,7 @@ class UserController extends BaseController
     {
         $userinfo = User::find(\session('userid'))->toArray();
         View::assign($userinfo);
-        View::assign('url', $this->request->domain());
+        View::assign('url', $this->request->domain().'/');
         $sign = md5($userinfo['pid'] . $userinfo['secret_key']);
         View::assign('orderurl', $this->request->domain() . "/checkOrder/{$userinfo['pid']}/{$sign}");
         return View::fetch();

@@ -3,7 +3,6 @@
 namespace app\controller;
 
 use think\facade\View;
-use payclient\LaKaLa;
 
 class IndexController
 {

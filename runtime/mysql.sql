@@ -85,7 +85,7 @@ CREATE TABLE `mpay_pay_account` (
 
 LOCK TABLES `mpay_pay_account` WRITE;
 /*!40000 ALTER TABLE `mpay_pay_account` DISABLE KEYS */;
-INSERT INTO `mpay_pay_account` VALUES (1,1001,'sqbpay','18******423','76******QB',1,0,'{}',NULL);
+INSERT INTO `mpay_pay_account` VALUES (1,1000,'sqbpay','18******423','76******QB',1,0,'{}',NULL);
 /*!40000 ALTER TABLE `mpay_pay_account` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -114,7 +114,7 @@ CREATE TABLE `mpay_pay_channel` (
 
 LOCK TABLES `mpay_pay_channel` WRITE;
 /*!40000 ALTER TABLE `mpay_pay_channel` DISABLE KEYS */;
-INSERT INTO `mpay_pay_channel` VALUES (1,1,'24101820013292761382','https://qr.shouqianba.com/24101820013292761382','2024-10-19 02:23:37',1,NULL);
+INSERT INTO `mpay_pay_channel` VALUES (1,1,'24101820013292761382','https://qr.shouqianba.com/24101820013292761382','2024-01-01 10:00:00',1,NULL);
 /*!40000 ALTER TABLE `mpay_pay_channel` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -146,7 +146,7 @@ CREATE TABLE `mpay_user` (
 
 LOCK TABLES `mpay_user` WRITE;
 /*!40000 ALTER TABLE `mpay_user` DISABLE KEYS */;
-INSERT INTO `mpay_user` VALUES (1,1001,'953c4d682d9ab148277b76a06e215ce7','技术老胡','admin','Aa12345678',1,1,'2024-08-02 07:42:41',NULL);
+INSERT INTO `mpay_user` VALUES (1,1000,'953c4d682d9ab148277b76a06e215ce7','技术老胡','admin','Aa12345678',1,1,'2024-01-01 08:00:00',NULL);
 /*!40000 ALTER TABLE `mpay_user` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

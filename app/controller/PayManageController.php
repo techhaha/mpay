@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace app\controller;
 
 use app\BaseController;
-use app\model\Order;
 use app\model\PayAccount;
 use app\model\PayChannel;
 use think\facade\View;
-use app\model\Platform;
 
 class PayManageController extends BaseController
 {

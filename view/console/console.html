@@ -298,7 +298,7 @@
 									<div class="layui-card-header header-tite">
 										<spqn>最新订单</spqn><button type="button"
 											class="layui-btn layui-btn-primary layui-btn-xs"
-											id="order-new">全部订单</button>
+											lay-on="order-all">全部订单</button>
 									</div>
 									<div class="layui-card-body neworder">
 										<table id="orders-table" lay-filter="orders-table"></table>
@@ -326,8 +326,7 @@
 									class="pear-btn pear-btn-warming  layui-btn-fluid"
 									style="margin-top: 8px;height: 50px;line-height: 50px;">项目地址</a>
 								<br />
-								<a href="javascript:alert('正在搭建中！')"
-									class="pear-btn pear-btn-danger  layui-btn-fluid"
+								<a href="javascript:alert('正在搭建中！')" class="pear-btn pear-btn-danger  layui-btn-fluid"
 									style="margin-top: 8px;height: 50px;line-height: 50px;">演示站点</a>
 							</div>
 						</div>
@@ -338,15 +337,20 @@
 							<div class="layui-card-header">更 新</div>
 							<div class="layui-card-body">
 								<ul class="list">
-									<li class="list-item"><span class="title">优化代码格式</span><span class="footer">2021-09-06
+									<li class="list-item"><span class="title">优化代码格式</span><span
+											class="footer">2021-09-06
 											11:28</span></li>
-									<li class="list-item"><span class="title">新增消息组件</span><span class="footer">2021-09-06
+									<li class="list-item"><span class="title">新增消息组件</span><span
+											class="footer">2021-09-06
 											11:28</span></li>
-									<li class="list-item"><span class="title">移动端兼容</span><span class="footer">2021-09-06
+									<li class="list-item"><span class="title">移动端兼容</span><span
+											class="footer">2021-09-06
 											11:28</span></li>
-									<li class="list-item"><span class="title">系统布局优化</span><span class="footer">2021-09-06
+									<li class="list-item"><span class="title">系统布局优化</span><span
+											class="footer">2021-09-06
 											11:28</span></li>
-									<li class="list-item"><span class="title">系统布局优化</span><span class="footer">2021-09-06
+									<li class="list-item"><span class="title">系统布局优化</span><span
+											class="footer">2021-09-06
 											11:28</span></li>
 								</ul>
 							</div>
@@ -361,14 +365,15 @@
 	<script src="/component/pear/pear.js"></script>
 	<script src="/static/js/vue.global.js"></script>
 	<script>
-		layui.use(['layer', 'echarts', 'element', 'count', 'dropdown', 'table'], function () {
+		layui.use(['layer', 'element', 'count', 'dropdown', 'table', 'util'], function () {
 			var $ = layui.jquery,
 				layer = layui.layer,
 				table = layui.table,
 				element = layui.element,
 				count = layui.count,
 				dropdown = layui.dropdown,
-				echarts = layui.echarts;
+				util = layui.util;
+				// echarts = layui.echarts;
 
 			count.up("today_income", { time: 3000, num: parseFloat('<?php echo $today_income ?>'), bit: 2, regulator: 100 })
 			count.up("yesterday_income", { time: 3000, num: parseFloat('<?php echo $yesterday_income ?>'), bit: 2, regulator: 100 })
@@ -414,6 +419,14 @@
 				url: '/api/Order/getOrders?page=1&limit=8',
 				cols: cols,
 				skin: 'line',
+			});
+			// 查看全部订单
+			util.on({
+				'order-all': () => {
+					parent.layui.tab.addTabOnlyByElem('content',
+						{ id: 'order', title: '订单管理', url: '/Order/index', close: true }
+					)
+				}
 			});
 			// 折线图
 			/* 统计图表代码 */

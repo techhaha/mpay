@@ -74,6 +74,10 @@
 			<i class="layui-icon layui-icon-delete"></i>
 			删除
 		</button>
+		<button class="pear-btn pear-btn-warming pear-btn-md" lay-event="testPay">
+			<i class="layui-icon layui-icon-cart"></i>
+			支付测试
+		</button>
 	</script>
 	<script type="text/html" id="account-state">
 		<input type="checkbox" name="state" value="{{d.id}}" lay-skin="switch" lay-text="启用|禁用" lay-filter="accountEnable" {{ d.state == 1 ? 'checked' : '' }} />
@@ -98,7 +102,7 @@
 				select.innerHTML = option_str;
 				form.render('select');
 			})()
-			
+
 			let cols = [[
 				{ type: 'checkbox' },
 				{ title: '平 台', field: 'platform', align: 'center', templet: '' },
@@ -154,6 +158,8 @@
 							httpJSON('/api/PayManage/delAccount', { ids: select_id })
 							layer.close(index);
 						});
+				} else if (obj.event === 'testPay') {
+					account.testPay();
 				}
 			});
 			// 表单自定义事件监听
@@ -236,6 +242,17 @@
 				} else {
 					layer.msg(rec_info.msg, { icon: 2, time: 1200 }, () => { obj.elem.checked = !obj.elem.checked });
 				}
+			}
+			// 支付测试
+			account.testPay = function () {
+				layer.open({
+					id: 'iframe-test-pay',
+					type: 2,
+					title: '支付测试',
+					shade: 0.1,
+					area: [common.isModile() ? '100%' : '480px', common.isModile() ? '100%' : '320px'],
+					content: `/Order/testPay`,
+				});
 			}
 			// 请求封装
 			async function httpJSON(url, info) {

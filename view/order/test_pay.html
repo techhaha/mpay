@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>订单明细</title>
+	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+	<style>
+		.paybtn {
+			margin-top: 32px;
+			display: flex;
+			justify-content: space-evenly;
+			align-items: center;
+		}
+
+		.paybtn>button {
+			display: flex;
+			align-items: center;
+			width: 115px;
+			justify-content: center;
+		}
+
+		.paybtn>button>img {
+			margin-right: 3px;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="layui-row container">
+		<div class="main-container">
+			<form id="paytest" class="layui-form layui-form-pane" action="" lay-filter="paytest">
+				<div class="layui-form-item">
+					<label class="layui-form-label">商品名称</label>
+					<div class="layui-input-block">
+						<input type="text" name="name" autocomplete="off" class="layui-input" disabled>
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">订单编号</label>
+					<div class="layui-input-block">
+						<input type="text" name="out_trade_no" autocomplete="off" class="layui-input" disabled>
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">收款金额</label>
+					<div class="layui-input-block">
+						<input type="text" name="money" lay-verify="required|number" autocomplete="off"
+							class="layui-input">
+					</div>
+				</div>
+			</form>
+			<div class="layui-form-item">
+				<div class="paybtn">
+					<button class="pear-btn wxpay">
+						<img src="/static/img/wxpay.ico" width="16">
+						<span>微信支付</span>
+					</button>
+					<button class="pear-btn alipay">
+						<img src="/static/img/alipay.ico" width="16">
+						<span>支付宝</span>
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script src="/component/layui/layui.js"></script>
+	<script src="/component/pear/pear.js"></script>
+	<script src="/static/js/crypto-js.min.js"></script>
+	<script>
+		layui.use(['layer', 'form'], function () {
+			let form = layui.form;
+			let layer = layui.layer;
+
+			const formdata = {
+				name: `支付测试<?php echo date('Ymd-His', time()) ?>`,
+				out_trade_no: `pay<?php echo date('YmdHis', time()).mt_rand(1000,9999) ?>`,
+				money: 1,
+			}
+			form.val('paytest', formdata);
+			const key = `<?php echo $key ?>`;
+			const testdata = {
+				pid: `<?php echo $pid ?>`,
+				notify_url: window.location.origin,
+				return_url: window.location.origin,
+				sign_type: 'MD5'
+			};
+			document.querySelector('.wxpay').addEventListener('click', function () {
+				crateOrder('wxpay');
+			});
+			document.querySelector('.alipay').addEventListener('click', function () {
+				crateOrder('alipay');
+			});
+			// 创建订单
+			function crateOrder(paytype) {
+				form.submit('paytest', function (data) {
+					const field = data.field;
+					let newdata = { ...field, ...testdata };
+					newdata.type = paytype;
+					newdata.sign = getSign(newdata, key);
+					const query = new URLSearchParams(newdata);
+					window.open(`${window.location.origin}/submit?${query.toString()}`, '_blank');
+					return false;
+				});
+			}
+			// 签名
+			function getSign(param = {}, key = '') {
+				// 对参数进行排序
+				param = Object.keys(param).sort().reduce((obj, key) => {
+					obj[key] = param[key];
+					return obj;
+				}, {});
+				let signstr = '';
+				for (let k in param) {
+					if (k != "sign" && k != "sign_type" && param[k] != '') {
+						signstr += k + '=' + param[k] + '&';
+					}
+				}
+				// 去除最后一个字符 '&'
+				signstr = signstr.substring(0, signstr.length - 1);
+				// 添加密钥
+				signstr += key;
+				// 计算 MD5 值
+				let sign = CryptoJS.MD5(signstr).toString();
+				return sign;
+			}
+		})
+	</script>
+</body>
+
+</html>

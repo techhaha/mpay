@@ -21,8 +21,9 @@ class IndexController
     }
     public function test()
     {
-        $key = "0383d7088b6947b68e4a626af119e2bd";
+        $pay = new \payclient\PayClass(['username'=>1531,'password'=>15646]);
 
-        return $key;
+
+        return '123';
     }
 }

@@ -72,7 +72,7 @@ CREATE TABLE `mpay_pay_account` (
   `account` varchar(255) NOT NULL DEFAULT '' COMMENT '账号',
   `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
   `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
-  `pattern` tinyint(4) NOT NULL DEFAULT '0' COMMENT '账号监听模式',
+  `pattern` tinyint(4) NOT NULL DEFAULT '1' COMMENT '账号监听模式',
   `params` varchar(255) NOT NULL DEFAULT '' COMMENT '自定义查询',
   `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
   PRIMARY KEY (`id`) USING BTREE

@@ -282,7 +282,7 @@ class PayController
         $payclient_path = "\\payclient\\{$payclient_name}";
         $Payclient = new $payclient_path($config);
         // 获取支付明细
-        $records = $Payclient->payQuery($query);
+        $records = $Payclient->getOrderInfo($query);
         if ($records) {
             // 提交收款记录
             $upres = $Mpay->upRecords($records, $aid);

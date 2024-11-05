@@ -49,7 +49,7 @@ return array(
   array(
     'platform' => 'ysepay',
     'name' => '小Y经营',
-    'class_name' => 'Ysepay',
+    'class_name' => 'YsePay',
     'price' => '99.00',
     'describe' => '为商户和消费者提供安全、便捷、高效的支付产品与服务助力商户提升运营效率，实现数字化运营',
     'website' => 'https://xym.ysepay.com/',

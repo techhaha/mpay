@@ -27,7 +27,7 @@ class PayClass
     // 验证码接口
     private $captcha_path = '/saas_merchant_management/public/captcha';
 
-    function __construct($config)
+    function __construct(array $config)
     {
         $this->username = $config['username'];
         $this->password = $config['password'];
@@ -35,18 +35,18 @@ class PayClass
         // 检查token/cookie目录
         $dir_path = runtime_path() . "token/{$this->pay_type}/";
         if (!is_dir($dir_path)) {
-            if (!mkdir($dir_path, 755, true)) echo '目录创建失败';
+            if (!mkdir($dir_path, 755, true)) echo '创建token/cookie目录失败';
         }
         // token/cookie文件路径
         $this->token_path = $dir_path . md5($this->username . $this->password . __CLASS__) . '.json';
         $this->cookie_path = $dir_path . md5($this->username . $this->password . __CLASS__) . '.txt';
         // 检查token文件
         if (!file_exists($this->token_path)) {
-            file_put_contents($this->token_path, \json_encode(['token' => 'ok', 'update_time' => date('Y-m-d H:i:s')]));
+            file_put_contents($this->token_path, json_encode(['token' => 'ok', 'update_time' => date('Y-m-d H:i:s')]));
         }
     }
     // 获取订单信息
-    public function getOrderInfo(array $query)
+    public function getOrderInfo(array $query): array
     {
         $order_list = $this->queryOrder($query);
         $orders = [];
@@ -82,7 +82,7 @@ class PayClass
         if ($result['code'] === 0) {
             $order_list = $result['data']['list'];
         } else {
-            // 重试2次
+            // 重试3次
             if ($times < 3) {
                 $this->updateToken();
                 $order_list = $this->queryOrder($query, $times + 1);
@@ -137,12 +137,13 @@ class PayClass
             $this->saveToken($data['data']);
             return true;
         } else {
-            // 重试2次
+            // 重试3次
+            $is_login = false;
             if ($times < 3) {
-                $is_login = false;
                 $is_login = $this->login($times + 1);
                 return $is_login;
             }
+            return $is_login;
         }
     }
     // 更新token
@@ -162,7 +163,7 @@ class PayClass
     private function saveToken($data)
     {
         $token = $data['token'];
-        file_put_contents($this->token_path, ['token' => $token, 'update_time' => date('Y-m-d H:i:s')]);
+        file_put_contents($this->token_path, json_encode(['token' => $token, 'update_time' => date('Y-m-d H:i:s')]));
     }
     // 解析验证码
     private function getCaptchaInfo(string $image = '', string $typeid = '3'): string

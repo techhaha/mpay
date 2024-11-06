@@ -95,8 +95,8 @@ class ShouQianBa
     {
         $new_query = $query;
         $now = $this->now;
-        $begin_time = (int)(($now - 175) . 000);
-        $end_time = (int)($now . 999);
+        $begin_time = (int)(($now - 175) . '000');
+        $end_time = (int)($now . '999');
         $new_query['date_start'] = $begin_time;
         $new_query['date_end'] = $end_time;
         return $new_query;

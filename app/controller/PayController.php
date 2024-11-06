@@ -155,6 +155,7 @@ class PayController
             return \json(\backMsg(1, '更新失败'));
         }
     }
+    // 处理收款通知
     public function payHeart(Request $request)
     {
         $pid = $request->get('pid');
@@ -182,7 +183,7 @@ class PayController
         foreach ($payList as $order) {
             if (!in_array($order['order_no'], $doneOrders)) $new_orders[] = $order;
         }
-        if (!count($new_orders)) return json(['code' => 0, 'msg' => '查询无新订单']);
+        if (!count($new_orders)) return json(['code' => 0, 'msg' => '收款通知无新消息']);
         // 有效订单列表
         $activeOrders = Order::scope('activeOrder')->where($query)->select();
         if (!count($activeOrders)) return json(['code' => 0, 'msg' => '数据库无有效期订单']);

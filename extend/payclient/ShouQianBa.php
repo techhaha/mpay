@@ -95,10 +95,10 @@ class ShouQianBa
     {
         $new_query = $query;
         $now = $this->now;
-        $begin_time = (int)(($now - 175) . mt_rand(100, 999));
-        $end_time = (int)($now . mt_rand(100, 999));
-        $query['date_start'] = $begin_time;
-        $query['date_end'] = $end_time;
+        $begin_time = (int)(($now - 175) . 000);
+        $end_time = (int)($now . 999);
+        $new_query['date_start'] = $begin_time;
+        $new_query['date_end'] = $end_time;
         return $new_query;
     }
     // 登陆账号

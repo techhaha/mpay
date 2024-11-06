@@ -155,15 +155,17 @@ class PayController
             return \json(\backMsg(1, '更新失败'));
         }
     }
-    // 处理收款通知
-    public function payHeart($pid = '', $aid = '', $sign = '')
+    public function payHeart(Request $request)
     {
+        $pid = $request->get('pid');
+        $aid = $request->get('aid');
+        $sign = $request->get('sign');
         // 检测请求参数
         if (!($pid && $aid && $sign)) {
-            return '参数错误';
+            return json(['code' => 0, 'msg' => '参数错误']);
         }
         // 检测收款通知
-        $payList = request()->post();
+        $payList = $request->post();
         if (!$payList) {
             return json(['code' => 0, 'msg' => '空收款通知']);
         }
@@ -174,57 +176,59 @@ class PayController
         }
         // 当前用户账号
         $query = ['pid' => $pid, 'aid' => $aid];
-        // 排除有效期内的已支付订单
+        // 排除已支付订单
         $doneOrders = Order::scope('dealOrder')->where($query)->column('platform_order');
-        if ($doneOrders) {
-            $num = count($payList['order_no']);
-            for ($i = 0; $i < $num; $i++) {
-                if (in_array($payList['order_no'][$i], $doneOrders)) {
-                    $payList['price'][$i] = 0;
-                }
-            }
+        $new_orders = [];
+        foreach ($payList as $order) {
+            if (!in_array($order['order_no'], $doneOrders)) $new_orders[] = $order;
         }
-        if (array_sum($payList['price']) === 0) {
-            return json(['code' => 0, 'msg' => '查询无新订单']);
-        }
+        if (!count($new_orders)) return json(['code' => 0, 'msg' => '查询无新订单']);
         // 有效订单列表
         $activeOrders = Order::scope('activeOrder')->where($query)->select();
-        if (!\count($activeOrders)) {
-            return json(['code' => 0, 'msg' => '无有效期订单']);
-        }
-        // $msg = []; 订单高并发预留
-        foreach ($activeOrders as $order) {
-            $index = array_search($order->really_price, $payList['price']);
-            // 付款金额检查
-            if ($index !== false) {
-                // 已支付订单容错查询
-                $is_order_no = Order::where('platform_order', $payList['order_no'][$index])->where($query)->find();
+        if (!count($activeOrders)) return json(['code' => 0, 'msg' => '数据库无有效期订单']);
+        // 查找所有支付渠道
+        $channels = $activeOrders->column('cid');
+        $cids = PayChannel::whereIn('id', $channels)->column('channel', 'id');
+        // 订单处理
+        $notify = [];
+        foreach ($new_orders as $new_order) {
+            foreach ($activeOrders as $order) {
                 // 支付方式核对
-                $is_payway = $order->type === $payList['payway'][$index];
+                $is_payway = $order->type === $new_order['payway'];
                 // 支付渠道核对
-                $is_channel = PayChannel::where('id', $order->cid)->value('channel') === $payList['channel'][$index];
-                // 全部核对通过，修改订单状态
-                if (!$is_order_no && $is_payway && $is_channel) {
-                    // 支付成功
-                    $set_order_state = $order->save(['state' => 1, 'pay_time' => date('Y-m-d H:i:s', time()), 'platform_order' => $payList['order_no'][$index]]);
-                    // 订单成交通知
-                    if (!$set_order_state) {
-                        return json(['code' => 0, 'msg' => '修改订单状态失败']);
-                    }
-                    $notify = self::crateNotify($order);
-                    // 字符串签名
-                    $user_key = User::where('pid', $order->pid)->value('secret_key');
-                    $sign = self::getSign($notify, $user_key);
-                    $notify['sign'] = $sign;
-                    // 异步通知
-                    $res_notify = self::getHttpResponse($order->notify_url . '?' . http_build_query($notify));
-                    if ($res_notify === 'success') {
-                        return json(['code' => 0, 'msg' => 'success']);
-                    } else {
-                        return json(['code' => 1, 'msg' => '异步通知失败']);
-                    }
+                $is_channel = $cids[$order->cid] === $new_order['channel'];
+                // 金额核对
+                $is_money = $order->money === $new_order['price'];
+                // 订单核对
+                if ($is_payway && $is_channel && $is_money) {
+                    $res = $this->updateOrderState($order, $new_order['order_no']);
+                    $notify[] = $res;
                 }
             }
+        }
+        if (!$notify) $notify = ['code' => 0, 'msg' => '收款通知无匹配订单'];
+        return json($notify);
+    }
+    // 修改订单状态并通知
+    private function updateOrderState(Order $order, string $order_no = ''): array
+    {
+        // 支付成功
+        $set_order_state = $order->save(['state' => 1, 'pay_time' => date('Y-m-d H:i:s', time()), 'platform_order' => $order_no]);
+        if (!$set_order_state) {
+            return ['order' => $order->order_id, 'code' => 0, 'msg' => '修改订单状态失败'];
+        }
+        // 订单成交通知
+        $notify = self::crateNotify($order);
+        // 字符串签名
+        $user_key = User::where('pid', $order->pid)->value('secret_key');
+        $sign = self::getSign($notify, $user_key);
+        $notify['sign'] = $sign;
+        // 异步通知
+        $res_notify = self::getHttpResponse($order->notify_url . '?' . http_build_query($notify));
+        if ($res_notify === 'success') {
+            return ['order' => $order->order_id, 'code' => 1, 'msg' => 'notify success'];
+        } else {
+            return ['order' => $order->order_id, 'code' => 0, 'msg' => 'notify fail'];
         }
     }
     // [定时任务]获取收款明细，提交收款通知[本地版]
@@ -258,9 +262,7 @@ class PayController
         $res_new_order = $Mpay->orderHeart();
         $new_order = json_decode($res_new_order, true);
         // 检测新订单
-        if ($new_order['code'] !== 1) {
-            return $res_new_order;
-        }
+        if ($new_order['code'] !== 1) return $res_new_order;
         // 订单列表
         $order_list = $new_order['orders'];
         // 检测本账号订单

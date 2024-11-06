@@ -176,7 +176,7 @@ class Order extends BaseModel
     // 查询有效期内的成交订单
     public function scopeDealOrder($query)
     {
-        $query->where('close_time', '>', self::getFormatTime())->where('state', 1);
+        $query->where('close_time', '>', self::getFormatTime(time() - self::$activity_time))->where('state', 1);
     }
     // 查询超时过期订单
     public function scopeTimeoutOrder($query)

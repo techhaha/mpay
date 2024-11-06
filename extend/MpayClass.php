@@ -26,7 +26,7 @@ class MpayClass
     public function upRecords($records, $aid)
     {
         $header = ['Content-Type: application/json;charset=UTF-8'];
-        $url = $this->submit_records_url . "/{$this->pid}/{$aid}/{$this->getSign()}";
+        $url = $this->submit_records_url . "?pid={$this->pid}&aid={$aid}&sign={$this->getSign()}";
         $res = $this->getHttpResponse($url, $header, json_encode($records));
         return $res;
     }

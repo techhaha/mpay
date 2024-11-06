@@ -13,7 +13,7 @@ Route::rule('getOrderState/[:order_id]', 'Pay/getOrderState');
 // 监控新订单
 Route::rule('checkOrder/[:pid]/[:sign]', 'Pay/checkOrder');
 // 处理收款通知
-Route::rule('payHeart/[:pid]/[:aid]/[:sign]', 'Pay/payHeart');
+Route::rule('payHeart', 'Pay/payHeart');
 // 监听收款通知
 Route::rule('checkPayResult', 'Pay/checkPayResult');
 // 验证支付结果

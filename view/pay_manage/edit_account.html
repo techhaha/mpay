@@ -60,9 +60,14 @@
 					</div>
 				</div>
 				<div class="layui-form-item layui-form-text">
-					<label class="layui-form-label">查询参数</label>
+					<label class="layui-form-label">查询参数 
+						<a href="https://www.jyshare.com/front-end/53/" class="layui-font-blue" style="float: right;" target="_blank">
+							<span class="layui-font-gray">JSON工具 </span><span class="icon pear-icon">&#xe6b6;</span>
+						</a>
+					</label>
 					<div class="layui-input-block">
-						<textarea name="params" placeholder="账号订单查询自定义参数，JSON格式，没有请填 { } " class="layui-textarea"></textarea>
+						<textarea name="params" placeholder="账号订单查询自定义参数，JSON格式，没有请勿填写！"
+							class="layui-textarea"></textarea>
 					</div>
 				</div>
 			</div>
@@ -111,6 +116,7 @@
 				let field = obj.field;
 				field.state = 'state' in field ? 1 : 0;
 				field.id = '<?php echo $id ?>';
+				field.params = field.params === '' ? '{}' : field.params;
 				(async () => {
 					const url = '/api/PayManage/editAccount';
 					const info = field;

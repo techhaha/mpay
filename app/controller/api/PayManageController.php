@@ -54,8 +54,12 @@ class PayManageController extends BaseController
     {
         $ids = $this->request->post('ids');
         $res = PayAccount::destroy($ids);
-        $res2 = PayChannel::destroy($ids);
+        $res2 = PayChannel::whereIn('account_id', $ids)->select()->delete();
         if ($res && $res2) {
+            $accs = PayAccount::whereIn('id', $ids)->withTrashed()->select();
+            foreach ($accs as $acc) {
+                $this->delAccountConfig($acc);
+            }
             return \json(\backMsg(0, '已删除'));
         } else {
             return \json(\backMsg(1, '失败'));
@@ -105,6 +109,17 @@ class PayManageController extends BaseController
             return json(\backMsg(1, '修改失败'));
         }
     }
+    // 删除收款终端
+    public function delChannel()
+    {
+        $cid = $this->request->post('id');
+        $res = PayChannel::destroy($cid);
+        if ($res) {
+            return \json(\backMsg(0, '已删除'));
+        } else {
+            return \json(\backMsg(1, '失败'));
+        }
+    }
     // 收款终端列表
     public function getChannelList()
     {
@@ -116,6 +131,15 @@ class PayManageController extends BaseController
             return \json(\backMsg(1, '失败'));
         }
     }
+    // 删除账号配置
+    public function delAccountConfig($acc)
+    {
+        $path = config_path() . "/payconfig/{$acc->pid}_{$acc->id}.php";
+        if (file_exists($path)) {
+            unlink($path);
+        }
+    }
+
     // 生成账号配置
     private function createAccountConfig($acc)
     {

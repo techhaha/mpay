@@ -53,11 +53,11 @@
 					})()
 				},
 				edit: function () {
-					const cid = this.getAttribute("data-cid")
+					const cid = this.getAttribute("data-cid");
 					layer.open({
 						id: 'iframe-channel-edit',
 						type: 2,
-						title: '添加收款终端',
+						title: '修改终端',
 						shade: 0.1,
 						area: [common.isModile() ? '80%' : '400px', common.isModile() ? '70%' : '300px'],
 						content: `/PayManage/editChannel?cid=${cid}`,
@@ -74,6 +74,24 @@
 						content: `/PayManage/addChannel?aid=${aid}`,
 					});
 				},
+				delete: function () {
+					const cid = this.getAttribute("data-cid");
+					layer.confirm('确定删除终端?', { icon: 3, title: '提示' },
+						function (index) {
+							fetch('/api/PayManage/delChannel', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: cid }) })
+								.then(res => res.json())
+								.then(res => {
+									if (res.code === 0) {
+										layer.msg(res.msg, { icon: 1, time: 1200 }, function () {
+											location.reload();
+										});
+									} else {
+										layer.msg(res.msg, { icon: 2, time: 1200 });
+									}
+								})
+							layer.close(index);
+						});
+				},
 			});
 			// 工具
 			let channel = {};
@@ -89,7 +107,10 @@
 					<a href="javascript:;" class="layui-font-blue" lay-on="getQrcode"data-qrcode="${item.qrcode}"><span class="icon pear-icon">&#xe6cc;</span></a><br>
 					<span class="layui-badge layui-bg-cyan">最后使用</span><span class="layui-badge layui-bg-gray">${item.last_time}</span><br>
 					<span class="layui-badge layui-bg-cyan">启用状态</span><span class="layui-badge layui-bg-${item.state == 1 ? 'green' : 'gray'}">${item.state == 1 ? '启用' : '禁用'}</span><br>
-					<button class="layui-btn layui-btn-primary layui-btn-radius layui-border-green layui-btn-sm edit" lay-on="edit" data-cid="${item.id}"><span class="icon pear-icon">&#xe693;</span>修改</button>
+					<div class="layui-btn-group edit">
+						<button class="layui-btn layui-btn-primary layui-btn-sm" lay-on="edit" data-cid="${item.id}"><span class="icon pear-icon">&#xe693;</span></button>
+						<button class="layui-btn layui-btn-primary layui-btn-sm" lay-on="delete" data-cid="${item.id}"><span class="icon pear-icon">&#xe66b;</span></button>
+					</div>
 				</div>`;
 				card.innerHTML = htmlstr;
 				return card;

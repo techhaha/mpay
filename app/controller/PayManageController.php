@@ -13,6 +13,8 @@ class PayManageController extends BaseController
 {
     public function index()
     {
+        $domain = $this->request->domain();
+        View::assign('domain', $domain);
         return View::fetch();
     }
     // 编辑账号

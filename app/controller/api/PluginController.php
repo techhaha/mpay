@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace app\controller\api;
 
 use app\BaseController;
-use app\model\Platform;
-use think\facade\View;
 
 class PluginController extends BaseController
 {

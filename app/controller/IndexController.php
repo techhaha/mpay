@@ -21,9 +21,7 @@ class IndexController
     }
     public function test()
     {
-        $pay = new \payclient\PayClass(['username'=>1531,'password'=>15646]);
-
-
-        return '123';
+        $web = \request()->domain();
+        return $web;
     }
 }

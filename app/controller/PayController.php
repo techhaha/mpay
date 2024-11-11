@@ -195,11 +195,11 @@ class PayController
         foreach ($new_orders as $new_order) {
             foreach ($activeOrders as $order) {
                 // 支付方式核对
-                $is_payway = $order->type === $new_order['payway'];
+                $is_payway = $order->type == $new_order['payway'];
                 // 支付渠道核对
-                $is_channel = $cids[$order->cid] === $new_order['channel'];
+                $is_channel = $cids[$order->cid] == $new_order['channel'];
                 // 金额核对
-                $is_money = $order->money === $new_order['price'];
+                $is_money = $order->money == $new_order['price'];
                 // 订单核对
                 if ($is_payway && $is_channel && $is_money) {
                     $res = $this->updateOrderState($order, $new_order['order_no']);

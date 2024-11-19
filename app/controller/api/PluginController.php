@@ -18,14 +18,6 @@ class PluginController extends BaseController
             return json(['code' => 1, 'msg' => '无数据记录', 'count' => 0, 'data' => []]);
         }
     }
-    // 测试
-    public function test()
-    {
-        // $res = $this->addPlugin(['platform' => 'haopay', 'name' => '好支付', 'class_name' => 'Haopay', 'price' => 99, 'describe' => '好支付', 'website' => 'https://store.zhihuijingyingba.com/', 'state' => 1, 'query' => []]);
-        // $res = $this->delPlugin('haopay');
-        $res = $this->setPlugin('haopay', ['state' => 0]);
-        return $res;
-    }
     // 添加插件
     public function addPlugin(array $option = [])
     {

@@ -16,7 +16,7 @@ class Order extends BaseModel
     public static function createOrder($data)
     {
         $my_time = time();
-        $channel = self::setChannel($data['pid']);
+        $channel = self::setChannel($data['pid'], $data['type']);
         $new_order = [
             // 订单号
             'order_id'      => self::createOrderID('H'),
@@ -112,13 +112,20 @@ class Order extends BaseModel
         return $order->toArray();
     }
     // 选择收款通道
-    private static function setChannel($pid): array
+    private static function setChannel($pid, $type): array
     {
+        // 查询有效收款账户及通道
         $aids = PayAccount::where('pid', $pid)->where('state', 1)->column('id');
-        $channel_info = PayChannel::whereIn('account_id', $aids)->where('state', 1)->order('last_time', 'asc')->find();
-        if (!$channel_info || !$aids) {
-            return [];
+        $channel_infos = PayChannel::whereIn('account_id', $aids)->where('state', 1)->order('last_time', 'asc')->select();
+        if (!$channel_infos || !$aids) return [];
+        // 微信/支付宝收款处理
+        $patt_wx = '/^wxpay/i';
+        $patt_ali = '/^alipay/i';
+        foreach ($channel_infos as $key => $value) {
+
         }
+        $channel_info = $channel_infos[0];
+        // 选取收款通道
         $patt = PayAccount::find($channel_info->account_id);
         $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];
         PayChannel::update(['last_time' => self::getFormatTime(), 'id' => $channel['cid']]);

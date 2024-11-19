@@ -42,7 +42,12 @@ class PayManageController extends BaseController
     public function addChannel()
     {
         $aid = $this->request->get('aid');
-        View::assign(['aid' => $aid]);
+        $account = PayAccount::find($aid);
+        $platform = $account->getData('platform');
+        View::assign(['aid' => $aid, 'platform' => $platform, 'account' => $account->account]);
+        if ($platform == 'wxpay' || $platform == 'alipay') {
+            return View::fetch('add_channel_code');
+        }
         return View::fetch();
     }
     // 编辑收款终端

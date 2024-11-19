@@ -23,6 +23,24 @@
                     </div>
                 </div>
                 <div class="layui-form-item">
+                    <label class="layui-form-label">收款通道</label>
+                    <div class="layui-input-block">
+                        <select class="type" lay-filter="select-type">
+                            <option value="">请选择</option>
+                            <!-- <?php if ($platform == 'wxpay') { ?> -->
+                            <option value="wx1">个人码</option>
+                            <option value="wx2">赞赏码</option>
+                            <option value="wx3">经营码</option>
+                            <option value="wx4">商家码</option>
+                            <!-- <?php } ?> -->
+                            <!-- <?php if ($platform == 'alipay') { ?> -->
+                            <option value="ali1">个人码</option>
+                            <option value="ali2">经营码</option>
+                            <!-- <?php } ?> -->
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item">
                     <label class="layui-form-label">收款码</label>
                     <div class="layui-input-block">
                         <input type="text" name="qrcode" autocomplete="off" lay-affix="upload-drag"
@@ -54,7 +72,12 @@
             form.on('input-affix(scanning)', function () {
                 window.open('https://cli.im/deqr', '_blank');
             });
-
+            // select 事件
+            form.on('select(select-type)', function (data) {
+                const value = data.value; // 获得被选中的值
+                const channel = document.querySelector('input[name="channel"]');
+                channel.value = '<?php echo $account ?>' + value;
+            });
             form.on('submit(save)', function (obj) {
                 let field = obj.field;
                 field.account_id = '<?php echo $aid ?>';

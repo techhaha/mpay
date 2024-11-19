@@ -3,7 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
-	<title>终端列表</title>
+	<title>收款码</title>
 	<link rel="stylesheet" href="/component/pear/css/pear.css" />
 	<style>
 		.edit {
@@ -68,7 +68,7 @@
 					layer.open({
 						id: 'iframe-channel-add',
 						type: 2,
-						title: '添加收款终端',
+						title: '添加收款码',
 						shade: 0.1,
 						area: [common.isModile() ? '80%' : '400px', common.isModile() ? '70%' : '300px'],
 						content: `/PayManage/addChannel?aid=${aid}`,
@@ -138,7 +138,7 @@
 			channel.addBtn = function (mainbox, aid) {
 				let btn = document.createElement('div');
 				btn.className = 'layui-card';
-				btn.innerHTML = `<button type="button" lay-on="add" data-aid="${aid}" class="layui-btn layui-btn-fluid">添加收款终端</button>`;
+				btn.innerHTML = `<button type="button" lay-on="add" data-aid="${aid}" class="layui-btn layui-btn-fluid">添加收款码</button>`;
 				mainbox.appendChild(btn);
 			}
 			// 生成二维码

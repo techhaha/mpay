@@ -22,6 +22,50 @@ class PayManageController extends BaseController
             return json(['code' => 1, 'msg' => '无数据记录', 'count' => 0, 'data' => []]);
         }
     }
+    // 收款终端列表
+    public function getChannelList()
+    {
+        $aid = $this->request->post('aid');
+        $res = PayChannel::where(['account_id' => $aid])->order('last_time', 'desc')->select();
+        if ($res) {
+            return \json(\backMsg(0, '获取成功', $res));
+        } else {
+            return \json(\backMsg(1, '失败'));
+        }
+    }
+    // 账号状态
+    public function accountEnable()
+    {
+        $info = $this->request->post();
+        $up_res = PayAccount::update($info);
+        if ($up_res) {
+            return json(\backMsg(0, '成功'));
+        } else {
+            return json(\backMsg(1, '失败'));
+        }
+    }
+    // 添加账号
+    public function addAccount()
+    {
+        $info = $this->request->post();
+        $pid = $this->request->session('pid');
+        $info['pid'] = $pid;
+        $info['params'] = '{}';
+        $check_acc = PayAccount::where(['account' => $info['account'], 'platform' => $info['platform'], 'pid' => $pid])->find();
+        if ($check_acc) {
+            return \json(\backMsg(1, '账号已存在'));
+        }
+        $acc = PayAccount::create($info);
+        if ($acc) {
+            $state =  $this->createAccountConfig($acc);
+            if (!$state) {
+                return json(\backMsg(1, '自字义参数错误'));
+            }
+            return \json(\backMsg(0, '添加成功'));
+        } else {
+            return \json(\backMsg(1, '添加失败'));
+        }
+    }
     // 编辑账号
     public function editAccount()
     {
@@ -36,17 +80,6 @@ class PayManageController extends BaseController
             return json(\backMsg(0, '修改成功'));
         } else {
             return json(\backMsg(1, '修改失败'));
-        }
-    }
-    // 账号状态
-    public function accountEnable()
-    {
-        $info = $this->request->post();
-        $up_res = PayAccount::update($info);
-        if ($up_res) {
-            return json(\backMsg(0, '成功'));
-        } else {
-            return json(\backMsg(1, '失败'));
         }
     }
     // 删除账号
@@ -65,32 +98,14 @@ class PayManageController extends BaseController
             return \json(\backMsg(1, '失败'));
         }
     }
-    // 添加账号
-    public function addAccount()
-    {
-        $info = $this->request->post();
-        $pid = $this->request->session('pid');
-        $info['pid'] = $pid;
-        $info['params'] = '{}';
-        $check_acc = PayAccount::where(['account' => $info['account'], 'pid' => $pid])->find();
-        if ($check_acc) {
-            return \json(\backMsg(1, '账号已存在'));
-        }
-        $acc = PayAccount::create($info);
-        if ($acc) {
-            $state =  $this->createAccountConfig($acc);
-            if (!$state) {
-                return json(\backMsg(1, '自字义参数错误'));
-            }
-            return \json(\backMsg(0, '添加成功'));
-        } else {
-            return \json(\backMsg(1, '添加失败'));
-        }
-    }
     // 添加收款终端
     public function addChannel()
     {
         $info = $this->request->post();
+        $check = PayChannel::where(['account_id' => $info['account_id'], 'channel' => $info['channel']])->count();
+        if ($check) {
+            return \json(\backMsg(1, '编号已存在'));
+        }
         $res = PayChannel::create($info);
         if ($res) {
             return \json(\backMsg(0, '添加成功'));
@@ -116,17 +131,6 @@ class PayManageController extends BaseController
         $res = PayChannel::destroy($cid);
         if ($res) {
             return \json(\backMsg(0, '已删除'));
-        } else {
-            return \json(\backMsg(1, '失败'));
-        }
-    }
-    // 收款终端列表
-    public function getChannelList()
-    {
-        $aid = $this->request->post('aid');
-        $res = PayChannel::where(['account_id' => $aid])->order('last_time', 'desc')->select();
-        if ($res) {
-            return \json(\backMsg(0, '获取成功', $res));
         } else {
             return \json(\backMsg(1, '失败'));
         }

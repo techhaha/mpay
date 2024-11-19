@@ -3,7 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
-	<title>添加账号</title>
+	<title>添加收款通道</title>
 	<link rel="stylesheet" href="/component/pear/css/pear.css" />
 	<style>
 		.inputTxt {
@@ -19,8 +19,28 @@
 				<div class="layui-form-item">
 					<label class="layui-form-label">收款平台</label>
 					<div class="layui-input-block">
-						<select name="platform" lay-filter="select-platform">
+						<select name="platform">
 							<option value="">收款平台</option>
+							<option value="wxpay">微信支付</option>
+							<option value="alipay">支付宝</option>
+						</select>
+					</div>
+				</div>
+				<div class="layui-form-item">
+					<label class="layui-form-label">收款通道</label>
+					<div class="layui-input-block">
+						<select name="password">
+							<option value="">请选择</option>
+							<optgroup label="微信支付">
+								<option value="wx1">个人码</option>
+								<option value="wx2">赞赏码</option>
+								<option value="wx3">经营码</option>
+								<option value="wx4">商家码</option>
+							</optgroup>
+							<optgroup label="支付宝">
+								<option value="al1">个人码</option>
+								<option value="al2">经营码</option>
+							</optgroup>
 						</select>
 					</div>
 				</div>
@@ -28,21 +48,6 @@
 					<label class="layui-form-label">收款账号</label>
 					<div class="layui-input-block">
 						<input type="text" name="account" autocomplete="off" class="layui-input">
-					</div>
-				</div>
-				<div class="layui-form-item">
-					<label class="layui-form-label">登陆密码</label>
-					<div class="layui-input-block">
-						<input type="text" name="password" autocomplete="off" class="layui-input">
-					</div>
-				</div>
-				<div class="layui-form-item">
-					<label class="layui-form-label">监听模式</label>
-					<div class="layui-input-block">
-						<select name="pattern">
-							<option value="">请选择</option>
-							<?php include_once '../view/tpl/pattern.html'; ?>
-						</select>
 					</div>
 				</div>
 			</div>
@@ -66,36 +71,10 @@
 	<script>
 		layui.use(['form'], function () {
 			let form = layui.form;
-
-			// 渲染插件选项
-			(async () => {
-				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
-				let option_str = `<option value="">收款平台</option>`;
-				data.forEach(val => {
-					option_str += `<option value="${val.platform}">${val.name}</option>`;
-				});
-				const select = document.querySelector('select[name="platform"]');
-				select.innerHTML = option_str;
-				form.render('select');
-			})()
-			// select 事件
-			form.on('select(select-platform)', function (data) {
-				const value = data.value; // 获得被选中的值
-				const field1 = document.querySelector('input[name="password"]').parentNode.parentNode;
-				const field2 = document.querySelector('select[name="pattern"]').parentNode.parentNode;
-				if (value === 'wxpay' || value === 'alipay') {
-					field1.style.display = 'none';
-					field2.style.display = 'none';
-				} else {
-					field1.style.display = 'block';
-					field2.style.display = 'block';
-				}
-			});
 			form.on('submit(add-account)', function (obj) {
-				let field = obj.field;
-				field.pattern = field.pattern === '' ? 1 : field.pattern;
+				const field = obj.field;
 				(async () => {
-					const url = '/api/PayManage/addAccount';
+					const url = '/api/PayManage/addCode';
 					const info = field;
 					const res = await fetch(url, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) });
 					if (res.status !== 200) {

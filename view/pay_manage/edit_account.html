@@ -27,7 +27,7 @@
 				<div class="layui-form-item">
 					<label class="layui-form-label">收款平台</label>
 					<div class="layui-input-block">
-						<select name="platform">
+						<select name="platform" lay-filter="select-platform">
 							<option value="">收款平台</option>
 						</select>
 					</div>
@@ -60,8 +60,9 @@
 					</div>
 				</div>
 				<div class="layui-form-item layui-form-text">
-					<label class="layui-form-label">查询参数 
-						<a href="https://www.jyshare.com/front-end/53/" class="layui-font-blue" style="float: right;" target="_blank">
+					<label class="layui-form-label">查询参数
+						<a href="https://www.jyshare.com/front-end/53/" class="layui-font-blue" style="float: right;"
+							target="_blank">
 							<span class="layui-font-gray">JSON工具 </span><span class="icon pear-icon">&#xe6b6;</span>
 						</a>
 					</label>
@@ -112,6 +113,20 @@
 					"params": `<?php echo $params ?>`,
 				});
 			})()
+			// select 事件
+			const platform = "<?php echo $platform ?>";
+			if (platform === 'wxpay' || platform === 'alipay') {
+				changePat(false);
+			}
+			form.on('select(select-platform)', function (data) {
+				const value = data.value; // 获得被选中的值
+				if (value === 'wxpay' || value === 'alipay') {
+					changePat(false);
+				} else {
+					changePat(true);
+				}
+			});
+			// 提交
 			form.on('submit(save-account)', function (obj) {
 				let field = obj.field;
 				field.state = 'state' in field ? 1 : 0;
@@ -137,6 +152,21 @@
 				})()
 				return false;
 			});
+			// 操作元素显示
+			function changePat(is_show = true) {
+				const field1 = document.querySelector('input[name="password"]').parentNode.parentNode;
+				const field2 = document.querySelector('select[name="pattern"]').parentNode.parentNode;
+				const field3 = document.querySelector('textarea[name="params"]').parentNode.parentNode;
+				if (is_show) {
+					field1.style.display = 'block';
+					field2.style.display = 'block';
+					field3.style.display = 'block';
+				} else {
+					field1.style.display = 'none';
+					field2.style.display = 'none';
+					field3.style.display = 'none';
+				}
+			}
 		})
 	</script>
 </body>

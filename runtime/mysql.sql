@@ -100,6 +100,7 @@ CREATE TABLE `mpay_pay_channel` (
   `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '渠道ID',
   `account_id` int(11) NOT NULL DEFAULT '0' COMMENT '收款平台ID',
   `channel` varchar(255) NOT NULL DEFAULT '' COMMENT '收款通道',
+  `state` tinyint(4) NOT NULL DEFAULT '0' COMMENT '保存类型',
   `qrcode` varchar(255) NOT NULL DEFAULT '' COMMENT '二维码',
   `last_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近使用',
   `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
@@ -114,7 +115,7 @@ CREATE TABLE `mpay_pay_channel` (
 
 LOCK TABLES `mpay_pay_channel` WRITE;
 /*!40000 ALTER TABLE `mpay_pay_channel` DISABLE KEYS */;
-INSERT INTO `mpay_pay_channel` VALUES (1,1,'24101820013292761382','https://qr.shouqianba.com/24101820013292761382','2024-01-01 10:00:00',1,NULL);
+INSERT INTO `mpay_pay_channel` VALUES (1,1,'24101820013292761382',0,'https://qr.shouqianba.com/24101820013292761382','2024-01-01 10:00:00',1,NULL);
 /*!40000 ALTER TABLE `mpay_pay_channel` ENABLE KEYS */;
 UNLOCK TABLES;
 

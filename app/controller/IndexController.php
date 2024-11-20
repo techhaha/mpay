@@ -27,9 +27,9 @@ class IndexController
         if ($action === 'mpay') {
             $data = json_decode($info['data'], true);
             $config = \think\facade\Config::load("payconfig/{$data['pid']}_{$data['aid']}", 'payconfig');
-            $payclient_path = "\\payclient\\Mpay";
+            $payclient_path = "\\payclient\\{$config['pay']['payclass']}";
             $Payclient = new $payclient_path($info, $config);
-            $res = $Payclient->notify($info);
+            $res = $Payclient->notify();
             return $res;
         } else {
             return 202;

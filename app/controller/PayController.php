@@ -90,11 +90,12 @@ class PayController
         if ($order_id) {
             $act_order = Order::where('order_id', $order_id)->find();
             if ($act_order) {
-                $qrcode = PayChannel::where('id', $act_order->cid)->value('qrcode');
+                $channel = PayChannel::where('id', $act_order->cid)->find();
                 View::assign($act_order->toArray());
                 $passtime = strtotime($act_order->close_time) - time();
                 View::assign('passtime', $passtime > 0 ? $passtime : 0);
-                View::assign('payUrl', $qrcode);
+                View::assign('payUrl', $channel->qrcode);
+                View::assign('code_type', $channel->type);
                 return View::fetch();
             } else {
                 return '订单不存在';
@@ -327,6 +328,22 @@ class PayController
             $info = ['code' => 2, 'msg' => '签名错误'];
             file_put_contents($path, json_encode($info, 320));
             return json($info);
+        }
+    }
+    // 处理微信/支付宝收款通知
+    public function mpayNotify(Request $request)
+    {
+        $info = $request->post();
+        $action = isset($info['action']) ? $info['action'] : '';
+        if ($action === 'mpay') {
+            $data = json_decode($info['data'], true);
+            $config = \think\facade\Config::load("payconfig/{$data['pid']}_{$data['aid']}", 'payconfig');
+            $payclient_path = "\\payclient\\{$config['pay']['payclass']}";
+            $Payclient = new $payclient_path($info, $config, $request->domain());
+            $Payclient->notify();
+            return 200;
+        } else {
+            return 202;
         }
     }
     // 签名

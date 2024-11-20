@@ -85,9 +85,9 @@
 	<script type="text/html" id="account-checkUrl">
 			{{# 
 				if (d.platform == '微信支付') {
-					return `{"payway":"wxpay","pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}`;
+					return `{"pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}`;
 				} else if (d.platform == '支付宝') {
-					return `{"payway":"alipay","pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}`;
+					return `{"pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}`;
 				} else {
 					return '<?php echo $domain ?>/checkPayResult?pid=' + d.pid + '&aid=' + d.id;
 				}

@@ -16,6 +16,8 @@ Route::rule('checkOrder/[:pid]/[:sign]', 'Pay/checkOrder');
 Route::rule('payHeart', 'Pay/payHeart');
 // 监听收款通知
 Route::rule('checkPayResult', 'Pay/checkPayResult');
+// 监听微信/支付宝收款通知
+Route::rule('mpayNotify', 'Pay/mpayNotify');
 // 验证支付结果
 Route::rule('validatePayResult', 'Pay/validatePayResult');
 

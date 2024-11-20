@@ -119,12 +119,23 @@ class Order extends BaseModel
         $channel_infos = PayChannel::whereIn('account_id', $aids)->where('state', 1)->order('last_time', 'asc')->select();
         if (!$channel_infos || !$aids) return [];
         // 微信/支付宝收款处理
-        $patt_wx = '/^wxpay/i';
-        $patt_ali = '/^alipay/i';
         foreach ($channel_infos as $key => $value) {
-
+            $check_wx = preg_match('/^wxpay\d+#/i', $value->channel);
+            $check_ali = preg_match('/^alipay\d+#/i', $value->channel);
+            if ($check_wx && $type === 'wxpay') {
+                $channel_info = $channel_infos[$key];
+                break;
+            } elseif ($check_ali && $type === 'alipay') {
+                $channel_info = $channel_infos[$key];
+                break;
+            } else {
+                if ($check_wx || $check_ali) {
+                    continue;
+                }
+                $channel_info = $channel_infos[$key];
+                break;
+            }
         }
-        $channel_info = $channel_infos[0];
         // 选取收款通道
         $patt = PayAccount::find($channel_info->account_id);
         $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];

@@ -28,15 +28,25 @@
                         <select class="type" lay-filter="select-type">
                             <option value="">请选择</option>
                             <!-- <?php if ($platform == 'wxpay') { ?> -->
-                            <option value="wx1">个人码</option>
-                            <option value="wx2">赞赏码</option>
-                            <option value="wx3">经营码</option>
-                            <option value="wx4">商家码</option>
+                            <option value="wxpay1">个人码</option>
+                            <option value="wxpay2">赞赏码</option>
+                            <!-- <option value="wxpay3">经营码</option>
+                            <option value="wxpay4">商家码</option> -->
                             <!-- <?php } ?> -->
                             <!-- <?php if ($platform == 'alipay') { ?> -->
-                            <option value="ali1">个人码</option>
-                            <option value="ali2">经营码</option>
+                            <option value="alipay1">个人码</option>
+                            <option value="alipay2">经营码</option>
                             <!-- <?php } ?> -->
+                        </select>
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">收款样式</label>
+                    <div class="layui-input-block">
+                        <select name="type">
+                            <option value="">请选择</option>
+                            <option value="0">付款链接</option>
+                            <option value="1">图片地址</option>
                         </select>
                     </div>
                 </div>
@@ -76,7 +86,7 @@
             form.on('select(select-type)', function (data) {
                 const value = data.value; // 获得被选中的值
                 const channel = document.querySelector('input[name="channel"]');
-                channel.value = '<?php echo $account ?>' + value;
+                channel.value = value + '#<?php echo $account ?>';
             });
             form.on('submit(save)', function (obj) {
                 let field = obj.field;

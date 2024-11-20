@@ -63,6 +63,7 @@ class PayManageController extends BaseController
             'qrcode' => $channel->qrcode,
             'last_time' => $channel->last_time,
             'state' => $channel->state,
+            'type' => $channel->type,
         ]);
         return View::fetch();
     }

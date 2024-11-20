@@ -152,6 +152,7 @@
     <script src="/static/js/awesome-qr.min.js"></script>
     <script>
         const payCode = '<?php echo htmlentities($payUrl); ?>';
+        const codeType = '<?php echo htmlentities($code_type); ?>';
         const payType = '<?php echo htmlentities($type); ?>';
         const order = '<?php echo htmlentities($order_id); ?>';
         const QR = AwesomeQR.AwesomeQR;
@@ -167,7 +168,11 @@
                 payTypeText.innerText = '请使用支付宝扫码支付'
             }
             // 生成二维码
-            document.getElementById('qrcode').src = await getQrcode(payCode, QR);
+            if (codeType == 0) {
+                document.getElementById('qrcode').src = await getQrcode(payCode, QR);
+            } else {
+                document.getElementById('qrcode').src = payCode;
+            }
             // 订单过期时间
             let passtime = 0;
             // 订单状态查询

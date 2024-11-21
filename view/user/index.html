@@ -13,6 +13,12 @@
             top: 20px;
             z-index: 999;
         }
+    
+        label {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+        }
     </style>
 </head>
 
@@ -41,9 +47,9 @@
                         <span id="yiyan"></span>
                     </div>
                 </div>
-
+    
                 <div class="layui-card">
-                    <div class="layui-card-header">API 密钥</div>
+                    <div class="layui-card-header">支付API配置<span class="layui-font-gray"> · 易支付接口标准</span></div>
                     <div class="layui-card-body">
                         <div class="layui-form layui-form-pane">
                             <div class="layui-form-item" pane>
@@ -81,10 +87,19 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+    
+                <div class="layui-card">
+                    <div class="layui-card-header">聚合码定时任务<span class="layui-font-gray"> · 监控有效期订单</span></div>
+                    <div class="layui-card-body">
+                        <div class="layui-form layui-form-pane">
                             <div class="layui-form-item" pane>
                                 <label class="layui-form-label">订单监控</label>
                                 <div class="layui-input-block">
-                                    <div class="layui-form-mid layui-elip" style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                    <div class="layui-form-mid layui-elip"
+                                        style="margin-left: 10px;color: #5f5f5f;float: none;">
                                         <?php echo $orderurl ?>
                                         <a href="javascript:;" lay-on="copyinfo" data-info="<?php echo $orderurl ?>"
                                             style="float: right;" title="复制"><span
@@ -97,16 +112,102 @@
                 </div>
             </div>
             <div class="layui-col-md6">
+    
                 <div class="layui-card">
-                    <div class="layui-card-header">
-                        我的文章
-                    </div>
+                    <div class="layui-card-header">收款码监控配置<span class="layui-font-gray"> · SmsForwarder</span></div>
                     <div class="layui-card-body">
-                        <div style="padding: 120px 0px;width: 100%;text-align: center;">
-                            <h3>不知道写什么，先留着</h3>
-                        </div>
+                        <fieldset class="layui-elem-field">
+                            <legend style="font-size: 14px;">发送通道配置</legend>
+                            <div class="layui-field-box">
+                                <div class="layui-form layui-form-pane">
+                                    <div class="layui-form-item" pane>
+                                        <label class="layui-form-label">Webhook</label>
+                                        <div class="layui-input-block">
+                                            <div class="layui-form-mid layui-elip"
+                                                style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                                <?php echo $url . 'mpayNotify' ?>
+                                                <a href="javascript:;" lay-on="copyinfo"
+                                                    data-info="<?php echo $url . 'mpayNotify' ?>" style="float: right;"
+                                                    title="复制"><span class="icon pear-icon pear-icon-survey"></span></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item" pane>
+                                        <label class="layui-form-label">消息模版</label>
+                                        <div class="layui-input-block">
+                                            <div class="layui-form-mid layui-elip"
+                                                style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                                {"action": "mpay","data": "[msg]","time":"[timestamp]","sign": "[sign]"}
+                                                <a href="javascript:;" lay-on="copyinfo"
+                                                    data-info='{"action": "mpay","data": "[msg]","time":"[timestamp]","sign": "[sign]"}'
+                                                    style="float: right;" title="复制"><span
+                                                        class="icon pear-icon pear-icon-survey"></span></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item" pane>
+                                        <label class="layui-form-label">Secret</label>
+                                        <div class="layui-input-block">
+                                            <div class="layui-form-mid layui-elip"
+                                                style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                                <?php echo $secret_key ?>
+                                                <a href="javascript:;" lay-on="copyinfo"
+                                                    data-info="<?php echo $secret_key ?>" style="float: right;"
+                                                    title="复制"><span class="icon pear-icon pear-icon-survey"></span></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item" pane>
+                                        <label class="layui-form-label">成功关键字</label>
+                                        <div class="layui-input-block">
+                                            <div class="layui-form-mid layui-elip"
+                                                style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                                200
+                                                <a href="javascript:;" lay-on="copyinfo" data-info="200"
+                                                    style="float: right;" title="复制"><span
+                                                        class="icon pear-icon pear-icon-survey"></span></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </fieldset>
+                        <fieldset class="layui-elem-field">
+                            <legend style="font-size: 14px;">应用转发规则·多重匹配</legend>
+                            <div class="layui-field-box">
+                                <div class="layui-form layui-form-pane">
+                                    <div class="layui-form-item" pane>
+                                        <label class="layui-form-label">微信支付</label>
+                                        <div class="layui-input-block">
+                                            <div class="layui-form-mid layui-elip"
+                                                style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                                <?php echo '并且 是 APP包名 相等 com.tencent.mm<br />并且 是 通知标题 相等 微信支付<br />&nbsp;或者 是 通知标题 相等 微信收款助手' ?>
+                                                <a href="javascript:;" lay-on="copyinfo"
+                                                    data-info='<?php echo "并且 是 APP包名 相等 com.tencent.mm\n并且 是 通知标题 相等 微信支付\n 或者 是 通知标题 相等 微信收款助手" ?>'
+                                                    style="float: right;" title="复制"><span
+                                                        class="icon pear-icon pear-icon-survey"></span></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item" pane>
+                                        <label class="layui-form-label">支付宝</label>
+                                        <div class="layui-input-block">
+                                            <div class="layui-form-mid layui-elip"
+                                                style="margin-left: 10px;color: #5f5f5f;float: none;">
+                                                <?php echo '并且 是 APP包名 相等 com.eg.android.AlipayGphone<br />并且 是 通知标题 包含 成功收款' ?>
+                                                <a href="javascript:;" lay-on="copyinfo"
+                                                    data-info='<?php echo "并且 是 APP包名 相等 com.eg.android.AlipayGphone\n并且 是 通知标题 包含 成功收款" ?>'
+                                                    style="float: right;" title="复制"><span
+                                                        class="icon pear-icon pear-icon-survey"></span></a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </fieldset>
                     </div>
                 </div>
+    
             </div>
         </div>
     </div>

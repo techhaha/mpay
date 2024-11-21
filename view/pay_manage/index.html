@@ -83,15 +83,13 @@
 		<input type="checkbox" name="state" value="{{d.id}}" lay-skin="switch" lay-text="启用|禁用" lay-filter="accountEnable" {{ d.state == 1 ? 'checked' : '' }} />
 	</script>
 	<script type="text/html" id="account-checkUrl">
-			{{# 
-				if (d.platform == '微信支付') {
-					return `{"pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}`;
-				} else if (d.platform == '支付宝') {
-					return `{"pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}`;
-				} else {
-					return '<?php echo $domain ?>/checkPayResult?pid=' + d.pid + '&aid=' + d.id;
-				}
-			}}
+		{{# 
+			if (d.platform == '微信支付' || d.platform == '支付宝') {
+				return `<p title="双击复制">{"pid":"${d.pid}","aid":"${d.id}","uid":"\{\{UID\}\}","title":"\{\{TITLE\}\}","msg":"\{\{MSG\}\}","time":"\{\{RECEIVE_TIME\}\}","divice":"\{\{DEVICE_NAME\}\}"}</p>`;
+			} else {
+				return `<p title="双击复制"><?php echo $domain ?>/checkPayResult?pid=${d.pid}&aid=${d.id}</p>`;
+			}
+		}}
 	</script>
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
@@ -149,8 +147,12 @@
 					account.editAccount(id);
 				} else if (obj.event === 'channelList') {
 					account.channelList(id);
-				} else if (obj.event === 'copy') {
-					console.log(obj.getCol());
+				}
+			});
+			table.on('toolDouble(account-table)', function (obj) {
+				if (obj.event === 'copy') {
+					const text = obj.tr[0].querySelector('td[data-field="checkUrl"]>div').innerText;
+					navigator.clipboard.writeText(text).then(() => { layer.msg('复制成功') });
 				}
 			});
 			// 表格头部按钮事件

@@ -32,7 +32,7 @@ class UserController extends BaseController
     // 修改用户
     public function setUser()
     {
-        $userinfo = User::find(\session('userid'))->toArray();
+        $userinfo = User::find(session('userid'))->toArray();
         View::assign($userinfo);
         return View::fetch();
     }

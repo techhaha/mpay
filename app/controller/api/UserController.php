@@ -22,7 +22,7 @@ class UserController extends BaseController
             Session::set('nickname', $userinfo['data']->nickname);
             Session::set('userrole', $userinfo['data']->role);
             Session::set('islogin', true);
-            return json(\backMsg(0, 'ok'));
+            return json(backMsg(0, 'ok'));
         } else {
             return json($userinfo);
         }
@@ -30,26 +30,42 @@ class UserController extends BaseController
     public function logout()
     {
         Session::clear();
-        return json(\backMsg(0, '注销成功'));
+        return json(backMsg(0, '注销成功'));
     }
     public function editUser()
     {
-        $userid = \session('userid');
+        $userid = session('userid');
         $info = $this->request->post();
         $res = User::update($info, ['id' => $userid]);
         if (!$res) {
-            return json(\backMsg(1, '修改失败'));
+            return json(backMsg(1, '修改失败'));
         }
-        return json(\backMsg(0, '重置成功'));
+        return json(backMsg(0, '重置成功'));
+    }
+    public function changePassword()
+    {
+        $userid = session('userid');
+        $user_info = User::find($userid);
+        $post_info = $this->request->post();
+        if (password_verify($post_info['old_password'], $user_info->password)) {
+            $new_password = password_hash($post_info['new_password'], PASSWORD_DEFAULT);
+            $res = User::update(['password' => $new_password], ['id' => $userid]);
+            if (!$res) {
+                return json(backMsg(1, '修改失败'));
+            }
+            return json(backMsg(0, '修改成功'));
+        } else {
+            return json(backMsg(1, '原密码错误'));
+        }
     }
     public function resetKey()
     {
-        $userid = \session('userid');
+        $userid = session('userid');
         $res = User::update(['secret_key' => $this->generateKey()], ['id' => $userid]);
         if (!$res) {
-            return json(\backMsg(1, '重置失败'));
+            return json(backMsg(1, '重置失败'));
         }
-        return json(\backMsg(0, '重置成功'));
+        return json(backMsg(0, '重置成功'));
     }
     private function checkUser(array $login_info): array
     {
@@ -57,16 +73,16 @@ class UserController extends BaseController
         $password = $login_info['password'];
         $userinfo = User::where('username', $username)->find();
         if ($userinfo) {
-            if ($password === $userinfo->password) {
+            if (password_verify($password, $userinfo->password)) {
                 return ['code' => 0, 'data' => $userinfo];
             } else {
-                return \backMsg(1, '登陆密码错误');
+                return backMsg(1, '登陆密码错误');
             }
         } else {
-            return \backMsg(2, '用户不存在');
+            return backMsg(2, '用户不存在');
         }
     }
-    private function generateKey()
+    private function generateKey(bool $strong = true)
     {
         $bytes = openssl_random_pseudo_bytes(16, $strong);
         if ($strong) {

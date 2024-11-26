@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>程序安装</title>
+    <link rel="stylesheet" href="/component/pear/css/pear.css" />
+    <style>
+
+    </style>
+</head>
+
+<body>
+
+    <div class="layui-container" style="margin-top: 50px;">
+        <div class="layui-row">
+            <div class="layui-col-md8 layui-col-md-offset2">
+                <form class="layui-form">
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">数据库地址</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="host" required lay-verify="required" placeholder="请输入数据库地址"
+                                autocomplete="off" class="layui-input" value="localhost">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">端口</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="port" required lay-verify="required" placeholder="请输入数据库名称"
+                                autocomplete="off" class="layui-input" value="3306">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">编码</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="charset" required lay-verify="required" placeholder="请输入数据库名称"
+                                autocomplete="off" class="layui-input" value="utf8mb4">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">数据库</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="name" required lay-verify="required" placeholder="请输入数据库名称"
+                                autocomplete="off" class="layui-input" value="">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">用户名</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="user" required lay-verify="required" placeholder="请输入数据库用户名"
+                                autocomplete="off" class="layui-input" value="root">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">密码</label>
+                        <div class="layui-input-block">
+                            <input type="password" name="pass" required lay-verify="required" placeholder="请输入数据库密码"
+                                autocomplete="off" class="layui-input">
+                        </div>
+                    </div>
+                    <hr style="margin: 24px 0px;" />
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">管理员昵称</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="nickname" required lay-verify="required" placeholder="请输入管理员昵称"
+                                autocomplete="off" class="layui-input" value="管理大大">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">管理员账号</label>
+                        <div class="layui-input-block">
+                            <input type="text" name="username" required lay-verify="required" placeholder="请输入管理员用户名"
+                                autocomplete="off" class="layui-input" value="admin">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label">管理员密码</label>
+                        <div class="layui-input-block">
+                            <input type="password" name="password" required lay-verify="required" placeholder="请输入管理员密码"
+                                autocomplete="off" class="layui-input">
+                        </div>
+                    </div>
+                    <div class="layui-form-item">
+                        <div class="layui-input-block">
+                            <button class="layui-btn" lay-submit lay-filter="formSubmit">立即安装</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <script src="/component/layui/layui.js"></script>
+    <script src="/component/pear/pear.js"></script>
+    <script>
+        layui.use(['form'], function () {
+            var form = layui.form;
+            var layer = layui.layer;
+
+            // 监听提交
+            form.on('submit(formSubmit)', function (data) {
+                const field = data.field;
+                // 提交表单
+                fetch('/install/install', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(field)
+                }).then(res => {
+                    if (res.ok) {
+                        return res.json();
+                    }
+                    throw new Error('数据库配置错误');
+                }).then(res => {
+                    if (res.code == 0) {
+                        layer.msg(res.msg, {
+                            time: 1000,
+                            end: () => {
+                                window.location.href = '/User/login';
+                            }
+                        });
+                    } else {
+                        layer.msg(res.msg);
+                    }
+                }).catch(err => {
+                    layer.msg(err.message);
+                })
+                return false;
+            });
+        });
+    </script>
+
+</body>
+
+</html>

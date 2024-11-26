@@ -59,7 +59,7 @@ return array (
     'price' => '49.00',
     'describe' => '数字门店',
     'website' => 'https://store.zhihuijingyingba.com/',
-    'state' => 1,
+    'state' => 0,
     'query' => 
     array (
       'pageNo' => 1,
@@ -79,7 +79,7 @@ return array (
     'price' => '59.00',
     'describe' => '为商户和消费者提供安全、便捷、高效的支付产品与服务助力商户提升运营效率，实现数字化运营',
     'website' => 'https://xym.ysepay.com/',
-    'state' => 1,
+    'state' => 0,
     'query' => 
     array (
       'storeNo' => '',
@@ -102,7 +102,7 @@ return array (
     'price' => '49.00',
     'describe' => '码钱商管平台',
     'website' => 'https://m.hkrt.cn/',
-    'state' => 1,
+    'state' => 0,
     'query' => 
     array (
       'terminalType' => '',

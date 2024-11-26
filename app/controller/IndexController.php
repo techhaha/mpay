@@ -22,17 +22,7 @@ class IndexController
     }
     public function test()
     {
-        $info = request()->post();
-        $action = isset($info['action']) ? $info['action'] : '';
-        if ($action === 'mpay') {
-            $data = json_decode($info['data'], true);
-            $config = \think\facade\Config::load("payconfig/{$data['pid']}_{$data['aid']}", 'payconfig');
-            $payclient_path = "\\payclient\\{$config['pay']['payclass']}";
-            $Payclient = new $payclient_path($info, $config);
-            $res = $Payclient->notify();
-            return $res;
-        } else {
-            return 202;
-        }
+
+            return app()->getBasePath();
     }
 }

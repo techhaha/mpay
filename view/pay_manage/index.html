@@ -152,7 +152,13 @@
 			table.on('toolDouble(account-table)', function (obj) {
 				if (obj.event === 'copy') {
 					const text = obj.tr[0].querySelector('td[data-field="checkUrl"]>div').innerText;
-					navigator.clipboard.writeText(text).then(() => { layer.msg('复制成功') });
+					if (navigator.clipboard) {
+                        navigator.clipboard.writeText(text).then(() => {
+                            layer.msg('复制成功');
+                        });
+                    } else {
+                        layer.msg('复制失败，请手动复制');
+                    }
 				}
 			});
 			// 表格头部按钮事件

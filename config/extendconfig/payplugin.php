@@ -59,7 +59,7 @@ return array (
     'price' => '49.00',
     'describe' => '数字门店',
     'website' => 'https://store.zhihuijingyingba.com/',
-    'state' => 0,
+    'state' => 1,
     'query' => 
     array (
       'pageNo' => 1,

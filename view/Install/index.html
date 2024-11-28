@@ -6,87 +6,115 @@
     <title>程序安装</title>
     <link rel="stylesheet" href="/component/pear/css/pear.css" />
     <style>
+        .logo {
+            width: 60px !important;
+            margin-top: 10px !important;
+            margin-bottom: 10px !important;
+        }
 
+        .title {
+            font-size: 30px !important;
+            font-weight: 550 !important;
+            margin-left: 20px !important;
+            color: #5FB878 !important;
+            height: 60px !important;
+            line-height: 60px !important;
+            margin-top: 10px !important;
+        }
+
+        .desc {
+            width: 100% !important;
+            text-align: center !important;
+            color: gray !important;
+            height: 60px !important;
+            line-height: 60px !important;
+        }
     </style>
 </head>
 
-<body>
+<body class="pear-container" background="/admin/images/background.svg" style="background-size: cover;">
 
-    <div class="layui-container" style="margin-top: 50px;">
-        <div class="layui-row">
-            <div class="layui-col-md8 layui-col-md-offset2">
-                <form class="layui-form">
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">数据库地址</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="host" required lay-verify="required" placeholder="请输入数据库地址"
-                                autocomplete="off" class="layui-input" value="localhost">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">端口</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="port" required lay-verify="required" placeholder="请输入数据库名称"
-                                autocomplete="off" class="layui-input" value="3306">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">编码</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="charset" required lay-verify="required" placeholder="请输入数据库名称"
-                                autocomplete="off" class="layui-input" value="utf8mb4">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">数据库</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="name" required lay-verify="required" placeholder="请输入数据库名称"
-                                autocomplete="off" class="layui-input" value="">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">用户名</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="user" required lay-verify="required" placeholder="请输入数据库用户名"
-                                autocomplete="off" class="layui-input" value="root">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">密码</label>
-                        <div class="layui-input-block">
-                            <input type="password" name="pass" required lay-verify="required" placeholder="请输入数据库密码"
-                                autocomplete="off" class="layui-input">
-                        </div>
-                    </div>
-                    <hr style="margin: 24px 0px;" />
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">管理员昵称</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="nickname" required lay-verify="required" placeholder="请输入管理员昵称"
-                                autocomplete="off" class="layui-input" value="管理大大">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">管理员账号</label>
-                        <div class="layui-input-block">
-                            <input type="text" name="username" required lay-verify="required" placeholder="请输入管理员用户名"
-                                autocomplete="off" class="layui-input" value="admin">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <label class="layui-form-label">管理员密码</label>
-                        <div class="layui-input-block">
-                            <input type="password" name="password" required lay-verify="required" placeholder="请输入管理员密码"
-                                autocomplete="off" class="layui-input">
-                        </div>
-                    </div>
-                    <div class="layui-form-item">
-                        <div class="layui-input-block">
-                            <button class="layui-btn" lay-submit lay-filter="formSubmit">立即安装</button>
-                        </div>
-                    </div>
-                </form>
+    <div class="layui-card" style="padding-top: 40px; max-width: 780px; margin: 20px auto;">
+        <div class="layui-card-body">
+            <div class="layui-form-item">
+                <div style="display: flex; justify-content: center;">
+                    <div><img class="logo" src="/admin/images/logo.png" /></div>
+                    <div class="title">码支付安装程序</div>
+                </div>
+                <div class="desc">
+                    让 个 人 收 款 更 加 轻 松 便 捷
+                </div>
             </div>
+            <form class="layui-form"
+                style="width: 70%; max-width: 680px; margin: 0px auto; padding: 24px; padding-left: 0px;">
+                <div class="layui-form-item">
+                    <label class="layui-form-label">HOST</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="host" required lay-verify="required" placeholder="请输入数据库地址"
+                            autocomplete="off" class="layui-input" value="127.0.0.1">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">端口</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="port" required lay-verify="required" placeholder="请输入数据库名称"
+                            autocomplete="off" class="layui-input" value="3306">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">编码</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="charset" required lay-verify="required" placeholder="请输入数据库名称"
+                            autocomplete="off" class="layui-input" value="utf8mb4">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">数据库</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="name" required lay-verify="required" placeholder="请输入数据库名称"
+                            autocomplete="off" class="layui-input" value="">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">用户名</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="user" required lay-verify="required" placeholder="请输入数据库用户名"
+                            autocomplete="off" class="layui-input" value="root">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">密码</label>
+                    <div class="layui-input-block">
+                        <input type="password" name="pass" required lay-verify="required" placeholder="请输入数据库密码"
+                            autocomplete="off" class="layui-input">
+                    </div>
+                </div>
+                <hr style="margin: 24px 0px;" />
+                <div class="layui-form-item">
+                    <label class="layui-form-label">管理员昵称</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="nickname" required lay-verify="required" placeholder="请输入管理员昵称"
+                            autocomplete="off" class="layui-input" value="勇敢牛牛">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">管理员账号</label>
+                    <div class="layui-input-block">
+                        <input type="text" name="username" required lay-verify="required" placeholder="请输入管理员用户名"
+                            autocomplete="off" class="layui-input" value="admin">
+                    </div>
+                </div>
+                <div class="layui-form-item">
+                    <label class="layui-form-label">管理员密码</label>
+                    <div class="layui-input-block">
+                        <input type="password" name="password" required lay-verify="required" placeholder="请输入管理员密码"
+                            autocomplete="off" class="layui-input">
+                    </div>
+                </div>
+                <div class="layui-form-item" style="text-align: center;">
+                    <button class="layui-btn" lay-submit lay-filter="formSubmit">立即安装</button>
+                </div>
+            </form>
         </div>
     </div>
     <script src="/component/layui/layui.js"></script>

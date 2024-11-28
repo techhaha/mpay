@@ -96,6 +96,9 @@ class PluginController extends BaseController
         $config = self::getPluginConfig();
         $option = [];
         foreach ($config as $value) {
+            if ($value['state'] == 0) {
+                continue;
+            }
             $option[] = ['platform' => $value['platform'], 'name' => $value['name']];
         }
         return json($option);

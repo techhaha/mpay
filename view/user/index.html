@@ -221,7 +221,13 @@
             util.on({
                 'copyinfo': (ele) => {
                     const info = ele.attr('data-info');
-                    navigator.clipboard.writeText(info).then(() => { layer.msg('复制成功') });
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(info).then(() => {
+                            layer.msg('复制成功');
+                        });
+                    } else {
+                        layer.msg('复制失败，请手动复制');
+                    }
                 },
                 'resetKey': (ele) => {
                     layer.confirm('重置密钥后，将无法使用原密钥，是否继续？', { icon: 3, title: '重置密钥' }, function (index) {

@@ -11,9 +11,11 @@ class PluginController extends BaseController
     // 获取插件列表
     public function getPluginList()
     {
-        $plugin_config = self::getPluginConfig();
+
+        $local_plugin_config = self::getPluginConfig();
+        $plugin_config = \Plugin::getPluginList($local_plugin_config);
         if ($plugin_config) {
-            return json(['code' => 0, 'msg' => 'OK', 'count' => \count($plugin_config), 'data' => $plugin_config]);
+            return json(['code' => 0, 'msg' => 'OK', 'count' => count($plugin_config), 'data' => $plugin_config]);
         } else {
             return json(['code' => 1, 'msg' => '无数据记录', 'count' => 0, 'data' => []]);
         }

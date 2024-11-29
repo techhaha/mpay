@@ -84,12 +84,14 @@
             table.on('toolbar(plugin-table)', function (obj) {
                 if (obj.event === 'showAllPlugin') {
                     plugin.changClass(this);
+                    table.reload('plugin-table', { where: { show: 0 } });
                 } else if (obj.event === 'showInstalled') {
                     plugin.changClass(this);
+                    table.reload('plugin-table', { where: { show: 1 } });
                 } else if (obj.event === 'showWaitInstall') {
                     plugin.changClass(this);
+                    table.reload('plugin-table', { where: { show: 2 } });
                 }
-
             });
             // 单元格事件
             table.on('tool(plugin-table)', function (obj) {
@@ -111,8 +113,9 @@
                 return false;
             });
 
-            // 处理点击btn切换class
             let plugin = {};
+
+            // 处理点击btn切换class
             plugin.changClass = (ele) => {
                 const select = 'layui-btn layui-btn-primary layui-bg-green layui-btn-sm';
                 const unselect = 'layui-btn layui-btn-primary layui-bg-gray layui-btn-sm';

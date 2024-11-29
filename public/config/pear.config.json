@@ -1,7 +1,7 @@
 {
 	"logo": {
 		"title": "码支付",
-		"image": "/admin/images/logo.png"
+		"image": "/static/img/logo2.png"
 	},
 	"menu": {
 		"data": "/Console/menu",

@@ -3,7 +3,7 @@ logo:
   ## 网站名称
   title: "码支付"
   ## 网站图标
-  image: "/admin/images/logo.png"
+  image: "/static/img/logo3.png"
 ## 菜单配置
 menu: 
   ## 菜单数据来源

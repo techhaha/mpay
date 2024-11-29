@@ -11,7 +11,6 @@ class PluginController extends BaseController
     // 获取插件列表
     public function getPluginList()
     {
-
         $local_plugin_config = self::getPluginConfig();
         $plugin_config = \Plugin::getPluginList($local_plugin_config);
         if ($plugin_config) {

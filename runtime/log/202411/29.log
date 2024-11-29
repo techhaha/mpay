@@ -1,0 +1,83 @@
+[2024-11-29T20:25:18+08:00][error] [10501]SQLSTATE[HY000] [1045] Access denied for user 'admin'@'localhost' (using password: YES)[D:\phpStudy\phpstudy_pro\WWW\git\mpay\vendor\topthink\think-orm\src\db\PDOConnection.php:842]
+[2024-11-29T20:26:02+08:00][sql] CONNECT:[ UseTime:0.001519s ] mysql:host=127.0.0.1;port=3306;dbname=test1;charset=utf8mb4
+[2024-11-29T20:26:02+08:00][sql] DROP TABLE IF EXISTS `mpay_order`; [ RunTime:0.011527s ]
+[2024-11-29T20:26:02+08:00][sql] CREATE TABLE `mpay_order` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `pid` int(11) NOT NULL DEFAULT '0' COMMENT '商户ID',
+  `order_id` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '订单号',
+  `type` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '支付类型',
+  `out_trade_no` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户订单号',
+  `notify_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '异步通知地址',
+  `return_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '跳转通知地址',
+  `name` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商品名称',
+  `really_price` float NOT NULL DEFAULT '0' COMMENT '实际支付金额',
+  `money` float NOT NULL DEFAULT '0' COMMENT '订单价格',
+  `clientip` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户IP地址',
+  `device` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '设备类型',
+  `param` varchar(720) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '扩展参数',
+  `state` tinyint(4) NOT NULL DEFAULT '0' COMMENT '订单状态',
+  `patt` tinyint(4) NOT NULL DEFAULT '0' COMMENT '开启回调监听',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '订单创建时间',
+  `close_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '订单关闭时间',
+  `pay_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '支付时间',
+  `platform_order` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '收款平台订单号',
+  `aid` int(11) NOT NULL DEFAULT '0' COMMENT '收款账号ID',
+  `cid` int(11) NOT NULL DEFAULT '0' COMMENT '收款码ID',
+  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC; [ RunTime:0.011370s ]
+[2024-11-29T20:26:02+08:00][sql] DROP TABLE IF EXISTS `mpay_pay_account`; [ RunTime:0.000670s ]
+[2024-11-29T20:26:02+08:00][sql] CREATE TABLE `mpay_pay_account` (
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '收款平台ID',
+  `pid` int(11) NOT NULL DEFAULT '0' COMMENT '用户ID',
+  `platform` varchar(255) NOT NULL DEFAULT '' COMMENT '收款平台',
+  `account` varchar(255) NOT NULL DEFAULT '' COMMENT '账号',
+  `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
+  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
+  `pattern` tinyint(4) NOT NULL DEFAULT '1' COMMENT '账号监听模式',
+  `params` varchar(255) NOT NULL DEFAULT '' COMMENT '自定义查询',
+  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC; [ RunTime:0.041643s ]
+[2024-11-29T20:26:02+08:00][sql] DROP TABLE IF EXISTS `mpay_pay_channel`; [ RunTime:0.000877s ]
+[2024-11-29T20:26:02+08:00][sql] CREATE TABLE `mpay_pay_channel` (
+  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '渠道ID',
+  `account_id` int(11) NOT NULL DEFAULT '0' COMMENT '收款平台ID',
+  `channel` varchar(255) NOT NULL DEFAULT '' COMMENT '收款通道',
+  `type` tinyint(4) NOT NULL DEFAULT '0' COMMENT '保存类型',
+  `qrcode` varchar(255) NOT NULL DEFAULT '' COMMENT '二维码',
+  `last_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近使用',
+  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
+  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC; [ RunTime:0.038624s ]
+[2024-11-29T20:26:02+08:00][sql] DROP TABLE IF EXISTS `mpay_user`; [ RunTime:0.000607s ]
+[2024-11-29T20:26:02+08:00][sql] CREATE TABLE `mpay_user` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `pid` int(11) NOT NULL DEFAULT '0' COMMENT '商户ID',
+  `secret_key` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户秘钥',
+  `nickname` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户昵称',
+  `username` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '账号',
+  `password` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '密码',
+  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用状态 0:禁用 1:启用',
+  `role` tinyint(4) NOT NULL DEFAULT '0' COMMENT '用户角色 0:普通用户 1:管理员',
+  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC; [ RunTime:0.006188s ]
+[2024-11-29T20:26:02+08:00][sql] INSERT INTO `mpay_user` (`id`, `pid`, `secret_key`, `nickname`, `username`, `password`, `state`, `role`) VALUES (1, 1000, '9e66c3a184faf1b03a883840cf504482', '勇敢牛牛', 'admin', '$2y$10$wTWW2CxjProOWg7xuis/..vLlDIuJLKI3cNhcsjbQfV50/v.0eazq', 1, 1); [ RunTime:0.005451s ]
+[2024-11-29T20:26:13+08:00][sql] CONNECT:[ UseTime:0.001539s ] mysql:host=127.0.0.1;port=3306;dbname=test1;charset=utf8mb4
+[2024-11-29T20:26:13+08:00][sql] SHOW FULL COLUMNS FROM `mpay_user` [ RunTime:0.002027s ]
+[2024-11-29T20:26:13+08:00][sql] SELECT * FROM `mpay_user` WHERE (  `username` = 'admin' ) AND `mpay_user`.`delete_time` IS NULL LIMIT 1 [ RunTime:0.000710s ]
+[2024-11-29T20:26:14+08:00][sql] CONNECT:[ UseTime:0.001054s ] mysql:host=127.0.0.1;port=3306;dbname=test1;charset=utf8mb4
+[2024-11-29T20:26:14+08:00][sql] SHOW FULL COLUMNS FROM `mpay_order` [ RunTime:0.002653s ]
+[2024-11-29T20:26:14+08:00][sql] SELECT * FROM `mpay_order` WHERE (  `state` = 1  AND `create_time` > '2024-10-28 00:00:00' ) AND `mpay_order`.`delete_time` IS NULL [ RunTime:0.001011s ]
+[2024-11-29T20:26:14+08:00][sql] CONNECT:[ UseTime:0.001857s ] mysql:host=127.0.0.1;port=3306;dbname=test1;charset=utf8mb4
+[2024-11-29T20:26:14+08:00][sql] SHOW FULL COLUMNS FROM `mpay_order` [ RunTime:0.001358s ]
+[2024-11-29T20:26:14+08:00][sql] SELECT `id`,`type`,`really_price` FROM `mpay_order` WHERE (  `create_time` BETWEEN '2024-01-01 00:00:00' AND '2024-11-29 23:59:59'  AND `state` = 1 ) AND `mpay_order`.`delete_time` IS NULL [ RunTime:0.000446s ]
+[2024-11-29T20:26:15+08:00][sql] CONNECT:[ UseTime:0.001195s ] mysql:host=127.0.0.1;port=3306;dbname=test1;charset=utf8mb4
+[2024-11-29T20:26:15+08:00][sql] SHOW FULL COLUMNS FROM `mpay_order` [ RunTime:0.001157s ]
+[2024-11-29T20:26:15+08:00][sql] SELECT COUNT(*) AS think_count FROM `mpay_order` `Order` INNER JOIN `mpay_pay_account` `PayAccount` ON `Order`.`aid`=`PayAccount`.`id` WHERE (  `PayAccount`.`delete_time` IS NULL ) AND `Order`.`delete_time` IS NULL [ RunTime:0.002627s ]
+[2024-11-29T20:26:18+08:00][info] {"page":"1","limit":"10"}
+[2024-11-29T20:31:56+08:00][info] {"page":"1","limit":"10","show":"1"}
+[2024-11-29T21:09:56+08:00][debug] 未安装[{"platform":"alipay","name":"\u652f\u4ed8\u5b9d","class_name":"AliPay","price":"0.00","describe":"\u652f\u6301\u652f\u4ed8\u5b9d\u4e2a\u4eba\u6536\u6b3e\u7801\u3001\u7ecf\u8425\u7801\u6536\u6b3e\uff0c\u76d1\u542c\u56de\u8c03","website":"https:\/\/www.alipay.com\/","state":1,"query":[],"install":false},{"platform":"sqbpay","name":"\u6536\u94b1\u5427","class_name":"ShouQianBa","price":"49.00","describe":"\u4e3b\u6d41\u79fb\u52a8\u652f\u4ed8\u5168\u80fd\u6536 \u4fe1\u7528\u5361,\u82b1\u5457\u90fd\u80fd\u7528,\u751f\u610f\u5e2e\u624b\u6536\u94b1\u5427,\u79fb\u52a8\u6536\u6b3e\u5c31\u7528\u5b83!","website":"https:\/\/www.shouqianba.com\/","state":1,"query":{"date_end":null,"date_start":null,"page":1,"page_size":10,"upayQueryType":0,"status":"2000","store_sn":"","type":"30"},"install":false},{"platform":"sqbpay","name":"\u6536\u94b1\u5427","class_name":"ShouQianBa","price":"49.00","describe":"\u4e3b\u6d41\u79fb\u52a8\u652f\u4ed8\u5168\u80fd\u6536 \u4fe1\u7528\u5361,\u82b1\u5457\u90fd\u80fd\u7528,\u751f\u610f\u5e2e\u624b\u6536\u94b1\u5427,\u79fb\u52a8\u6536\u6b3e\u5c31\u7528\u5b83!","website":"https:\/\/www.shouqianba.com\/","state":1,"query":{"date_end":null,"date_start":null,"page":1,"page_size":10,"upayQueryType":0,"status":"2000","store_sn":"","type":"30"},"install":false},{"platform":"storepay","name":"\u6570\u5b57\u95e8\u5e97","class_name":"ZhiHuiJingYing","price":"49.00","describe":"\u6570\u5b57\u95e8\u5e97","website":"https:\/\/store.zhihuijingyingba.com\/","state":1,"query":{"pageNo":1,"pageSize":10,"payClient":4,"status":2,"_t":null,"createTime_begin":null,"createTime_end":null},"install":false},{"platform":"storepay","name":"\u6570\u5b57\u95e8\u5e97","class_name":"ZhiHuiJingYing","price":"49.00","describe":"\u6570\u5b57\u95e8\u5e97","website":"https:\/\/store.zhihuijingyingba.com\/","state":1,"query":{"pageNo":1,"pageSize":10,"payClient":4,"status":2,"_t":null,"createTime_begin":null,"createTime_end":null},"install":false},{"platform":"storepay","name":"\u6570\u5b57\u95e8\u5e97","class_name":"ZhiHuiJingYing","price":"49.00","describe":"\u6570\u5b57\u95e8\u5e97","website":"https:\/\/store.zhihuijingyingba.com\/","state":1,"query":{"pageNo":1,"pageSize":10,"payClient":4,"status":2,"_t":null,"createTime_begin":null,"createTime_end":null},"install":false},{"platform":"ysepay","name":"\u5c0fY\u7ecf\u8425","class_name":"YsePay","price":"59.00","describe":"\u4e3a\u5546\u6237\u548c\u6d88\u8d39\u8005\u63d0\u4f9b\u5b89\u5168\u3001\u4fbf\u6377\u3001\u9ad8\u6548\u7684\u652f\u4ed8\u4ea7\u54c1\u4e0e\u670d\u52a1\u52a9\u529b\u5546\u6237\u63d0\u5347\u8fd0\u8425\u6548\u7387\uff0c\u5b9e\u73b0\u6570\u5b57\u5316\u8fd0\u8425","website":"https:\/\/xym.ysepay.com\/","state":0,"query":{"storeNo":"","bizType":3,"payType":"","orderStatus":3,"trmNo":"","operatorUser":"","codeBoardCode":"","pageSize":10,"pageNo":1,"orderNo":""},"install":false},{"platform":"ysepay","name":"\u5c0fY\u7ecf\u8425","class_name":"YsePay","price":"59.00","describe":"\u4e3a\u5546\u6237\u548c\u6d88\u8d39\u8005\u63d0\u4f9b\u5b89\u5168\u3001\u4fbf\u6377\u3001\u9ad8\u6548\u7684\u652f\u4ed8\u4ea7\u54c1\u4e0e\u670d\u52a1\u52a9\u529b\u5546\u6237\u63d0\u5347\u8fd0\u8425\u6548\u7387\uff0c\u5b9e\u73b0\u6570\u5b57\u5316\u8fd0\u8425","website":"https:\/\/xym.ysepay.com\/","state":0,"query":{"storeNo":"","bizType":3,"payType":"","orderStatus":3,"trmNo":"","operatorUser":"","codeBoardCode":"","pageSize":10,"pageNo":1,"orderNo":""},"install":false},{"platform":"ysepay","name":"\u5c0fY\u7ecf\u8425","class_name":"YsePay","price":"59.00","describe":"\u4e3a\u5546\u6237\u548c\u6d88\u8d39\u8005\u63d0\u4f9b\u5b89\u5168\u3001\u4fbf\u6377\u3001\u9ad8\u6548\u7684\u652f\u4ed8\u4ea7\u54c1\u4e0e\u670d\u52a1\u52a9\u529b\u5546\u6237\u63d0\u5347\u8fd0\u8425\u6548\u7387\uff0c\u5b9e\u73b0\u6570\u5b57\u5316\u8fd0\u8425","website":"https:\/\/xym.ysepay.com\/","state":0,"query":{"storeNo":"","bizType":3,"payType":"","orderStatus":3,"trmNo":"","operatorUser":"","codeBoardCode":"","pageSize":10,"pageNo":1,"orderNo":""},"install":false},{"platform":"mqpay","name":"\u7801\u94b1","class_name":"MaQian","price":"49.00","describe":"\u7801\u94b1\u5546\u7ba1\u5e73\u53f0","website":"https:\/\/m.hkrt.cn\/","state":0,"query":{"terminalType":"","payType":"","payMode":"","tradeStatus":"1","tradeNo":"","storeId":"","page":1,"rows":10,"endDate":null,"endTime":null,"startDate":null,"startTime":null},"install":false},{"platform":"mqpay","name":"\u7801\u94b1","class_name":"MaQian","price":"49.00","describe":"\u7801\u94b1\u5546\u7ba1\u5e73\u53f0","website":"https:\/\/m.hkrt.cn\/","state":0,"query":{"terminalType":"","payType":"","payMode":"","tradeStatus":"1","tradeNo":"","storeId":"","page":1,"rows":10,"endDate":null,"endTime":null,"startDate":null,"startTime":null},"install":false},{"platform":"mqpay","name":"\u7801\u94b1","class_name":"MaQian","price":"49.00","describe":"\u7801\u94b1\u5546\u7ba1\u5e73\u53f0","website":"https:\/\/m.hkrt.cn\/","state":0,"query":{"terminalType":"","payType":"","payMode":"","tradeStatus":"1","tradeNo":"","storeId":"","page":1,"rows":10,"endDate":null,"endTime":null,"startDate":null,"startTime":null},"install":false},{"platform":"lklpay","name":"\u62c9\u5361\u62c9","class_name":"LaKaLa","price":"89.00","describe":"\u6570\u5b57\u652f\u4ed8\uff0c\u66f4\u5b89\u5168\uff0c\u66f4\u9ad8\u6548","website":"https:\/\/customer.lakala.com\/","state":0,"query":{"requestTime":null,"systemCode":"MERDASH","version":"1.0","openEntity":null,"requestId":null,"pageSize":10,"pageNum":1,"startTime":null,"timeOption":null,"tranSts":"SUCCESS","orderNo":null,"srefno":null,"ornNo":null,"endTime":null,"startDate":null,"endDate":null,"page":1,"size":10,"merchantNos":null,"merInnerNos":null},"install":false},{"platform":"lklpay","name":"\u62c9\u5361\u62c9","class_name":"LaKaLa","price":"89.00","describe":"\u6570\u5b57\u652f\u4ed8\uff0c\u66f4\u5b89\u5168\uff0c\u66f4\u9ad8\u6548","website":"https:\/\/customer.lakala.com\/","state":0,"query":{"requestTime":null,"systemCode":"MERDASH","version":"1.0","openEntity":null,"requestId":null,"pageSize":10,"pageNum":1,"startTime":null,"timeOption":null,"tranSts":"SUCCESS","orderNo":null,"srefno":null,"ornNo":null,"endTime":null,"startDate":null,"endDate":null,"page":1,"size":10,"merchantNos":null,"merInnerNos":null},"install":false},{"platform":"lklpay","name":"\u62c9\u5361\u62c9","class_name":"LaKaLa","price":"89.00","describe":"\u6570\u5b57\u652f\u4ed8\uff0c\u66f4\u5b89\u5168\uff0c\u66f4\u9ad8\u6548","website":"https:\/\/customer.lakala.com\/","state":0,"query":{"requestTime":null,"systemCode":"MERDASH","version":"1.0","openEntity":null,"requestId":null,"pageSize":10,"pageNum":1,"startTime":null,"timeOption":null,"tranSts":"SUCCESS","orderNo":null,"srefno":null,"ornNo":null,"endTime":null,"startDate":null,"endDate":null,"page":1,"size":10,"merchantNos":null,"merInnerNos":null},"install":false},{"platform":"sftpay","name":"\u76db\u4ed8\u901a","class_name":"ShengPay","price":"69.00","describe":"\u8f7b\u677e\u751f\u6d3b \u653e\u5fc3\u652f\u4ed8","website":"https:\/\/b.shengpay.com\/","state":0,"query":[],"install":false},{"platform":"sftpay","name":"\u76db\u4ed8\u901a","class_name":"ShengPay","price":"69.00","describe":"\u8f7b\u677e\u751f\u6d3b \u653e\u5fc3\u652f\u4ed8","website":"https:\/\/b.shengpay.com\/","state":0,"query":[],"install":false},{"platform":"sftpay","name":"\u76db\u4ed8\u901a","class_name":"ShengPay","price":"69.00","describe":"\u8f7b\u677e\u751f\u6d3b \u653e\u5fc3\u652f\u4ed8","website":"https:\/\/b.shengpay.com\/","state":0,"query":[],"install":false}]

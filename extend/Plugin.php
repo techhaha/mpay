@@ -2,9 +2,47 @@
 
 declare(strict_types=1);
 
+use think\facade\Log;
+
 class Plugin
 {
-    public static function getPluginList(): array
+    public static function getPluginList(array $local_plugin = []): array
+    {
+        $app_plugin = [];
+        $app_plugin_all = self::getAllPlugin();
+        $local_plugin = self::getInstall($local_plugin);
+        $plugin_uninstall = self::getUninstall($app_plugin_all, $local_plugin);
+        $app_plugin = array_merge($local_plugin, $plugin_uninstall);
+        return $app_plugin;
+    }
+    // 获取已安装插件
+    public static function getInstall(array $local_plugin = []): array
+    {
+        foreach ($local_plugin as $key => $value) {
+            $local_plugin[$key]['install'] = true;
+        }
+        return $local_plugin;
+    }
+    // 获取未安装插件
+    public static function getUninstall(array $app_plugin = [], array $local_plugin = []): array
+    {
+        $uninstall_plugin = [];
+        $install = [];
+        foreach ($local_plugin as $e_val) {
+            $install[] = $e_val['platform'];
+        }
+        foreach ($app_plugin as $i_val) {
+            if (in_array($i_val['platform'], $install)) {
+                continue;
+            }
+            $val = $i_val;
+            $val['install'] = false;
+            $uninstall_plugin[] = $val;
+        }
+        return $uninstall_plugin;
+    }
+    // 获取平台所有支持插件
+    public static function getAllPlugin(): array
     {
         $app_plugin = array(
             0 =>
@@ -167,12 +205,6 @@ class Plugin
             ),
         );
         return $app_plugin;
-    }
-    public static function getUnInstall(array $local_plugin_config = []): array
-    {
-        $plugin = self::getPluginList();
-        $plugin_UnInst = [];
-        return $plugin_UnInst;
     }
     // 请求外部资源
     private function getHttpResponse($url, $header = [], $post = null, $timeout = 10)

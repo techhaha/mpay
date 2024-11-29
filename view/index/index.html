@@ -15,34 +15,47 @@
 	<link rel="stylesheet" type="text/css" href="/static/css/style.css" id="theme-opt">
 	<link rel="stylesheet" type="text/css" href="/static/css/index.css" id="theme-opt">
 	<style>
-		#topnav .navigation-menu {
-			float: left;
+		.mlogo {
+			display: flex;
+			align-items: center;
 		}
 
-		#topnav .login-menu {
-			float: right;
-			list-style: none;
+		.mlogo img {
+			height: 28px;
+		}
+
+		.top-head {
+			display: flex;
+			justify-content: space-between;
+		}
+
+		.nav-menu,
+		.log-menu {
+			display: flex;
 			margin: 0;
 			padding: 0;
 		}
 
-		#topnav .login-menu>li {
-			float: left;
+		.nav-menu {
+			justify-content: flex-start;
+		}
+
+		.log-menu {
+			justify-content: flex-end;
+		}
+
+		.nav-menu>li,
+		.log-menu>li {
 			display: block;
-			position: relative;
 			margin: 0 10px;
+			min-height: 74px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
 		}
 
-		@media (min-width: 992px) {
-			#topnav .login-menu>li>a {
-				padding-top: 25px;
-				padding-bottom: 25px;
-				min-height: 62px;
-
-			}
-		}
-
-		#topnav .login-menu>li>a {
+		.nav-menu>li>a,
+		.log-menu>li>a {
 			display: block;
 			color: #3c4858;
 			font-size: 13px;
@@ -57,18 +70,23 @@
 			padding-right: 15px;
 		}
 
+		.nav-menu>li:first-child>a {
+			padding-left: 0;
+			padding-right: 0;
+		}
+
+		.nav-menu>li>a:hover,
+		.log-menu>li>a:hover {
+			color: #2f55d4;
+		}
+
 		@media (max-width: 991px) {
-			#topnav .navigation-menu {
-				margin-bottom: 40px;
+			.nav-menu > li:not(:first-child) {
+				display: none;
 			}
 
-			#topnav .login-menu {
-				position: absolute;
-				bottom: 0;
-			}
-
-			#topnav .login-menu>li>a {
-				padding: 10px 20px;
+			.log-menu {
+				display: none;
 			}
 		}
 	</style>
@@ -78,23 +96,27 @@
 
 	<header id="topnav" class="defaultscroll sticky active">
 		<div class="container">
-			<a class="logo" href="/">码支付</a>
-		</div>
-		<div id="navigation" class="active">
-			<ul class="navigation-menu">
-				<li class="active"><a href="/">首页</a></li>
-				<li><a href="/doc.html" target="_blank">开发文档</a></li>
-			</ul>
-			<ul class="login-menu">
-				<?php if(isset($nickname)){ ?>
-				<li><a href="/Console/index" class="a-head-btn bdr-5 bg-color-white">
-						<?php echo $nickname ?>
-					</a></li>
-				<?php }else{ ?>
-				<li><a href="/User/login" class="a-head-btn bdr-5 bg-color-white">登录</a></li>
-				<li><a href="/" class="a-head-btn bdr-5 bg-color-0055ff">注册</a></li>
-				<?php } ?>
-			</ul>
+			<div class="top-head">
+				<ul class="nav-menu">
+					<li class="mlogo">
+						<a href="/">
+							<img src="/static/img/logo1.png" alt="logo">
+						</a>
+					</li>
+					<li><a href="/">首页</a></li>
+					<li><a href="/doc.html" target="_blank">开发文档</a></li>
+				</ul>
+				<ul class="log-menu">
+					<?php if(isset($nickname)){ ?>
+					<li><a href="/Console/index" class="a-head-btn bdr-5 bg-color-white">
+							<?php echo $nickname ?>
+						</a></li>
+					<?php }else{ ?>
+					<li><a href="/User/login" class="a-head-btn bdr-5 bg-color-white">登录</a></li>
+					<li><a href="/" class="a-head-btn bdr-5 bg-color-0055ff">注册</a></li>
+					<?php } ?>
+				</ul>
+			</div>
 		</div>
 	</header>
 
@@ -307,6 +329,26 @@
 			</div>
 		</div>
 	</footer>
+	<script>
+        // 当页面滚动时，检查滚动位置
+        window.onscroll = function () {
+            scrollFunction();
+        };
+
+        // 定义滚动函数
+        function scrollFunction() {
+            // 获取页面滚动的距离
+            var scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+
+            // 如果滚动距离大于指定值（例如100像素），则添加样式
+            if (scrollTop > 80) {
+                document.getElementById("topnav").classList.add("nav-sticky");
+            } else {
+                // 如果滚动距离小于指定值，则移除样式
+                document.getElementById("topnav").classList.remove("nav-sticky");
+            }
+        }
+    </script>
 </body>
 
 </html>

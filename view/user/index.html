@@ -261,7 +261,7 @@
             }
 
         });
-        fetch('https://tenapi.cn/v2/yiyan').then(res => res.text()).then(data => { document.getElementById('yiyan').innerHTML = data || '人无横财不富，马无夜草不肥'; })
+        fetch('https://v1.hitokoto.cn?c=d&c=i&c=k&encode=text').then(res => res.text()).then(data => { document.getElementById('yiyan').innerHTML = data || '人无横财不富，马无夜草不肥'; })
 
 
     </script>

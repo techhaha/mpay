@@ -49,17 +49,17 @@ class Plugin
     // 获取平台所有支持插件
     public static function getAllPlugin(): array
     {
-        $app_plugin = self::getHttpResponse(self::$siteUrl . '/Mpay/getPlugins');
+        $app_plugin = self::getHttpResponse(self::$siteUrl . '/mpay/getPlugins/');
         return json_decode($app_plugin, true);
     }
     // 获取通知消息
     public static function getNotifyMessage(): array
     {
-        $message = self::getHttpResponse(self::$siteUrl . '/Mpay/message');
+        $message = self::getHttpResponse(self::$siteUrl . '/mpay/message/');
         return json_decode($message, true);
     }
     // 请求外部资源
-    private function getHttpResponse($url, $header = [], $post = null, $timeout = 10)
+    private static function getHttpResponse($url, $header = [], $post = null, $timeout = 10)
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);

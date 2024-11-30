@@ -20,7 +20,14 @@ class ConsoleController extends BaseController
     {
         // 加载菜单配置
         $menu = \think\facade\Config::load("extendconfig/menu", 'extendconfig');
-        return \json($menu);
+        return json($menu);
+    }
+    // 管理菜单
+    public function message()
+    {
+        // 加载菜单配置
+        $message = \Plugin::getNotifyMessage();
+        return json($message);
     }
     // 首页仪表盘
     public function console()

@@ -6,7 +6,8 @@ use think\facade\Log;
 
 class Plugin
 {
-    public static function getPluginList(array $local_plugin = []): array
+    // 获取全部插件（含本地）
+    public static function getAllPlugins(array $local_plugin = []): array
     {
         $app_plugin = [];
         $app_plugin_all = self::getAllPlugin();
@@ -14,6 +15,11 @@ class Plugin
         $plugin_uninstall = self::getUninstall($app_plugin_all, $local_plugin);
         $app_plugin = array_merge($local_plugin, $plugin_uninstall);
         return $app_plugin;
+    }
+    // 获取未安装插件
+    public static function getUninstallPlugins(array $local_plugin = []): array
+    {
+        return self::getUninstall(self::getAllPlugin(), $local_plugin);
     }
     // 获取已安装插件
     public static function getInstall(array $local_plugin = []): array
@@ -53,7 +59,7 @@ class Plugin
                 'price' => '0.00',
                 'describe' => '支持微信个人收款码、赞赏码、经营码、商家码收款，监听回调',
                 'website' => 'https://weixin.qq.com/',
-                'state' => 1,
+                'state' => 0,
                 'query' =>
                 array(),
             ),
@@ -65,7 +71,7 @@ class Plugin
                 'price' => '0.00',
                 'describe' => '支持支付宝个人收款码、经营码收款，监听回调',
                 'website' => 'https://www.alipay.com/',
-                'state' => 1,
+                'state' => 0,
                 'query' =>
                 array(),
             ),
@@ -77,7 +83,7 @@ class Plugin
                 'price' => '49.00',
                 'describe' => '主流移动支付全能收 信用卡,花呗都能用,生意帮手收钱吧,移动收款就用它!',
                 'website' => 'https://www.shouqianba.com/',
-                'state' => 1,
+                'state' => 0,
                 'query' =>
                 array(
                     'date_end' => NULL,
@@ -98,7 +104,7 @@ class Plugin
                 'price' => '49.00',
                 'describe' => '数字门店',
                 'website' => 'https://store.zhihuijingyingba.com/',
-                'state' => 1,
+                'state' => 0,
                 'query' =>
                 array(
                     'pageNo' => 1,

@@ -12,7 +12,13 @@ class PluginController extends BaseController
     public function getPluginList()
     {
         $local_plugin_config = self::getPluginConfig();
-        $plugin_config = \Plugin::getPluginList($local_plugin_config);
+        $show = $this->request->get('show', 1);
+        $plugin_config = match ((int)$show) {
+            0 => \Plugin::getAllPlugins($local_plugin_config),
+            1 => \Plugin::getInstall($local_plugin_config),
+            2 => \Plugin::getUninstallPlugins($local_plugin_config),
+            default => []
+        };
         if ($plugin_config) {
             return json(['code' => 0, 'msg' => 'OK', 'count' => count($plugin_config), 'data' => $plugin_config]);
         } else {
@@ -83,11 +89,28 @@ class PluginController extends BaseController
     public function pluginEnable()
     {
         $info = $this->request->post();
+        if ($this->isPluginInstall($info['platform']) == false) {
+            return json(backMsg(1, '插件未安装'));
+        }
         $up_res = $this->setPlugin($info['platform'], ['state' => $info['state']]);
         if ($up_res) {
-            return json(\backMsg(1, '失败'));
+            return json(backMsg(1, '失败'));
         } else {
-            return json(\backMsg(0, '成功'));
+            return json(backMsg(0, '成功'));
+        }
+    }
+    // 检测插件是否安装
+    public function isPluginInstall(string $platform): bool
+    {
+        $config = self::getPluginConfig();
+        $platforms = [];
+        foreach ($config as $key => $value) {
+            $platforms[] = $value['platform'];
+        }
+        if (in_array($platform, $platforms)) {
+            return true;
+        } else {
+            return false;
         }
     }
     // 插件选项

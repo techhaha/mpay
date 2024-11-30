@@ -50,5 +50,5 @@ return array (
       'store_sn' => '',
       'type' => '30',
     ),
-  )
+  ),
 );

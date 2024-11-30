@@ -43,12 +43,19 @@
         <button class="layui-btn layui-btn-primary layui-bg-gray layui-btn-sm" grp-btn lay-event="showWaitInstall">待安装</button>
 	</script>
     <script type="text/html" id="plugin-state">
+        {{# if(d.install == true){ }}
 		<input type="checkbox" name="state" value="{{d.platform}}" lay-skin="switch" lay-text="启用|禁用" lay-filter="pluginEnable" {{ d.state == 1 ? 'checked' : '' }} />
+        {{# }else{ }}
+        <span class="layui-badge layui-bg-gray">未安装</span>
+        {{# } }}
 	</script>
     <script type="text/html" id="plugin-action">
-		<a href="javascript:;" class="layui-font-green" lay-event="createConfig">配置</a><div class="divider-vl"></div>
+        {{# if(d.install == true){ }}
         <a href="javascript:;" class="layui-font-green" lay-event="pluginUpdate">更新</a><div class="divider-vl"></div>
         <a href="javascript:;" class="layui-font-green" lay-event="pluginUninstall">卸载</a>
+        {{# }else{ }}
+        <a href="javascript:;" class="layui-font-green" lay-event="pluginInstall">立即安装</a>
+        {{# } }}
 	</script>
     <script src="/component/layui/layui.js"></script>
     <script src="/component/pear/pear.js"></script>
@@ -66,14 +73,13 @@
                 { title: '说明', field: 'describe', align: 'left' },
                 { title: '价格', field: 'price', align: 'center', maxWidth: 180, templet: `<div>{{= d.price==0 ? '免费' : d.price }}</div>` },
                 { title: '状态', field: 'state', align: 'center', maxWidth: 180, templet: `#plugin-state` },
-                { title: '操作', align: 'right', maxWidth: 180, fixed: 'right', templet: `#plugin-action` },
+                { title: '操作', align: 'center', maxWidth: 180, fixed: 'right', templet: `#plugin-action` },
             ]]
 
             table.render({
                 id: 'plugin-table',
                 elem: '#plugin-table',
                 url: '/api/Plugin/getPluginList',
-                page: true,
                 skin: 'line',
                 cols: cols,
                 where: { show: 1 },
@@ -84,20 +90,17 @@
             // 表头工具事件
             table.on('toolbar(plugin-table)', function (obj) {
                 if (obj.event === 'showAllPlugin') {
-                    plugin.changClass(this);
-                    table.reload('plugin-table', { where: { show: 0 } });
+                    table.reload('plugin-table', { where: { show: 0 }, done: () => { plugin.changClass(obj.event) } });
                 } else if (obj.event === 'showInstalled') {
-                    plugin.changClass(this);
-                    table.reload('plugin-table', { where: { show: 1 } });
+                    table.reload('plugin-table', { where: { show: 1 }, done: () => { plugin.changClass(obj.event) } });
                 } else if (obj.event === 'showWaitInstall') {
-                    plugin.changClass(this);
-                    table.reload('plugin-table', { where: { show: 2 } });
+                    table.reload('plugin-table', { where: { show: 2 }, done: () => { plugin.changClass(obj.event) } });
                 }
             });
             // 单元格事件
             table.on('tool(plugin-table)', function (obj) {
                 const id = obj.data.id;
-                if (obj.event === 'createConfig') {
+                if (obj.event === 'pluginInstall') {
                     layer.msg(obj.event);
                 } else if (obj.event === 'pluginUpdate') {
                     layer.msg(obj.event);
@@ -117,9 +120,10 @@
             let plugin = {};
 
             // 处理点击btn切换class
-            plugin.changClass = (ele) => {
+            plugin.changClass = (event) => {
                 const select = 'layui-btn layui-btn-primary layui-bg-green layui-btn-sm';
                 const unselect = 'layui-btn layui-btn-primary layui-bg-gray layui-btn-sm';
+                const ele = document.querySelector(`button[lay-event="${event}"]`);
                 ele.className = select;
                 const btns = document.querySelectorAll(`button[grp-btn]`);
                 btns.forEach(val => {

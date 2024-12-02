@@ -101,11 +101,18 @@
             table.on('tool(plugin-table)', function (obj) {
                 const id = obj.data.id;
                 if (obj.event === 'pluginInstall') {
-                    layer.msg(obj.event);
+                    layer.msg('功能开发中，有需要请联系作者');
                 } else if (obj.event === 'pluginUpdate') {
-                    layer.msg(obj.event);
+                    layer.msg('功能开发中，有需要请联系作者');
                 } else if (obj.event === 'pluginUninstall') {
-                    layer.msg(obj.event);
+                    layer.confirm('卸载之后无法恢复，确认吗？', { icon: 3, title: '卸载插件' }, function (index) {
+                        layer.close(index);
+                        config = {
+                            platform: obj.data.platform,
+                            classname: obj.data.class_name
+                        }
+                        plugin.uninstall(config);
+                    });
                 }
             });
             // 启用状态
@@ -144,6 +151,20 @@
                     layer.tips(rec_info.msg, obj.othis, { tips: 1, time: 1200 });
                 } else {
                     layer.msg(rec_info.msg, { icon: 2, time: 1200 }, () => { obj.elem.checked = !obj.elem.checked });
+                }
+            }
+            // 卸载插件
+            plugin.uninstall = async (config) => {
+                const res = await fetch('/api/Plugin/uninstallPlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+                if (res.status !== 200) {
+                    layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+                    return false;
+                }
+                const rec_info = await res.json();
+                if (rec_info.code === 0) {
+                    layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('plugin-table'); });
+                } else {
+                    layer.msg(rec_info.msg, { icon: 2, time: 1200 });
                 }
             }
         });

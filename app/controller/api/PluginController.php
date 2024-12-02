@@ -25,6 +25,22 @@ class PluginController extends BaseController
             return json(['code' => 1, 'msg' => '无数据记录', 'count' => 0, 'data' => []]);
         }
     }
+    // 卸载插件
+    public function uninstallPlugin()
+    {
+        $platform = $this->request->post('platform');
+        $classname = $this->request->post('classname');
+        if (!$platform || !$classname) {
+            return json(backMsg(1, '请选择插件'));
+        }
+        $res1 = $this->delPlugin($platform);
+        $res2 = $this->delPluginFile($classname);
+        if ($res1 && $res2) {
+            return json(backMsg(0, '卸载成功'));
+        } else {
+            return json(backMsg(1, '插件不存在'));
+        }
+    }
     // 添加插件
     public function addPlugin(array $option = [])
     {
@@ -46,22 +62,34 @@ class PluginController extends BaseController
         $this->savePluginConfig($plugin_config, '支付插件列表');
         return 0;
     }
-    // 删除插件
-    public function delPlugin($plugin_name = '')
+    // 删除插件配置
+    private function delPlugin(string $plugin_name = '')
     {
         $plugin_config = self::getPluginConfig();
-        $keys = [];
-        foreach ($plugin_config as $index => $value) {
+        $index = null;
+        foreach ($plugin_config as $i => $value) {
             if ($value['platform'] == $plugin_name) {
-                $keys[] = $index;
+                $index = $i;
             }
         }
-        foreach ($keys as $index) {
-            unset($plugin_config[$index]);
+        if ($index === null) {
+            return false; // 插件不存在
         }
-        $config = \array_values($plugin_config);
+        unset($plugin_config[$index]);
+        $config = array_values($plugin_config);
         $this->savePluginConfig($config, '支付插件列表');
-        return 0;
+        return true;
+    }
+    // 删除插件类库文件
+    private function delPluginFile(string $file_name = '')
+    {
+        $plugin_path = root_path() . '/extend/payclient/' . $file_name . '.php';
+        if (file_exists($plugin_path)) {
+            unlink($plugin_path);
+            return true;
+        } else {
+            return false;
+        }
     }
     // 修改插件
     public function setPlugin($platform = '', $option = [])

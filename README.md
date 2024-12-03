@@ -1,6 +1,3 @@
-
-
-
 # 码支付
 
 ![logo](assets/20241129_120237_logo.jpg)
@@ -155,17 +152,27 @@
 
 ### 页面展示
 
-![](assets/20241128_171842_image.png)
+![首页](assets/20241203_153935_image.png)
 
-![](assets/20241128_171854_image.png)
+![安装](assets/20241203_154034_image.png)
 
-![](assets/20241128_171931_image.png)
+![登陆](assets/20241203_154108_image.png)
 
-![](assets/20241128_172022_image.png)
+![后端控制台](assets/20241203_154141_image.png)
 
-![](assets/20241128_172101_image.png)
+![订单管理](assets/20241203_154218_image.png)
 
-![](assets/20241128_172229_image.png)
+![账号管理](assets/20241203_154307_image.png)
 
-![](assets/20241128_172353_image.png)
+![插件管理](assets/20241203_154420_image.png)
+
+![用户中心](assets/20241203_154505_image.png)
+
+![添加账号](assets/20241203_154755_image.png)
+
+![收款码](assets/20241203_154918_image.png)
+
+![订单详情](assets/20241203_155123_image.png)
+
+
 

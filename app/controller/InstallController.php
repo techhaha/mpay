@@ -53,7 +53,7 @@ class InstallController
     {
         $envPath = app()->getRootPath() . '.env';
         $envContent = <<<EOT
-APP_DEBUG = true
+APP_DEBUG = false
 
 DB_TYPE = mysql
 DB_HOST = {$dbConfig['host']}

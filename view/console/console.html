@@ -10,6 +10,12 @@
 	<link rel="stylesheet" href="/component/pear/css/pear.css" />
 	<link rel="stylesheet" href="/admin/css/other/console1.css" />
 	<style>
+		#notice {
+			color: #4b4b4b;
+			text-align: center;
+			line-height: 3em;
+		}
+
 		.rounded {
 			border-radius: 0.375rem;
 			width: 45px;
@@ -123,6 +129,52 @@
 		.neworder div[class="layui-table-body layui-table-main"] table td {
 			padding: 3px 0px;
 		}
+
+		.link-info {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			cursor: pointer;
+			border-radius: 12px;
+			padding: 8px 5px;
+			margin-bottom: 14px;
+			background-color: #fafafa;
+		}
+
+		.link-info:hover {
+			background-color: #f7f7f7;
+		}
+
+		.link-info:first-child {
+			margin-top: 10px;
+		}
+
+		.link-info:last-child {
+			margin-bottom: 25px;
+		}
+
+		.link-info h4 {
+			color: #566a7f;
+		}
+
+		.link-info p {
+			color: #a1acb8;
+		}
+
+		.link-info>div:first-child {
+			display: flex;
+			align-items: center;
+		}
+
+		.link-info>div:first-child>div {
+			float: left;
+		}
+
+		.link-info>div:first-child>div:first-child>img {
+			max-height: 30px;
+			margin: 10px;
+			margin-right: 16px;
+		}
 	</style>
 </head>
 
@@ -131,7 +183,9 @@
 		<div class="layui-row layui-col-space16">
 			<div class="layui-col-xs12">
 				<div class="layui-card">
-					<div class="layui-card-body">请在您网站后台配置支付接口对接时请您选择走易支付接口方式来对接本平台哦！请添加收藏我们网站,备用或者防止丢失哦！</div>
+					<div class="layui-card-body">
+						<h3 id="notice" class="layui-gray"></h3>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -314,45 +368,10 @@
 				<div class="layui-row layui-col-space16">
 					<div class="layui-col-md12">
 						<div class="layui-card">
-							<div class="layui-card-header">
-								链接
-							</div>
+							<div class="layui-card-header">项目信息</div>
 							<div class="layui-card-body">
-								<a target="_blank" href="https://blog.csdn.net/weixin_44177222"
-									class="pear-btn pear-btn-primary  layui-btn-fluid"
-									style="margin-top: 8px;height: 50px;line-height: 50px;">CSDN博客</a>
-								<br />
-								<a target="_blank" href="https://gitee.com/technical-laohu/mpay"
-									class="pear-btn pear-btn-warming  layui-btn-fluid"
-									style="margin-top: 8px;height: 50px;line-height: 50px;">项目地址</a>
-								<br />
-								<a target="_blank" href="https://f0bmwzqjtq2.feishu.cn/wiki/JmUTwOYdfix8T1k9IGlcs4jynsd"
-									class="pear-btn pear-btn-danger  layui-btn-fluid"
-									style="margin-top: 8px;height: 50px;line-height: 50px;">使用文档</a>
-							</div>
-						</div>
-					</div>
-					<!-- 寄语预留 -->
-					<div class="layui-col-md12">
-						<div class="layui-card">
-							<div class="layui-card-header">更 新</div>
-							<div class="layui-card-body">
-								<ul class="list">
-									<li class="list-item"><span class="title">优化代码格式</span><span
-											class="footer">2021-09-06
-											11:28</span></li>
-									<li class="list-item"><span class="title">新增消息组件</span><span
-											class="footer">2021-09-06
-											11:28</span></li>
-									<li class="list-item"><span class="title">移动端兼容</span><span
-											class="footer">2021-09-06
-											11:28</span></li>
-									<li class="list-item"><span class="title">系统布局优化</span><span
-											class="footer">2021-09-06
-											11:28</span></li>
-									<li class="list-item"><span class="title">系统布局优化</span><span
-											class="footer">2021-09-06
-											11:28</span></li>
+								<ul id="project-info">
+									<!-- 项目信息列表 -->
 								</ul>
 							</div>
 						</div>
@@ -362,11 +381,23 @@
 			</div>
 		</div>
 	</div>
+	<script type="text/html" id="project_info_tpl">
+	<li class="link-info" lay-on="{{= d.action }}">
+		<div>
+			<div><img src="{{= d.avatar }}"></div>
+			<div>
+				<h4>{{= d.title }}</h4>
+				<p>{{= d.desc }}</p>
+			</div>
+		</div>
+		<div><i class="layui-icon layui-icon-right"></i></div>
+	</li>
+	</script>
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
 	<script src="/static/js/vue.global.js"></script>
 	<script>
-		layui.use(['layer', 'element', 'count', 'dropdown', 'table', 'util'], function () {
+		layui.use(['layer', 'element', 'count', 'dropdown', 'table', 'util', 'laytpl'], function () {
 			var $ = layui.jquery,
 				layer = layui.layer,
 				table = layui.table,
@@ -374,8 +405,9 @@
 				count = layui.count,
 				dropdown = layui.dropdown,
 				util = layui.util;
+			laytpl = layui.laytpl;
 			// echarts = layui.echarts;
-
+			// 概览信息
 			count.up("today_income", { time: 3000, num: parseFloat('<?php echo $today_income ?>'), bit: 2, regulator: 100 })
 			count.up("yesterday_income", { time: 3000, num: parseFloat('<?php echo $yesterday_income ?>'), bit: 2, regulator: 100 })
 			count.up("week_income", { time: 3000, num: parseFloat('<?php echo $week_income ?>'), bit: 2, regulator: 100 })
@@ -405,13 +437,76 @@
 					})()
 				}
 			});
-
+			// 项目信息
+			const project_info = document.getElementById('project-info');
+			const project_info_tpl = document.getElementById('project_info_tpl').innerHTML;
+			let project_text = laytpl(project_info_tpl);
+			const project_data = [
+				{
+					title: '源码下载',
+					desc: '前往gitee下载免费源码',
+					avatar: '/static/img/gitee.png',
+					action: 'load'
+				}, {
+					title: '项目文档',
+					desc: '根据文档相关配置正确使用',
+					avatar: '/static/img/feishu.png',
+					action: 'doc'
+				}, {
+					title: '作者博客',
+					desc: '分享一些小项目小工具',
+					avatar: '/static/img/csdn.png',
+					action: 'blog'
+				}, {
+					title: '赞赏作者',
+					desc: '支持作者继续更新',
+					avatar: '/static/img/appreciate.png',
+					action: 'appreciate'
+				}, {
+					title: '学习交流',
+					desc: '加入项目学习交流群',
+					avatar: '/static/img/group.png',
+					action: 'group'
+				}, {
+					title: '插件定制',
+					desc: '有定制需求请联系作者',
+					avatar: '/static/img/customized.png',
+					action: 'customized'
+				}];
+			let res_html = '';
+			project_data.forEach(data => {
+				project_text.render(data, (html) => {
+					res_html += html;
+				});
+			});
+			project_info.innerHTML = res_html;
+			// 点击事件
+			util.on({
+				'load': () => {
+					util.openWin({ url: 'https://gitee.com/technical-laohu/mpay' });
+				},
+				'doc': () => {
+					util.openWin({ url: 'https://f0bmwzqjtq2.feishu.cn/docx/HBVrdrsACo36bzxUCSPcjOBNnyb?from=from_copylink' });
+				},
+				'blog': () => {
+					util.openWin({ url: 'https://blog.csdn.net/weixin_44177222?type=blog' });
+				},
+				'appreciate': () => {
+					util.openWin({ url: 'https://f0bmwzqjtq2.feishu.cn/docx/PjwOdvBeZoQEHUxF2ZScTjHOnKb?from=from_copylink' });
+				},
+				'group': () => {
+					util.openWin({ url: 'https://f0bmwzqjtq2.feishu.cn/docx/OjlwdPunLoGjL0xodMUcS0xFngX?from=from_copylink' });
+				},
+				'customized': () => {
+					util.openWin({ url: 'https://f0bmwzqjtq2.feishu.cn/docx/HjRYdRjeWoIHdyx7ETRcLKREnzB?from=from_copylink' });
+				}
+			});
 			// 表格列参数
 			let cols = [[
-				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 160 },
-				{ title: '金额', field: 'money', align: 'center', minWidth: 70 },
-				{ title: '状态', field: 'state', align: 'center', minWidth: 70, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
-				{ title: '创建时间', field: 'create_time', align: 'center', minWidth: 155 }
+				{ title: '订单号', field: 'order_id', align: 'center' },
+				{ title: '金额', field: 'money', align: 'center', maxWidth: 80 },
+				{ title: '状态', field: 'state', align: 'center', maxWidth: 80, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
+				{ title: '创建时间', field: 'create_time', align: 'center' }
 			]]
 			// 表格渲染
 			table.render({
@@ -433,6 +528,8 @@
 			/* 统计图表代码 */
 
 		});
+		// 一言
+		fetch('https://v1.hitokoto.cn?c=d&c=i&c=k&encode=text').then(res => res.text()).then(data => { document.getElementById('notice').innerText = data || '人无横财不富，马无夜草不肥'; })
 	</script>
 	<script>
 		const { createApp, ref } = Vue

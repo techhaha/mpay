@@ -143,7 +143,22 @@ class PayManageController extends BaseController
             unlink($path);
         }
     }
-
+    // 上传二维码图片
+    public function uploadQrcode()
+    {
+        $img = $this->request->file('codeimg');
+        $path = public_path() . '/files/qrcode/';
+        if (!is_dir($path)) {
+            mkdir($path, 0777, true);
+        }
+        $info = $img->move($path, 'img' . time() . '.' . $img->getOriginalExtension());
+        if ($info) {
+            $imgpath = '/files/qrcode/';
+            return json(backMsg(0, '上传成功', ['imgpath' => $imgpath . $info->getFilename()]));
+        } else {
+            return json(backMsg(1, '上传失败'));
+        }
+    }
     // 生成账号配置
     private function createAccountConfig($acc)
     {

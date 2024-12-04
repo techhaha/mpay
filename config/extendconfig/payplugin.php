@@ -35,7 +35,7 @@ return array (
     'platform' => 'sqbpay',
     'name' => '收钱吧',
     'class_name' => 'ShouQianBa',
-    'price' => '49.00',
+    'price' => '0.00',
     'describe' => '主流移动支付全能收 信用卡,花呗都能用,生意帮手收钱吧,移动收款就用它!',
     'website' => 'https://www.shouqianba.com/',
     'state' => 1,

@@ -29,7 +29,21 @@ class InstallController
         $dbConfig = $request->post();
 
         // 保存数据库配置信息到配置文件
-        $this->saveDbConfig($dbConfig);
+        if ($this->saveDbConfig($dbConfig) === false) {
+            return json(backMsg(1, '配置保存失败'));
+        } else {
+            return json(backMsg(0, '配置保存成功'));
+        };
+    }
+    // 初始化数据库
+    public function init(Request $request)
+    {
+        // 检查是否已经安装过
+        if ($this->checkLock()) {
+            return backMsg(1, '已经安装');
+        };
+        // 获取表单提交的数据库配置信息
+        $dbConfig = $request->post();
 
         // 连接数据库并建表
         $is_succ_tb = $this->createTables();
@@ -66,7 +80,7 @@ DB_PREFIX = mpay_
 
 DEFAULT_LANG = zh-cn
 EOT;
-        file_put_contents($envPath, $envContent);
+        return file_put_contents($envPath, $envContent);
     }
 
     private function createTables()

@@ -5,6 +5,11 @@
 	<meta charset="utf-8">
 	<title>收款管理</title>
 	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+	<style>
+		.account-trade {
+			padding: 15px;
+		}
+	</style>
 </head>
 
 <body class="pear-container">
@@ -119,6 +124,7 @@
 				{ title: '启用状态', field: 'state', align: 'center', templet: '#account-state' },
 				{ title: '监听模式', field: 'pattern', align: 'center' },
 				{ title: '监听地址 / 自定义模版', field: 'checkUrl', align: 'center', minWidth: 300, event: 'copy', templet: '#account-checkUrl' },
+				{ title: '收款平台流水', field: 'trade', align: 'center', templet: '<div><a href="javascript:;" lay-event="queryTrade" data-url="/api/PayManage/getAccountTrade?pid={{= d.pid }}&aid={{= d.id }}"><span class="layui-badge layui-bg-green">查询</span></a></div>' },
 				{ title: '收款码数量', field: 'channel', align: 'center', templet: '<div><a href="javascript:;" lay-event="channelList"><span class="layui-badge layui-bg-green">{{= d.channel }}</span></a></div>' },
 				{ title: '操作', align: 'center', fixed: 'right', templet: '<div><a href="javascript:;" class="layui-font-green" lay-event="edit"><strong>编辑</strong></a></div>' }
 			]]
@@ -147,18 +153,21 @@
 					account.editAccount(id);
 				} else if (obj.event === 'channelList') {
 					account.channelList(id);
+				} else if (obj.event === 'queryTrade') {
+					const url = this.getAttribute('data-url');
+					account.getAccountTrade(url);
 				}
 			});
 			table.on('toolDouble(account-table)', function (obj) {
 				if (obj.event === 'copy') {
 					const text = obj.tr[0].querySelector('td[data-field="checkUrl"]>div').innerText;
 					if (navigator.clipboard) {
-                        navigator.clipboard.writeText(text).then(() => {
-                            layer.msg('复制成功');
-                        });
-                    } else {
-                        layer.msg('复制失败，请手动复制');
-                    }
+						navigator.clipboard.writeText(text).then(() => {
+							layer.msg('复制成功');
+						});
+					} else {
+						layer.msg('复制失败，请手动复制');
+					}
 				}
 			});
 			// 表格头部按钮事件
@@ -274,6 +283,32 @@
 					content: `/Order/testPay`,
 				});
 			}
+
+			// 查询平台收银流水
+			account.getAccountTrade = async function (url) {
+				const res = await fetch(url);
+				if (res.status !== 200) {
+					layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+					return false;
+				}
+				const rec_info = await res.json();
+				if (rec_info.code === 0) {
+					const data = rec_info.data;
+					let html = '';
+					data.forEach(order => {
+						html += `<tr><td>${order.order_no}</td><td>${order.channel}</td><td>${order.price}</td><td>${order.payway}</td></tr>`;
+					});
+					layer.open({
+						type: 1,
+						title: '收银流水(近3分钟)',
+						area: ['720px', '480px'],
+						content: `<div class="account-trade"><table class="layui-table"><thead><tr><th>订单流水</th><th>终端编号</th><th>收款金额</th><th>支付方式</th></tr></thead><tbody>${html}</tbody></table></div>`
+					});
+				} else {
+					layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+				}
+			}
+
 			// 请求封装
 			async function httpJSON(url, info) {
 				const res = await fetch(url, { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(info) });

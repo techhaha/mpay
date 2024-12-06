@@ -159,6 +159,42 @@ class PayManageController extends BaseController
             return json(backMsg(1, '上传失败'));
         }
     }
+    // 获取账号交易流水
+    public function getAccountTrade()
+    {
+        $req_info = $this->request->get();
+        $req_pid = $req_info['pid'];
+        $req_aid = $req_info['aid'];
+        // 加载配置文件
+        $config = \think\facade\Config::load("payconfig/{$req_pid}_{$req_aid}", 'payconfig');
+        // 收款平台账号配置
+        $pay_config = isset($config['pay']) ? $config['pay'] : [];
+        // 配置检查
+        if ($pay_config) {
+            // 账号配置信息
+            $aid = $pay_config['aid'];
+            if ($req_aid != $aid) return '监听收款配置不一致';
+        } else {
+            return '监听收款配置文件名错误';
+        }
+        // 登陆账号
+        $config = ['username' => $pay_config['account'], 'password' => $pay_config['password']];
+        // 收款查询
+        $query = $pay_config['query'];
+        // 实例监听客户端
+        $payclient_name = $pay_config['payclass'];
+        $payclient_path = "\\payclient\\{$payclient_name}";
+        $Payclient = new $payclient_path($config);
+        // 获取支付明细
+        $records = $Payclient->getOrderInfo($query);
+        if ($records) {
+            // 收款流水
+            return json(backMsg(0, '查询成功', $records));
+        } else {
+            return json(backMsg(1, '查询空订单'));
+        }
+    }
+
     // 生成账号配置
     private function createAccountConfig($acc)
     {

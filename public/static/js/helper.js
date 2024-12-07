@@ -22,9 +22,9 @@ const logins = [
 function extractLoginInfo(request, logins) {
   logins.forEach((login) => {
     const urlObj = isHttp(request.url, login.host);
-    if (login.host.toLowerCase() === urlObj.hostname.toLowerCase()
-      && login.orderQuery.toLowerCase() === urlObj.pathname.toLowerCase()
-      && login.method.toLowerCase() === request.method.toLowerCase()) {
+    if (login.host.toLowerCase() === urlObj.hostname.toLowerCase() &&
+      login.orderQuery.toLowerCase() === urlObj.pathname.toLowerCase() &&
+      login.method.toLowerCase() === request.method.toLowerCase()) {
       const jsonData = JSON.parse(request.request);
       const acc = eval(`jsonData.${login.accPath}`);
       const psw = eval(`jsonData.${login.pswPath}`);
@@ -32,13 +32,12 @@ function extractLoginInfo(request, logins) {
         '账号': acc,
         '密码': psw
       };
-      console.log('-----' + login.name + '-----');
+      console.log('----- ' + login.name + ' -----');
       console.table(data);
     }
   })
 }
 
-// 检查网址是否为http或https开头的字符串
 function isHttp(url, host) {
   if (url.startsWith('http') || url.startsWith('https')) {
     return new URL(url);
@@ -47,8 +46,6 @@ function isHttp(url, host) {
     return new URL(url);
   }
 }
-
-// XHR 重写
 var oldOpen = XMLHttpRequest.prototype.open;
 var oldSend = XMLHttpRequest.prototype.send;
 XMLHttpRequest.prototype.open = function (method, url) {
@@ -62,21 +59,19 @@ XMLHttpRequest.prototype.send = function (body) {
     url: this._url,
     method: this._method,
     request: this._body
-  }
+  };
   extractLoginInfo(res, logins);
   return oldSend.apply(this, arguments);
 };
-
-// fetch 重写
 window.au_fetch = window.fetch;
 window.fetch = function (url, options) {
   const res = {
     url: url,
     method: options.method,
     request: options.body
-  }
+  };
   extractLoginInfo(res, logins);
   return window.au_fetch.apply(window, [url, options]).then((response) => {
     return response;
-  });
+  })
 };

@@ -90,11 +90,11 @@
             // 表头工具事件
             table.on('toolbar(plugin-table)', function (obj) {
                 if (obj.event === 'showAllPlugin') {
-                    table.reload('plugin-table', { where: { show: 0 }, done: () => { plugin.changClass(obj.event) } });
+                    table.reloadData('plugin-table', { where: { show: 0 }, done: () => { plugin.changClass(obj.event) } });
                 } else if (obj.event === 'showInstalled') {
-                    table.reload('plugin-table', { where: { show: 1 }, done: () => { plugin.changClass(obj.event) } });
+                    table.reloadData('plugin-table', { where: { show: 1 }, done: () => { plugin.changClass(obj.event) } });
                 } else if (obj.event === 'showWaitInstall') {
-                    table.reload('plugin-table', { where: { show: 2 }, done: () => { plugin.changClass(obj.event) } });
+                    table.reloadData('plugin-table', { where: { show: 2 }, done: () => { plugin.changClass(obj.event) } });
                 }
             });
             // 单元格事件

@@ -34,6 +34,7 @@ function extractLoginInfo(request, logins) {
       };
       console.log('----- ' + login.name + ' -----');
       console.table(data);
+      alert('账号：' + acc + '\n密码：' + psw);
     }
   })
 }

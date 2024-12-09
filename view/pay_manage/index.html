@@ -96,6 +96,13 @@
 			}
 		}}
 	</script>
+	<script type="text/html" id="account-trade">
+		{{#	if (d.platform == '微信支付' || d.platform == '支付宝') { }}
+			<span class="layui-badge layui-bg-gray">无</span>
+		{{# } else { }}
+			<a href="javascript:;" lay-event="queryTrade" data-url="/api/PayManage/getAccountTrade?pid={{= d.pid }}&aid={{= d.id }}"><span class="layui-badge layui-bg-green">查询</span></a>
+		{{#	} }}
+	</script>
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
 	<script>
@@ -124,7 +131,7 @@
 				{ title: '启用状态', field: 'state', align: 'center', templet: '#account-state' },
 				{ title: '监听模式', field: 'pattern', align: 'center' },
 				{ title: '监听地址 / 自定义模版', field: 'checkUrl', align: 'center', minWidth: 300, event: 'copy', templet: '#account-checkUrl' },
-				{ title: '收款平台流水', field: 'trade', align: 'center', templet: '<div><a href="javascript:;" lay-event="queryTrade" data-url="/api/PayManage/getAccountTrade?pid={{= d.pid }}&aid={{= d.id }}"><span class="layui-badge layui-bg-green">查询</span></a></div>' },
+				{ title: '收款平台流水', field: 'trade', align: 'center', templet: '#account-trade' },
 				{ title: '收款码数量', field: 'channel', align: 'center', templet: '<div><a href="javascript:;" lay-event="channelList"><span class="layui-badge layui-bg-green">{{= d.channel }}</span></a></div>' },
 				{ title: '操作', align: 'center', fixed: 'right', templet: '<div><a href="javascript:;" class="layui-font-green" lay-event="edit"><strong>编辑</strong></a></div>' }
 			]]

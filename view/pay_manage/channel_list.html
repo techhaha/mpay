@@ -40,16 +40,28 @@
 			util.on({
 				getQrcode: function () {
 					(async () => {
+						const type_data = this.getAttribute("data-type");
 						const qrcode_data = this.getAttribute("data-qrcode")
-						const qrcode_img = await getQrcode(qrcode_data, QR);
-						layer.open({
-							type: 1,
-							area: ['200px', '200px'],
-							title: false,
-							closeBtn: 0,
-							shadeClose: true,
-							content: `<img width="100%" src="${qrcode_img}">`
-						});
+						if (type_data == 1) {
+							layer.open({
+								type: 1,
+								area: ['200px', '200px'],
+								title: false,
+								closeBtn: 0,
+								shadeClose: true,
+								content: `<img width="100%" src="${qrcode_data}">`
+							});
+						} else if (type_data == 0) {
+							const qrcode_img = await getQrcode(qrcode_data, QR);
+							layer.open({
+								type: 1,
+								area: ['200px', '200px'],
+								title: false,
+								closeBtn: 0,
+								shadeClose: true,
+								content: `<img width="100%" src="${qrcode_img}">`
+							});
+						}
 					})()
 				},
 				edit: function () {
@@ -104,7 +116,7 @@
 				<div class="layui-card-body">
 					<span class="layui-badge layui-bg-cyan">终端编号</span><span class="layui-badge layui-bg-gray">${item.channel}</span><br>
 					<span class="layui-badge layui-bg-cyan">收款地址</span><span class="layui-badge layui-bg-gray">${qrcode}</span>
-					<a href="javascript:;" class="layui-font-blue" lay-on="getQrcode"data-qrcode="${item.qrcode}"><span class="icon pear-icon">&#xe6cc;</span></a><br>
+					<a href="javascript:;" class="layui-font-blue" lay-on="getQrcode" data-qrcode="${item.qrcode}" data-type="${item.type}"><span class="icon pear-icon">&#xe6cc;</span></a><br>
 					<span class="layui-badge layui-bg-cyan">最后使用</span><span class="layui-badge layui-bg-gray">${item.last_time}</span><br>
 					<span class="layui-badge layui-bg-cyan">启用状态</span><span class="layui-badge layui-bg-${item.state == 1 ? 'green' : 'gray'}">${item.state == 1 ? '启用' : '禁用'}</span><br>
 					<div class="layui-btn-group edit">

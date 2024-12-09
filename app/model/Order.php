@@ -101,14 +101,16 @@ class Order extends BaseModel
     public static function showOrderDetail($id)
     {
         $order = self::find($id);
-        $a_list = PayAccount::with('payChannel')->hasWhere('payChannel', ['id' => $order->cid])->where('PayAccount.id', $order->aid)->find();
+        $a_list = PayAccount::find($order->aid);
+        $c_list = PayChannel::find($order->cid);
         if (!$order) {
             return [];
         }
-        $order->platform = $a_list->platform ?? '···';
-        $order->account = $a_list->account ?? '···';
-        $order->channel = $a_list->payChannel[0]->channel ?? '···';
-        $order->qrcode = $a_list->payChannel[0]->qrcode ?? '···';
+        $order->platform = $a_list['platform'] ?? '···';
+        $order->account = $a_list['account'] ?? '···';
+        $order->channel = $c_list['channel'] ?? '···';
+        $order->qrcode = $c_list['qrcode'] ?? '···';
+        $order->url_type = $c_list['type'] ?? '···';
         return $order->toArray();
     }
     // 选择收款通道

@@ -198,7 +198,8 @@
 			<div class="layui-col-xs9">
 				<div class="list">
 					<a href="javascript:;" class="layui-font-blue" lay-on="getQrcode"
-						data-qrcode="<?php echo $qrcode ?>"><span class="icon pear-icon">&#xe6cc;</span></a>
+						data-qrcode="<?php echo $qrcode ?>" data-type="<?php echo $url_type ?>"><span
+							class="icon pear-icon">&#xe6cc;</span></a>
 					<?php echo $qrcode ?>
 				</div>
 			</div>
@@ -215,16 +216,28 @@
 			util.on({
 				getQrcode: function () {
 					(async () => {
-						const qrcode_data = this.getAttribute("data-qrcode")
-						const qrcode_img = await getQrcode(qrcode_data, QR);
-						layer.open({
-							type: 1,
-							area: ['200px', '200px'],
-							title: false,
-							closeBtn: 0,
-							shadeClose: true,
-							content: `<img width="100%" src="${qrcode_img}">`
-						});
+						const type_data = this.getAttribute("data-type");
+						const qrcode_data = this.getAttribute("data-qrcode");
+						if (type_data == 1) {
+							layer.open({
+								type: 1,
+								area: ['200px', '200px'],
+								title: false,
+								closeBtn: 0,
+								shadeClose: true,
+								content: `<img width="100%" src="${qrcode_data}">`
+							});
+						} else if (type_data == 0) {
+							const qrcode_img = await getQrcode(qrcode_data, QR);
+							layer.open({
+								type: 1,
+								area: ['200px', '200px'],
+								title: false,
+								closeBtn: 0,
+								shadeClose: true,
+								content: `<img width="100%" src="${qrcode_img}">`
+							});
+						}
 					})()
 				}
 			});

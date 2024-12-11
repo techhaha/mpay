@@ -17,6 +17,7 @@ class Order extends BaseModel
     {
         $my_time = time();
         $channel = self::setChannel($data['pid'], $data['type']);
+        if(!$channel) return false;
         $new_order = [
             // 订单号
             'order_id'      => self::createOrderID('H'),
@@ -124,6 +125,7 @@ class Order extends BaseModel
         foreach ($channel_infos as $key => $value) {
             $check_wx = preg_match('/^wxpay\d+#/i', $value->channel);
             $check_ali = preg_match('/^alipay\d+#/i', $value->channel);
+            $channel_info = null;
             if ($check_wx && $type === 'wxpay') {
                 $channel_info = $channel_infos[$key];
                 break;
@@ -138,6 +140,7 @@ class Order extends BaseModel
                 break;
             }
         }
+        if(!$channel_info) return [];
         // 选取收款通道
         $patt = PayAccount::find($channel_info->account_id);
         $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];

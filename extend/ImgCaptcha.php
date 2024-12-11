@@ -23,7 +23,7 @@ class ImgCaptcha
         return $captcha;
     }
     // 请求外部资源
-    private function getHttpResponse($url, $header = [], $post = null, $timeout = 10)
+    private static function getHttpResponse($url, $header = [], $post = null, $timeout = 10)
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);

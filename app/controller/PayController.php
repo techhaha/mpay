@@ -6,6 +6,7 @@ use think\Request;
 use think\facade\View;
 use app\model\User;
 use app\model\Order;
+use app\model\PayAccount;
 use app\model\PayChannel;
 
 class PayController
@@ -157,31 +158,20 @@ class PayController
         }
     }
     // 处理收款通知
-    public function payHeart(Request $request)
+    private function payHeart(array $records, array $config)
     {
-        $pid = $request->get('pid');
-        $aid = $request->get('aid');
-        $sign = $request->get('sign');
-        // 检测请求参数
-        if (!($pid && $aid && $sign)) {
-            return json(['code' => 0, 'msg' => '参数错误']);
-        }
+        $pid = $config['pid'];
+        $aid = $config['aid'];
         // 检测收款通知
-        $payList = $request->post();
-        if (!$payList) {
+        if (!$records) {
             return json(['code' => 0, 'msg' => '空收款通知']);
-        }
-        // 签名验证
-        $is_user = User::checkUser($pid, $sign);
-        if (!$is_user) {
-            return json(['code' => 0, 'msg' => '签名错误']);
         }
         // 当前用户账号
         $query = ['pid' => $pid, 'aid' => $aid];
         // 排除已支付订单
         $doneOrders = Order::scope('dealOrder')->where($query)->column('platform_order');
         $new_orders = [];
-        foreach ($payList as $order) {
+        foreach ($records as $order) {
             if (!in_array($order['order_no'], $doneOrders)) $new_orders[] = $order;
         }
         if (!count($new_orders)) return json(['code' => 0, 'msg' => '收款通知无新消息']);
@@ -233,66 +223,47 @@ class PayController
             return ['order' => $order->order_id, 'code' => 0, 'msg' => 'notify fail'];
         }
     }
-    // [定时任务]获取收款明细，提交收款通知[本地版]
+    // [定时任务]获取收款明细，提交收款通知
     public function checkPayResult(Request $request)
     {
         $req_info = $request->get();
         $req_pid = $req_info['pid'];
         $req_aid = $req_info['aid'];
-        // 加载配置文件
-        $config = \think\facade\Config::load("payconfig/{$req_pid}_{$req_aid}", 'payconfig');
-        // 用户账号配置
-        $user_config = isset($config['user']) ? $config['user'] : [];
-        // 收款平台账号配置
-        $pay_config = isset($config['pay']) ? $config['pay'] : [];
-        // 配置检查
-        if ($user_config && $pay_config) {
-            // 账号配置信息
-            $pid = $user_config['pid'];
-            $aid = $pay_config['aid'];
-            if (!($req_pid == $pid && $req_aid == $aid)) {
-                return '监听收款配置不一致';
-            }
-        } else {
-            return '监听收款配置文件名错误';
-        }
-        // 当前站点
-        $user_config['host'] = \request()->domain();
-        // 实例化支付类
-        $Mpay = new \MpayClass($user_config);
         // 获取订单
-        $res_new_order = $Mpay->orderHeart();
-        $new_order = json_decode($res_new_order, true);
+        $order_path = runtime_path() . '/order.json';
+        if (!file_exists($order_path)) return json(['code' => 3, 'msg' => '订单文件不存在']);
+        $new_order = json_decode(file_get_contents($order_path), true);
         // 检测新订单
-        if ($new_order['code'] !== 1) return $res_new_order;
+        if ($new_order['code'] !== 1) return json($new_order);
         // 订单列表
         $order_list = $new_order['orders'];
         // 检测本账号订单
         $orders = [];
         foreach ($order_list as $key => $val) {
-            if ($pid == $val['pid'] && $aid == $val['aid'] && $val['patt'] == 1) {
+            if ($req_pid == $val['pid'] && $req_aid == $val['aid'] && $val['patt'] == 1) {
                 $orders[] = $order_list[$key];
             }
         }
-        if (!$orders) {
-            return \json(['code' => 0, 'msg' => '非本账号订单或监听模式不对']);
-        }
+        if (!$orders) return json(['code' => 0, 'msg' => '非本账号订单或监听模式不对']);
+        // 加载配置文件
+        $config = PayAccount::getAccountConfig($req_aid);
+        if ($config === false) return json(['code' => 4, 'msg' => '监听收款配置错误']);
         // 登陆账号
-        $config = ['username' => $pay_config['account'], 'password' => $pay_config['password']];
+        $pay_config = ['username' => $config['account'], 'password' => $config['password']];
         // 收款查询
-        $query = $pay_config['query'];
+        $query = $config['query'];
         // 实例监听客户端
-        $payclient_name = $pay_config['payclass'];
+        $payclient_name = $config['payclass'];
         $payclient_path = "\\payclient\\{$payclient_name}";
-        $Payclient = new $payclient_path($config);
+        $Payclient = new $payclient_path($pay_config);
         // 获取支付明细
         $records = $Payclient->getOrderInfo($query);
         if ($records) {
             // 提交收款记录
-            $upres = $Mpay->upRecords($records, $aid);
+            $upres = $this->payHeart($records, $config);
             return $upres;
         } else {
-            return \json(['code' => 0, 'msg' => '查询空订单'], 320);
+            return json(['code' => 0, 'msg' => '查询空订单'], 320);
         }
     }
     // [定时任务]监听新订单,生成JSON文件信息
@@ -337,10 +308,11 @@ class PayController
         $action = isset($info['action']) ? $info['action'] : '';
         if ($action === 'mpay') {
             $data = json_decode($info['data'], true);
-            $config = \think\facade\Config::load("payconfig/{$data['pid']}_{$data['aid']}", 'payconfig');
-            $payclient_path = "\\payclient\\{$config['pay']['payclass']}";
-            $Payclient = new $payclient_path($info, $config, $request->domain());
-            $Payclient->notify();
+            $config = PayAccount::getAccountConfig($data['aid'], $data['pid']);
+            $payclient_path = "\\payclient\\{$config['payclass']}";
+            $Payclient = new $payclient_path($info, $config);
+            $res = $Payclient->notify();
+            $this->payHeart($res, $config);
             return 200;
         } else {
             return 202;

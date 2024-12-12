@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace app\model;
 
 use app\BaseModel;
+use app\model\User;
+use app\controller\api\PluginController;
 
 class PayAccount extends BaseModel
 {
@@ -23,6 +25,40 @@ class PayAccount extends BaseModel
             }
         }
         return self::withCount(['payChannel' => 'channel'])->where($select);
+    }
+    // 获取账号配置
+    public static function getAccountConfig($aid, $pid = null): array|bool
+    {
+        $aid_info = self::find($aid);
+        // 插件配置
+        $platform = PluginController::getPluginInfo($aid_info->getData('platform'));
+        // 查询参数
+        $params = json_decode($aid_info->params, true);
+        $query = array_merge($platform['query'], $params);
+        if ($aid_info && $platform) {
+            $config = [
+                'pid'       =>  $aid_info->pid,
+                // 账号id
+                'aid'       =>  $aid_info->id,
+                // 收款平台
+                'platform'  =>  $aid_info->getData('platform'),
+                // 插件类名
+                'payclass'  =>  $platform['class_name'],
+                // 账号
+                'account'   =>  $aid_info->account,
+                // 密码
+                'password'  =>  $aid_info->password,
+                // 订单查询参数配置
+                'query'     =>  $query,
+            ];
+            if ($pid !== null) {
+                $pid_info = User::where('pid', $pid)->find();
+                $config['key'] = $pid_info->secret_key;
+            }
+            return $config;
+        } else {
+            return false;
+        }
     }
     // 获取器
     public function getPlatformAttr($value)

@@ -166,25 +166,17 @@ class PayManageController extends BaseController
         $req_pid = $req_info['pid'];
         $req_aid = $req_info['aid'];
         // 加载配置文件
-        $config = \think\facade\Config::load("payconfig/{$req_pid}_{$req_aid}", 'payconfig');
-        // 收款平台账号配置
-        $pay_config = isset($config['pay']) ? $config['pay'] : [];
-        // 配置检查
-        if ($pay_config) {
-            // 账号配置信息
-            $aid = $pay_config['aid'];
-            if ($req_aid != $aid) return '监听收款配置不一致';
-        } else {
-            return '监听收款配置文件名错误';
-        }
+        $config = PayAccount::getAccountConfig($req_aid);
+        if ($config === false) return json(backMsg(1, '账号配置文件错误'));
+        if ($req_aid != $config['aid'] || $req_pid != session('pid')) return json(backMsg(1, '监听收款配置不一致'));
         // 登陆账号
-        $config = ['username' => $pay_config['account'], 'password' => $pay_config['password']];
+        $pay_config = ['username' => $config['account'], 'password' => $config['password']];
         // 收款查询
-        $query = $pay_config['query'];
+        $query = $config['query'];
         // 实例监听客户端
-        $payclient_name = $pay_config['payclass'];
+        $payclient_name = $config['payclass'];
         $payclient_path = "\\payclient\\{$payclient_name}";
-        $Payclient = new $payclient_path($config);
+        $Payclient = new $payclient_path($pay_config);
         // 获取支付明细
         $records = $Payclient->getOrderInfo($query);
         if ($records) {

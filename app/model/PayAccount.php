@@ -63,7 +63,7 @@ class PayAccount extends BaseModel
     // 获取器
     public function getPlatformAttr($value)
     {
-        $payplugin_path = config_path() . '/extendconfig/payplugin.php';
+        $payplugin_path = config_path() . '/extend/payplugin.php';
         if (!file_exists($payplugin_path)) {
             return [];
         }

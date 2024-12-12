@@ -171,7 +171,7 @@ class PluginController extends BaseController
     // 获取插件配置
     private static function getPluginConfig(): array
     {
-        $payplugin_path = config_path() . '/extendconfig/payplugin.php';
+        $payplugin_path = config_path() . '/extend/payplugin.php';
         if (!file_exists($payplugin_path)) {
             return [];
         }
@@ -182,7 +182,7 @@ class PluginController extends BaseController
     // 保存插件配置
     private function savePluginConfig(array $config, string $note = '说明')
     {
-        $payplugin_path = config_path() . '/extendconfig/payplugin.php';
+        $payplugin_path = config_path() . '/extend/payplugin.php';
         $note_tpl = <<<EOF
 // +----------------------------------------------------------------------
 // | $note

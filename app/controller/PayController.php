@@ -312,6 +312,7 @@ class PayController
             $payclient_path = "\\payclient\\{$config['payclass']}";
             $Payclient = new $payclient_path($info, $config);
             $res = $Payclient->notify();
+            if (is_int($res)) return $res;
             $this->payHeart($res, $config);
             return 200;
         } else {

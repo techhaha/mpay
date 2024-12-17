@@ -13,11 +13,11 @@ class Order extends BaseModel
     // 订单有效期
     private static $activity_time = 180;
     // 新建订单
-    public static function createOrder($data)
+    public static function createOrder($data): string|false
     {
         $my_time = time();
         $channel = self::setChannel($data['pid'], $data['type']);
-        if(!$channel) return false;
+        if (!$channel) return false;
         $new_order = [
             // 订单号
             'order_id'      => self::createOrderID('H'),
@@ -140,7 +140,7 @@ class Order extends BaseModel
                 break;
             }
         }
-        if(!$channel_info) return [];
+        if (!$channel_info) return [];
         // 选取收款通道
         $patt = PayAccount::find($channel_info->account_id);
         $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];

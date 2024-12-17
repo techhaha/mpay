@@ -5,6 +5,19 @@
 	<meta charset="utf-8">
 	<title>订单明细</title>
 	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+	<style>
+		.paytype {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			height: 34px;
+		}
+
+		.paytype>span {
+			margin-left: 3px;
+			line-height: normal;
+		}
+	</style>
 </head>
 
 <body class="pear-container">
@@ -56,6 +69,7 @@
 								<option value="">请选择</option>
 								<option value="wxpay">微信支付</option>
 								<option value="alipay">支付宝</option>
+								<option value="unionpay">云闪付</option>
 							</select>
 						</div>
 					</div>
@@ -207,7 +221,7 @@
 				{ title: '成交金额', field: 'really_price', align: 'center', minWidth: 85 },
 				{ title: '支付状态', field: 'state', align: 'center', minWidth: 85, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
 				{ title: '支付时间', field: 'pay_time', align: 'center', minWidth: 160, templet: '<div>{{= d.pay_time == d.create_time ? "- -" : d.pay_time}}</div>' },
-				{ title: '支付平台', field: 'type', align: 'center', width: 120, templet: '<div>{{# if(d.type=="wxpay"){return`<img src="/static/img/wxpay.ico"width="15"><span>微信支付</span>`}if(d.type=="alipay"){return`<img src="/static/img/alipay.ico"width="15"><span>支付宝</span>`} }}</div>' },
+				{ title: '支付平台', field: 'type', align: 'center', width: 120, templet: '<div>{{# if(d.type=="wxpay"){return`<div class="paytype"><img src="/static/img/wxpay.ico"width="15"><span>微信支付</span></div>`}if(d.type=="alipay"){return`<div class="paytype"><img src="/static/img/alipay.ico"width="15"><span>支付宝</span></div>`}if(d.type=="unionpay"){return`<div class="paytype"><img src="/static/img/unionpay.ico"width="15"><span>云闪付</span></div>`} }}</div>' },
 				{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: '<div>{{# return`${d.payAccount.platform} [${d.aid}:${d.cid}]` }}</div>' },
 				{ title: '操作', align: 'center', width: 120, fixed: 'right', templet: '<div><strong><a href="javascript:;" data-id="{{= d.id }}" class="layui-font-green {{= d.state==1 ? "orderSet-paid" : "orderSet-paying" }}">设置</a></strong></div>' }
 			]]

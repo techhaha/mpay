@@ -23,12 +23,25 @@
 			margin-left: 20px;
 		}
 
+		.paytype {
+			display: flex;
+			align-items: center;
+		}
+
+		.paytype>strong {
+			margin-left: 3px;
+		}
+
 		.alipay {
 			color: #1677ff;
 		}
 
 		.wxpay {
 			color: #1AAD19;
+		}
+
+		.unionpay {
+			color: #d81e06;
 		}
 	</style>
 </head>
@@ -54,8 +67,8 @@
 		<div class="layui-row">
 			<div class="layui-col-xs3"><label class="layui-form-label"><strong>收款方式</strong></label></div>
 			<div class="layui-col-xs9">
-				<div class="list">
-					<?php $payway=['alipay'=>'支付宝','wxpay'=>'微信支付'];$payway_img=['alipay'=>'/static/img/alipay.ico','wxpay'=>'/static/img/wxpay.ico'];echo "<img src='{$payway_img[$type]}'width='16'><strong class='{$type}'>{$payway[$type]}</strong>" ?>
+				<div class="list paytype">
+					<?php $payway=['alipay'=>'支付宝','wxpay'=>'微信支付','unionpay'=>'云闪付'];$payway_img=['alipay'=>'/static/img/alipay.ico','wxpay'=>'/static/img/wxpay.ico','unionpay'=>'/static/img/unionpay.ico'];echo "<img src='{$payway_img[$type]}'width='16'><strong class='{$type}'>{$payway[$type]}</strong>" ?>
 				</div>
 			</div>
 		</div>

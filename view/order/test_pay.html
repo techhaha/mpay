@@ -3,7 +3,7 @@
 
 <head>
 	<meta charset="utf-8">
-	<title>订单明细</title>
+	<title>支付测试</title>
 	<link rel="stylesheet" href="/component/pear/css/pear.css" />
 	<style>
 		.paybtn {
@@ -60,6 +60,10 @@
 						<img src="/static/img/alipay.ico" width="16">
 						<span>支付宝</span>
 					</button>
+					<button class="pear-btn unionpay">
+						<img src="/static/img/unionpay.ico" width="16">
+						<span>云闪付</span>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -90,6 +94,9 @@
 			});
 			document.querySelector('.alipay').addEventListener('click', function () {
 				crateOrder('alipay');
+			});
+			document.querySelector('.unionpay').addEventListener('click', function () {
+				crateOrder('unionpay');
 			});
 			// 创建订单
 			function crateOrder(paytype) {

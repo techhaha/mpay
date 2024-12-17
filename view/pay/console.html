@@ -166,6 +166,9 @@
             } else if (payType === 'alipay') {
                 payTpeyImg.src = '/static/img/alipay.jpg';
                 payTypeText.innerText = '请使用支付宝扫码支付'
+            } else if (payType === 'unionpay') {
+                payTpeyImg.src = '/static/img/unionpay.jpg';
+                payTypeText.innerText = '请使用云闪付扫码支付'
             }
             // 生成二维码
             if (codeType == 0) {

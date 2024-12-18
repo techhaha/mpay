@@ -22,7 +22,6 @@ class IndexController
     }
     public function test()
     {
-
-            return app()->getBasePath();
+        return View::fetch();
     }
 }

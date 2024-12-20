@@ -125,14 +125,27 @@ class PayManageController extends BaseController
     public function uploadQrcode()
     {
         $img = $this->request->file('codeimg');
+        if (!$img) {
+            return json(backMsg(1, '请选择要上传的文件'));
+        }
+        // 验证文件类型
+        $allowedTypes = ['image/png', 'image/jpeg', 'image/gif'];
+        $fileMimeType = $img->getMime();
+        if (!in_array($fileMimeType, $allowedTypes)) {
+            return json(backMsg(1, '只允许上传PNG、JPEG或GIF格式的图片'));
+        }
+        // 生成唯一文件名
+        $filename = 'img_' . time() . '_' . uniqid() . '.' . $img->getOriginalExtension();
+        // 设置文件保存路径
         $path = public_path() . '/files/qrcode/';
         if (!is_dir($path)) {
-            mkdir($path, 0777, true);
+            mkdir($path, 0755, true);
         }
-        $info = $img->move($path, 'img' . time() . '.' . $img->getOriginalExtension());
+        // 移动文件到指定目录
+        $info = $img->move($path, $filename);
         if ($info) {
-            $imgpath = '/files/qrcode/';
-            return json(backMsg(0, '上传成功', ['imgpath' => $imgpath . $info->getFilename()]));
+            $imgpath = '/files/qrcode/' . $filename;
+            return json(backMsg(0, '上传成功', ['imgpath' => $imgpath]));
         } else {
             return json(backMsg(1, '上传失败'));
         }

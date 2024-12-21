@@ -279,6 +279,8 @@ class PayController
         $action = isset($info['action']) ? $info['action'] : '';
         if ($action === 'mpay') {
             $data = json_decode($info['data'], true);
+            if (!is_array($data)) return 200;
+            if(!isset($data['aid']) || !isset($data['pid'])) return 202;
             $config = PayAccount::getAccountConfig($data['aid'], $data['pid']);
             $payclient_path = "\\payclient\\{$config['payclass']}";
             $Payclient = new $payclient_path($info, $config);

@@ -161,7 +161,7 @@ class PayController
                 // 支付渠道核对
                 $is_channel = $cids[$order->cid] == $new_order['channel'];
                 // 金额核对
-                $is_money = $order->money == $new_order['price'];
+                $is_money = $order->really_price == $new_order['price'];
                 // 订单核对
                 if ($is_payway && $is_channel && $is_money) {
                     $res = $this->updateOrderState($order, $new_order['order_no']);

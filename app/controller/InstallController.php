@@ -23,7 +23,7 @@ class InstallController
     {
         // 检查是否已经安装过
         if ($this->checkLock()) {
-            return backMsg(1, '已经安装');
+            return json(backMsg(1, '已经安装'));
         };
         // 检查环境
         $envCheck = $this->checkEnvironment();

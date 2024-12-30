@@ -201,9 +201,8 @@ class PayController
         $req_pid = $req_info['pid'];
         $req_aid = $req_info['aid'];
         // 获取订单
-        $order_path = runtime_path() . '/order.json';
-        if (!file_exists($order_path)) return json(['code' => 3, 'msg' => '订单文件不存在']);
-        $new_order = json_decode(file_get_contents($order_path), true);
+        $new_order = cache('order');
+        if (!$new_order) return json(['code' => 3, 'msg' => '没有找到新订单缓存']);
         // 检测新订单
         if ($new_order['code'] !== 1) return json($new_order);
         // 订单列表
@@ -237,38 +236,31 @@ class PayController
             return json(['code' => 0, 'msg' => '查询空订单'], 320);
         }
     }
-    // [定时任务]监听新订单,生成JSON文件信息
+    // [定时任务]监听新订单,生成缓存
     public function checkOrder($pid = '', $sign = '')
     {
-        if (!($pid && $sign)) {
-            return '参数错误';
-        }
+        if (!($pid && $sign)) return '参数错误';
         $is_user = User::checkUser($pid, $sign);
-        $path = runtime_path() . 'order.json';
         if ($is_user) {
             $orders = Order::scope('activeOrder')->field('id,pid,aid,cid,patt')->select();
-            if (!file_exists($path)) {
-                file_put_contents($path, '[]');
-            }
-            $old_info = file_get_contents($path);
+            $old_info = cache('order');
             $num = count($orders);
             if ($num > 0) {
                 $info = ['code' => 1, 'msg' => "有{$num}个新订单"];
                 $order_list = ['code' => 1, 'msg' => "有{$num}个新订单", 'orders' => $orders];
-                if ($old_info !== json_encode($order_list)) {
-                    file_put_contents($path, json_encode($order_list));
+                if ($old_info !== $order_list) {
+                    cache('order', $order_list);
                 }
                 return json($info);
             } else {
                 $info = ['code' => 0, 'msg' => '没有新订单'];
-                if ($old_info !== json_encode($info, 320)) {
-                    file_put_contents($path, json_encode($info, 320));
+                if ($old_info !== $info) {
+                    cache('order', $info);
                 }
                 return json($info);
             }
         } else {
             $info = ['code' => 2, 'msg' => '签名错误'];
-            file_put_contents($path, json_encode($info, 320));
             return json($info);
         }
     }
@@ -280,7 +272,7 @@ class PayController
         if ($action === 'mpay') {
             $data = json_decode($info['data'], true);
             if (!is_array($data)) return 200;
-            if(!isset($data['aid']) || !isset($data['pid'])) return 202;
+            if (!isset($data['aid']) || !isset($data['pid'])) return 202;
             $config = PayAccount::getAccountConfig($data['aid'], $data['pid']);
             $payclient_path = "\\payclient\\{$config['payclass']}";
             $Payclient = new $payclient_path($info, $config);

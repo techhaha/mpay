@@ -49,13 +49,23 @@ class Plugin
     // 获取平台所有支持插件
     public static function getAllPlugin(): array
     {
+        $app_plugin = cache('app_plugin');
+        if ($app_plugin) {
+            return json_decode($app_plugin, true);
+        }
         $app_plugin = self::getHttpResponse(self::$siteUrl . '/mpay/getplugins');
+        cache('app_plugin', $app_plugin, 36000);
         return json_decode($app_plugin, true);
     }
     // 获取通知消息
     public static function getNotifyMessage(): array
     {
+        $message = cache('message');
+        if ($message) {
+            return json_decode($message, true);
+        }
         $message = self::getHttpResponse(self::$siteUrl . '/mpay/message');
+        cache('message', $message, 36000);
         return json_decode($message, true);
     }
     // 请求外部资源

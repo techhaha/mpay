@@ -25,9 +25,13 @@ class InstallController
         if ($this->checkLock()) {
             return backMsg(1, '已经安装');
         };
+        // 检查环境
+        $envCheck = $this->checkEnvironment();
+        if ($envCheck !== true) {
+            return json(backMsg(1, $envCheck));
+        };
         // 获取表单提交的数据库配置信息
         $dbConfig = $request->post();
-
         // 保存数据库配置信息到配置文件
         if ($this->saveDbConfig($dbConfig) === false) {
             return json(backMsg(1, '配置保存失败'));
@@ -62,7 +66,22 @@ class InstallController
         $this->setLock();
         return json(backMsg(0, '安装成功'));
     }
-
+    private function checkEnvironment()
+    {
+        // 检查PHP版本
+        if (version_compare(PHP_VERSION, '8.0', '<')) {
+            return 'PHP版本必须大于等于8.0';
+        }
+        // 检查文件上传写入权限
+        if (!is_writable(sys_get_temp_dir())) {
+            return '文件上传目录没有写入权限';
+        }
+        // 检查Fileinfo扩展是否安装
+        if (!extension_loaded('fileinfo')) {
+            return 'Fileinfo扩展未安装';
+        }
+        return true;
+    }
     private function saveDbConfig($dbConfig)
     {
         $envPath = app()->getRootPath() . '.env';

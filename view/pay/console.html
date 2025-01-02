@@ -151,6 +151,35 @@
     <script src="/component/layui/layui.js"></script>
     <script src="/static/js/awesome-qr.min.js"></script>
     <script>
+        function detectBrowserEnvironment() {
+            const userAgent = navigator.userAgent.toLowerCase();
+            let environment = 'other';
+            if (userAgent.includes('micromessenger')) {
+                if (userAgent.includes('miniprogram')) {
+                    environment = 'wxapp'; // 微信小程序
+                } else if (userAgent.includes('android') || userAgent.includes('iphone') || userAgent.includes('ipad')) {
+                    environment = 'wxphone'; // 手机微信
+                } else {
+                    environment = 'wxpc'; // PC微信
+                }
+            } else if (userAgent.includes('aliapp') || userAgent.includes('alipayclient')) {
+                if (userAgent.includes('android') || userAgent.includes('iphone') || userAgent.includes('ipad')) {
+                    environment = 'aliphone'; // 手机支付宝
+                } else {
+                    environment = 'alipc'; // PC支付宝
+                }
+            } else if (userAgent.includes('android') || userAgent.includes('iphone') || userAgent.includes('ipad')) {
+                // 先判断是否是已知的手机APP内置浏览器，如果不是则认为是手机浏览器
+                if (!userAgent.includes('micromessenger') && !userAgent.includes('aliapp') && !userAgent.includes('qq')) {
+                    environment = 'phone'; // 手机浏览器
+                }
+            } else {
+                environment = 'pc'; // 剩下的情况认为是PC浏览器
+            }
+            return environment;
+        }
+    </script>
+    <script>
         const payCode = '<?php echo htmlentities($payUrl); ?>';
         const codeType = '<?php echo htmlentities($code_type); ?>';
         const payType = '<?php echo htmlentities($type); ?>';
@@ -247,6 +276,14 @@
             return info;
         }
         /* <?php } ?> */
+
+        // 环境判断
+        const environment = detectBrowserEnvironment();
+        if (payType === 'wxpay' && environment === 'aliphone') {
+            layer.alert('请使用微信打开此页面');
+        } else if (payType === 'alipay' && environment === 'wxphone') {
+            layer.alert('请使用支付宝打开此页面');
+        }
         // 生成二维码
         async function getQrcode(text, QR) {
             const qrcodeUrl = await new Promise((resolve) => {

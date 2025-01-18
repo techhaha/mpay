@@ -42,7 +42,7 @@ class Order extends BaseModel
             // 设备类型
             'device'        => isset($data['device']) ? $data['device'] : '',
             // 业务扩展参数
-            'param'         => serialize(self::getParams($data)),
+            'param'         => serialize(isset($data['param']) ? $data['param'] : ''),
             // 等待/过期：0, 支付成功：1
             'state'         => 0,
             // 开启监听：1, 关闭监听：0
@@ -148,17 +148,17 @@ class Order extends BaseModel
         return $channel;
     }
     // 获取扩展参数数组
-    private static function getParams(array $data): array
-    {
-        $keys = ['pid', 'type', 'out_trade_no', 'notify_url', 'return_url', 'name', 'money', 'sign', 'sign_type'];
-        $params = [];
-        foreach ($data as $key => $value) {
-            if (!in_array($key, $keys)) {
-                $params[$key] = $value;
-            }
-        }
-        return $params;
-    }
+    // private static function getParams(array $data): array
+    // {
+    //     $keys = ['pid', 'type', 'out_trade_no', 'notify_url', 'return_url', 'name', 'money', 'sign', 'sign_type'];
+    //     $params = [];
+    //     foreach ($data as $key => $value) {
+    //         if (!in_array($key, $keys)) {
+    //             $params[$key] = $value;
+    //         }
+    //     }
+    //     return $params;
+    // }
     // 检查金额
     private static function checkMoney($money, $type, $aid, $cid): float
     {

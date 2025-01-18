@@ -97,7 +97,12 @@ class PayController
                     $sign = self::getSign($notify, $user_key);
                     $notify['sign'] = $sign;
                     // 跳转通知URL
-                    $res_return_url = $act_order->return_url . '?' . http_build_query($notify);
+                    $res_return_url = '';
+                    if (strpos($act_order->return_url, '?')) {
+                        $res_return_url = $act_order->return_url . '&' . http_build_query($notify);
+                    } else {
+                        $res_return_url = $act_order->return_url . '?' . http_build_query($notify);
+                    }
                     // 响应消息
                     $data['order_id'] = $act_order->order_id;
                     $data['passtime'] = $passtime > 0 ? $passtime : 0;
@@ -187,7 +192,13 @@ class PayController
         $sign = self::getSign($notify, $user_key);
         $notify['sign'] = $sign;
         // 异步通知
-        $res_notify = self::getHttpResponse($order->notify_url . '?' . http_build_query($notify));
+        $notify_url = '';
+        if (strpos($order->notify_url, '?')) {
+            $notify_url = $order->notify_url . '&' . http_build_query($notify);
+        } else {
+            $notify_url = $order->notify_url . '?' . http_build_query($notify);
+        }
+        $res_notify = self::getHttpResponse($notify_url);
         if ($res_notify === 'success') {
             return ['order' => $order->order_id, 'code' => 1, 'msg' => 'notify success'];
         } else {
@@ -314,7 +325,8 @@ class PayController
             'sign_type' => 'MD5',
         ];
         // 添加扩展参数
-        $notify = array_merge($notify, unserialize($param->param));
+        // $notify = array_merge($notify, unserialize($param->param));
+        $notify['param'] = unserialize($param->param);
         return $notify;
     }
     // 请求外部资源

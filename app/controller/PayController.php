@@ -97,12 +97,8 @@ class PayController
                     $sign = self::getSign($notify, $user_key);
                     $notify['sign'] = $sign;
                     // 跳转通知URL
-                    $res_return_url = '';
-                    if (strpos($act_order->return_url, '?')) {
-                        $res_return_url = $act_order->return_url . '&' . http_build_query($notify);
-                    } else {
-                        $res_return_url = $act_order->return_url . '?' . http_build_query($notify);
-                    }
+                    $res_return_url = $act_order->return_url . '?' . http_build_query($notify);
+                    if (strpos($act_order->return_url, '?')) $res_return_url = $act_order->return_url . '&' . http_build_query($notify);
                     // 响应消息
                     $data['order_id'] = $act_order->order_id;
                     $data['passtime'] = $passtime > 0 ? $passtime : 0;
@@ -192,12 +188,8 @@ class PayController
         $sign = self::getSign($notify, $user_key);
         $notify['sign'] = $sign;
         // 异步通知
-        $notify_url = '';
-        if (strpos($order->notify_url, '?')) {
-            $notify_url = $order->notify_url . '&' . http_build_query($notify);
-        } else {
-            $notify_url = $order->notify_url . '?' . http_build_query($notify);
-        }
+        $notify_url = $order->notify_url . '?' . http_build_query($notify);
+        if (strpos($order->notify_url, '?')) $notify_url = $order->notify_url . '&' . http_build_query($notify);
         $res_notify = self::getHttpResponse($notify_url);
         if ($res_notify === 'success') {
             return ['order' => $order->order_id, 'code' => 1, 'msg' => 'notify success'];
@@ -280,20 +272,17 @@ class PayController
     {
         $info = $request->post();
         $action = isset($info['action']) ? $info['action'] : '';
-        if ($action === 'mpay') {
-            $data = json_decode($info['data'], true);
-            if (!is_array($data)) return 200;
-            if (!isset($data['aid']) || !isset($data['pid'])) return 202;
-            $config = PayAccount::getAccountConfig($data['aid'], $data['pid']);
-            $payclient_path = "\\payclient\\{$config['payclass']}";
-            $Payclient = new $payclient_path($info, $config);
-            $res = $Payclient->notify();
-            if (is_int($res)) return $res;
-            $this->payHeart($res, $config);
-            return 200;
-        } else {
-            return 202;
-        }
+        if ($action !== 'mpay') return '非mpay的访问请求';
+        $data = json_decode($info['data'], true);
+        if (!is_array($data)) return '通知数据为空';
+        if (!isset($data['aid']) || !isset($data['pid'])) return 'aid和pid参数错误';
+        $config = PayAccount::getAccountConfig($data['aid'], $data['pid']);
+        $payclient_path = "\\payclient\\{$config['payclass']}";
+        $Payclient = new $payclient_path($info, $config);
+        $res = $Payclient->notify();
+        if ($res['code'] !== 0) return $res['msg'];
+        $this->payHeart($res['data'], $config);
+        return 200;
     }
     // 签名
     private static function getSign(array $param = [], string $key = ''): string

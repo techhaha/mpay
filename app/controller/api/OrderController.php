@@ -48,7 +48,9 @@ class OrderController extends BaseController
             $sign = self::getSign($notify, $user_key);
             $notify['sign'] = $sign;
             // 异步通知
-            $res_notify = self::getHttpResponse($order->notify_url . '?' . http_build_query($notify));
+            $notify_url = $order->notify_url . '?' . http_build_query($notify);
+            if (strpos($order->notify_url, '?')) $notify_url = $order->notify_url . '&' . http_build_query($notify);
+            $res_notify = self::getHttpResponse($notify_url);
             if ($res_notify === 'success') {
                 return json(\backMsg(0, '订单通知成功'));
             } else {
@@ -72,7 +74,9 @@ class OrderController extends BaseController
             $sign = self::getSign($notify, $user_key);
             $notify['sign'] = $sign;
             // 异步通知
-            $res_notify = self::getHttpResponse($order->notify_url . '?' . http_build_query($notify));
+            $notify_url = $order->notify_url . '?' . http_build_query($notify);
+            if (strpos($order->notify_url, '?')) $notify_url = $order->notify_url . '&' . http_build_query($notify);
+            $res_notify = self::getHttpResponse($notify_url);
             if ($res_notify === 'success') {
                 return json(\backMsg(0, '订单通知成功'));
             } else {
@@ -156,7 +160,8 @@ class OrderController extends BaseController
             'sign_type' => 'MD5',
         ];
         // 添加扩展参数
-        $notify = array_merge($notify, unserialize($param->param));
+        // $notify = array_merge($notify, unserialize($param->param));
+        $notify['param'] = unserialize($param->param);
         return $notify;
     }
     // 请求外部资源

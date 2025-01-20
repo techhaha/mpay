@@ -1,6 +1,12 @@
-/.idea
-/.vscode
-/.history
-/.gitee
+.vscode
 *.env
 
+extend/*
+!extend/ImgCaptcha.php
+!extend/payclient.zip
+!extend/Plugin.php
+
+vendor/*
+!vendor/vendor.zip
+
+runtime/*

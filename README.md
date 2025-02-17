@@ -477,6 +477,10 @@ V免签是一款开源免费适用于个人收款使用的收款程序，原理�
 
 ## 感谢赞助
 
+<img src="assets/20250217_111408_1739762042428.jpg" width=50% />
+
+
+
 |姓名   | 金额  |
 |---|---|
 | 知汇学社  | 100  |
@@ -487,7 +491,7 @@ V免签是一款开源免费适用于个人收款使用的收款程序，原理�
 
 ## 友情链接
 
-[腾飞博客，专业WP子比主题美化定制](https://calfbxtoi72.feishu.cn/docx/DA3ddthzOolQ16xDgeOcHA36nrg)
+1. [腾飞博客，专业WP子比主题美化定制](https://calfbxtoi72.feishu.cn/docx/DA3ddthzOolQ16xDgeOcHA36nrg)
 
 
 

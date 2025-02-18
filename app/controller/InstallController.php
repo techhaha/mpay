@@ -149,7 +149,7 @@ EOT;
   `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
   `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
   `pattern` tinyint(4) NOT NULL DEFAULT '1' COMMENT '账号监听模式',
-  `params` varchar(255) NOT NULL DEFAULT '' COMMENT '自定义查询',
+  `params` text NOT NULL DEFAULT '' COMMENT '自定义查询',
   `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
   PRIMARY KEY (`id`) USING BTREE
 ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;";

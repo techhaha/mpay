@@ -1,10 +1,29 @@
-# 码支付
+<p align="center">
+    <a href="https://gitee.com/technical-laohu/mpay">
+        <img src="assets/20241129_120237_logo.jpg" alt="LangBot" width=50% />
+    </a>
+</p>
+
+<div align="center">
+    <a href="https://gitee.com/technical-laohu/mpay">项目主页</a> ｜
+    <a href="https://gitee.com/technical-laohu/mpay/releases">源码下载</a> ｜
+    <a href="https://f0bmwzqjtq2.feishu.cn/docx/HBVrdrsACo36bzxUCSPcjOBNnyb">使用文档</a> ｜
+    <a href="https://f0bmwzqjtq2.feishu.cn/docx/FtphdDA10oBfPyxNEEZc5mgJnqf">常见问题</a> ｜
+    <a href="https://f0bmwzqjtq2.feishu.cn/docx/OjlwdPunLoGjL0xodMUcS0xFngX">学习交流</a> ｜
+    <a href="https://f0bmwzqjtq2.feishu.cn/docx/PjwOdvBeZoQEHUxF2ZScTjHOnKb">赞赏作者</a>
+</div>
+
+<div align="center">
+    😎免签约、🧩多通道、🦄不掉线 - 专注于个人在线收款🤖
+</div>
+
+## 码支付
 
 ![logo](assets/20241129_120237_logo.jpg)
 
 **码支付[mpay]是一款便捷收款工具，专注于个人免签收款，通过普通收款码即可实现收款通知自动回调，支持绝大多数商城系统**
 
-# 项目地址
+## 项目地址
 
 | gitee | github |
 | :----------: | :------------: |

@@ -22,6 +22,6 @@
 
 **码支付[mpay]是一款便捷收款工具，专注于个人免签收款，通过普通收款码即可实现收款通知自动回调，支持绝大多数商城系统**
 
-|                                               <p align="center">gitee</p>                                                |                                            <p align="center">github</p>                                             |
-| :----------------------------------------------------------------------------------------------------------------------: | :-----------------------------------------------------------------------------------------------------------------: |
-| <a href="https://gitee.com/technical-laohu/mpay"><img src="assets/20241122_113208_gitee.png" alt="mpay" width=100 /></a> | <a href="https://github.com/techhaha/mpay"><img src="assets/20241122_113331_github.png" alt="mpay" width=100 /></a> |
+| <p align="center">gitee</p> | <p align="center">github</p> |
+| :----------: | :------------: |
+| <a href="https://gitee.com/technical-laohu/mpay"><img src="assets/20241122_113208_gitee.png" alt="mpay" width=100 /></a>|<a href="https://github.com/techhaha/mpay"><img src="assets/20241122_113331_github.png" alt="mpay" width=100 /></a>|

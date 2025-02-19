@@ -1,8 +1,10 @@
-
+<p align="center">
 <div align="center">
     <a href="https://gitee.com/technical-laohu/mpay">
         <img src="assets/20241129_120237_logo.jpg" alt="mpay" width=40% />
     </a>
+</div>
+<div align="center">
     <a href="https://gitee.com/technical-laohu/mpay" target="_blank">项目主页</a> ｜
     <a href="https://gitee.com/technical-laohu/mpay/releases" target="_blank">源码下载</a> ｜
     <a href="https://f0bmwzqjtq2.feishu.cn/docx/HBVrdrsACo36bzxUCSPcjOBNnyb" target="_blank">使用文档</a> ｜
@@ -14,6 +16,7 @@
 <div align="center">
     😎免签约、🧩多通道、🛜不掉线 - 专注于个人在线收款💴
 </div>
+</p>
 
 ## 项目介绍
 

@@ -170,11 +170,11 @@ class PayManageController extends BaseController
         $Payclient = new $payclient_path($pay_config);
         // 获取支付明细
         $records = $Payclient->getOrderInfo($query);
-        if ($records) {
+        if ($records['code'] === 0) {
             // 收款流水
-            return json(backMsg(0, '查询成功', $records));
+            return json(backMsg(0, '查询成功', $records['data']));
         } else {
-            return json(backMsg(1, '查询空订单'));
+            return json(['code' => 1, 'msg' => $records['msg']]);
         }
     }
 }

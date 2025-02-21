@@ -20,8 +20,4 @@ class IndexController
         View::assign('domain', \request()->domain());
         return View::fetch();
     }
-    public function test()
-    {
-        return View::fetch();
-    }
 }

@@ -231,12 +231,12 @@ class PayController
         $Payclient = new $payclient_path($pay_config);
         // 获取支付明细
         $records = $Payclient->getOrderInfo($query);
-        if ($records) {
+        if ($records['code'] === 0) {
             // 提交收款记录
-            $upres = $this->payHeart($records, $config);
+            $upres = $this->payHeart($records['data'], $config);
             return $upres;
         } else {
-            return json(['code' => 0, 'msg' => '查询空订单'], 320);
+            return json(['code' => 0, 'msg' => $records['msg']], 320);
         }
     }
     // [定时任务]监听新订单,生成缓存

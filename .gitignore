@@ -10,3 +10,6 @@ vendor/*
 !vendor/vendor.zip
 
 runtime/*
+
+app/*
+!app/controller/TestController.php

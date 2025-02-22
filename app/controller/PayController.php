@@ -30,30 +30,30 @@ class PayController
         $out_trade_no = Order::where('out_trade_no', $req_data['out_trade_no'])->value('out_trade_no');
         if ($out_trade_no) return '订单提交重复';
         // 创建新订单
-        $order_id = Order::createOrder($req_data);
-        if (!$order_id) return '创建订单失败';
-        return redirect("/Pay/console/{$order_id}");
+        $order_info = Order::createOrder($req_data);
+        if ($order_info['code'] !== 0) return $order_info['msg'];
+        return redirect("/Pay/console/{$order_info['data']['order_id']}");
     }
     // api提交订单
     public function mapi(Request $request)
     {
-        if (!$request->isPost()) return '请使用POST方式提交';
+        if (!$request->isPost()) return json(backMsg(0, '请求方式错误'));
         $req_data = $request->post();
         if (!$req_data) $req_data = $request->get();
-        if (!$req_data) return '参数错误';
+        if (!$req_data) return json(backMsg(0, '参数错误'));
         // 验证签名
         $key = User::where('pid', $req_data['pid'])->where('state', 1)->value('secret_key');
-        if (!$key) return '用户禁用或不存在';
+        if (!$key) return json(backMsg(0, '用户禁用或不存在'));
         $sign_str = self::getSign($req_data, $key);
-        if ($req_data['sign'] !== $sign_str) return '签名错误';
+        if ($req_data['sign'] !== $sign_str) return json(backMsg(0, '签名错误'));
         // 检查商户订单
         $out_trade_no = Order::where('out_trade_no', $req_data['out_trade_no'])->value('out_trade_no');
-        if ($out_trade_no) return '订单提交重复';
+        if ($out_trade_no) return json(backMsg(0, '订单提交重复'));
         // 创建新订单
-        $order_id = Order::createOrder($req_data);
-        if (!$order_id) return '创建订单失败';
-        $payurl = $request->domain() . "/Pay/console/{$order_id}";
-        $info = ['code' => 1, 'msg' => '订单创建成功', 'trade_no' => $order_id, 'qrcode' => $payurl];
+        $order_info = Order::createOrder($req_data);
+        if ($order_info['code'] !== 0) return json(backMsg(0, $order_info['msg']));
+        $payurl = $request->domain() . "/Pay/console/{$order_info['data']['order_id']}";
+        $info = ['code' => 1, 'msg' => '订单创建成功', 'trade_no' => $order_info['data']['order_id'], 'payurl' => $payurl];
         return json($info);
     }
     // 收银台

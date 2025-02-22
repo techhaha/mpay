@@ -13,11 +13,12 @@ class Order extends BaseModel
     // 订单有效期
     private static $activity_time = 180;
     // 新建订单
-    public static function createOrder($data): string|false
+    public static function createOrder($data): array
     {
         $my_time = time();
         $channel = self::setChannel($data['pid'], $data['type']);
-        if (!$channel) return false;
+        if ($channel['code'] !== 0) return $channel;
+        $channel = $channel['data'];
         $new_order = [
             // 订单号
             'order_id'      => self::createOrderID('H'),
@@ -60,9 +61,9 @@ class Order extends BaseModel
         ];
         $res = self::create($new_order);
         if ($res->order_id) {
-            return $res->order_id;
+            return backMsg(0, 'ok', ['order_id' => $res->order_id]);
         } else {
-            return false;
+            return backMsg(4, '创建订单记录失败');
         }
     }
     // 查询订单列表
@@ -119,8 +120,9 @@ class Order extends BaseModel
     {
         // 查询有效收款账户及通道
         $aids = PayAccount::where('pid', $pid)->where('state', 1)->column('id');
+        if (!$aids) return backMsg(1, '用户无可用收款账户');
         $channel_infos = PayChannel::whereIn('account_id', $aids)->where('state', 1)->order('last_time', 'asc')->select();
-        if (!$channel_infos || !$aids) return [];
+        if ($channel_infos->isEmpty()) return backMsg(2, '用户账户无可用收款码');
         // 微信/支付宝收款处理
         $channel_info = null;
         foreach ($channel_infos as $key => $value) {
@@ -140,12 +142,12 @@ class Order extends BaseModel
                 break;
             }
         }
-        if (!$channel_info) return [];
+        if (!$channel_info) return backMsg(3, '用户账户无可用收款通道');
         // 选取收款通道
         $patt = PayAccount::find($channel_info->account_id);
         $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];
         PayChannel::update(['last_time' => self::getFormatTime(), 'id' => $channel['cid']]);
-        return $channel;
+        return backMsg(0, 'ok', $channel);
     }
     // 获取扩展参数数组
     // private static function getParams(array $data): array

@@ -163,13 +163,13 @@ class PayManageController extends BaseController
         // 登陆账号
         $pay_config = ['username' => $config['account'], 'password' => $config['password']];
         // 收款查询
-        $query = $config['query'];
+        $params = $config['params'];
         // 实例监听客户端
         $payclient_name = $config['payclass'];
         $payclient_path = "\\payclient\\{$payclient_name}";
         $Payclient = new $payclient_path($pay_config);
         // 获取支付明细
-        $records = $Payclient->getOrderInfo($query);
+        $records = $Payclient->getOrderInfo($params);
         if ($records['code'] === 0) {
             // 收款流水
             return json(backMsg(0, '查询成功', $records['data']));

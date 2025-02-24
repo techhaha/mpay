@@ -34,7 +34,6 @@ class PayAccount extends BaseModel
         $platform = PluginController::getPluginInfo($aid_info->getData('platform'));
         // 查询参数
         $params = json_decode($aid_info->params, true);
-        $query = array_merge($platform['query'], $params);
         if ($aid_info && $platform) {
             $config = [
                 'pid'       =>  $aid_info->pid,
@@ -48,8 +47,8 @@ class PayAccount extends BaseModel
                 'account'   =>  $aid_info->account,
                 // 密码
                 'password'  =>  $aid_info->password,
-                // 订单查询参数配置
-                'query'     =>  $query,
+                // 配置参数
+                'params'     =>  $params,
             ];
             if ($pid !== null) {
                 $pid_info = User::where('pid', $pid)->find();

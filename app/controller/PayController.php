@@ -223,14 +223,14 @@ class PayController
         if ($config === false) return json(['code' => 4, 'msg' => '监听收款配置错误']);
         // 登陆账号
         $pay_config = ['username' => $config['account'], 'password' => $config['password']];
-        // 收款查询
-        $query = $config['query'];
+        // 配置参数
+        $params = $config['params'];
         // 实例监听客户端
         $payclient_name = $config['payclass'];
         $payclient_path = "\\payclient\\{$payclient_name}";
         $Payclient = new $payclient_path($pay_config);
         // 获取支付明细
-        $records = $Payclient->getOrderInfo($query);
+        $records = $Payclient->getOrderInfo($params);
         if ($records['code'] === 0) {
             // 提交收款记录
             $upres = $this->payHeart($records['data'], $config);

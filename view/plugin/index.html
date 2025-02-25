@@ -71,9 +71,10 @@
                 { title: '收款平台名称', field: 'name', align: 'center', maxWidth: 180 },
                 { title: '官网', field: 'name', align: 'left', maxWidth: 220, templet: `<div><a href="{{= d.website }}" class="layui-font-green" target="_blank">{{= d.website }}</a></div>` },
                 { title: '说明', field: 'describe', align: 'left' },
-                { title: '价格', field: 'price', align: 'center', maxWidth: 180, templet: `<div>{{= d.price==0 ? '免费' : d.price }}</div>` },
-                { title: '状态', field: 'state', align: 'center', maxWidth: 180, templet: `#plugin-state` },
-                { title: '操作', align: 'center', maxWidth: 180, fixed: 'right', templet: `#plugin-action` },
+                { title: '价格', field: 'price', align: 'center', width: 120, templet: `<div>{{= d.price==0 ? '免费' : d.price }}</div>` },
+                { title: '状态', field: 'state', align: 'center', width: 120, templet: `#plugin-state` },
+                { title: '教程', field: 'helplink', align: 'center', width: 120, templet: `<div><a href="{{= d.helplink }}" class="layui-font-green" target="_blank">使用文档</a></div>` },
+                { title: '操作', align: 'center', width: 180, fixed: 'right', templet: `#plugin-action` },
             ]]
 
             table.render({
@@ -166,6 +167,25 @@
                 } else {
                     layer.msg(rec_info.msg, { icon: 2, time: 1200 });
                 }
+            }
+            // 安装插件
+            plugin.install = async (config) => {
+                const res = await fetch('/api/Plugin/installPlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+                if (res.status !== 200) {
+                    layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+                    return false;
+                }
+                const rec_info = await res.json();
+
+            }
+            // 更新插件
+            plugin.update = async (config) => {
+                const res = await fetch('/api/Plugin/updatePlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+                if (res.status!== 200) {
+                    layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+                    return false; 
+                }
+                const rec_info = await res.json();
             }
         });
     </script>

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 class Plugin
 {
-    private static $siteUrl = 'https://api.zhaidashi.cn';
+    private static $siteUrl = 'http://localhost:60';
     // 获取全部插件（含本地）
     public static function getAllPlugins(array $local_plugin = []): array
     {
@@ -23,6 +23,7 @@ class Plugin
     // 获取已安装插件
     public static function getInstall(array $local_plugin = []): array
     {
+        if (empty($local_plugin))  return [];
         foreach ($local_plugin as $key => $value) {
             $local_plugin[$key]['install'] = true;
         }
@@ -33,8 +34,10 @@ class Plugin
     {
         $uninstall_plugin = [];
         $install = [];
-        foreach ($local_plugin as $e_val) {
-            $install[] = $e_val['platform'];
+        if (!empty($local_plugin)) {
+            foreach ($local_plugin as $e_val) {
+                $install[] = $e_val['platform'];
+            }
         }
         foreach ($app_plugin as $i_val) {
             if (in_array($i_val['platform'], $install)) {
@@ -50,12 +53,11 @@ class Plugin
     public static function getAllPlugin(): array
     {
         $app_plugin = cache('app_plugin');
-        if ($app_plugin) {
-            return json_decode($app_plugin, true);
-        }
-        $app_plugin = self::getHttpResponse(self::$siteUrl . '/mpay/getplugins');
-        cache('app_plugin', $app_plugin, 36000);
-        return json_decode($app_plugin, true);
+        if ($app_plugin) return $app_plugin;
+        $app_plugin = self::getHttpResponse(self::$siteUrl . '/mpayapi', ['action' => 'getPluginList']);
+        $info = json_decode($app_plugin, true);
+        if ($info['code'] === 0) cache('app_plugin', $info['data'], 36000);
+        return $info['data'];
     }
     // 获取通知消息
     public static function getNotifyMessage(): array
@@ -69,27 +71,36 @@ class Plugin
         return json_decode($message, true);
     }
     // 请求外部资源
-    private static function getHttpResponse($url, $header = [], $post = null, $timeout = 10)
+    private static function getHttpResponse($url,  $post = null, $header = [], $timeout = 10)
     {
         $ch = curl_init($url);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        if ($header) {
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $header);
-        } else {
-            $httpheader[] = "Accept: */*";
-            $httpheader[] = "Accept-Language: zh-CN,zh;q=0.9";
-            $httpheader[] = "Connection: close";
-            curl_setopt($ch, CURLOPT_HTTPHEADER, $httpheader);
-        }
-        curl_setopt($ch, CURLOPT_HEADER, false);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        $httpheader = [
+            "Accept: application/json",
+            "Accept-Language: zh-CN,zh;q=0.9",
+            "Connection: close",
+            "mpayAgent: your_mpay_agent_identifier"
+        ];
+        $httpheader = array_merge($httpheader, $header);
         if ($post) {
+            if (!is_string($post)) $post = json_encode($post);
+            $httpheader[] = "Content-Type: application/json";
+            $httpheader[] = "Content-Length: " . strlen($post);
             curl_setopt($ch, CURLOPT_POST, true);
             curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
         }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $httpheader);
+        curl_setopt($ch, CURLOPT_HEADER, false);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         $response = curl_exec($ch);
+        // 检查 cURL 请求是否出错
+        if ($response === false) {
+            $error = curl_error($ch);
+            curl_close($ch);
+            throw new \RuntimeException("cURL error: $error");
+        }
         curl_close($ch);
         return $response;
     }

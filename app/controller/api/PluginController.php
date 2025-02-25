@@ -44,7 +44,7 @@ class PluginController extends BaseController
     // 添加插件
     public function addPlugin(array $option = [])
     {
-        $keys = ['platform', 'name', 'class_name', 'price', 'describe', 'website', 'state', 'query'];
+        $keys = ['platform', 'name', 'class_name', 'price', 'describe', 'website', 'state'];
         $config = [];
         foreach ($option as $key => $value) {
             if (in_array($key, $keys)) {
@@ -117,9 +117,7 @@ class PluginController extends BaseController
     public function pluginEnable()
     {
         $info = $this->request->post();
-        if ($this->isPluginInstall($info['platform']) == false) {
-            return json(backMsg(1, '插件未安装'));
-        }
+        if (!$this->isPluginInstall($info['platform'])) return json(backMsg(1, '插件未安装'));
         $up_res = $this->setPlugin($info['platform'], ['state' => $info['state']]);
         if ($up_res) {
             return json(backMsg(1, '失败'));
@@ -172,9 +170,7 @@ class PluginController extends BaseController
     private static function getPluginConfig(): array
     {
         $payplugin_path = config_path() . '/extend/payplugin.php';
-        if (!file_exists($payplugin_path)) {
-            return [];
-        }
+        if (!file_exists($payplugin_path)) return [];
         // 加载插件配置
         $payplugin_config = require $payplugin_path;
         return $payplugin_config;

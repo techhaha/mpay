@@ -1,7 +1,7 @@
 <p align="center">
 <div align="center">
     <a href="https://gitee.com/technical-laohu/mpay">
-        <img src="assets/20241129_120237_logo.jpg" alt="mpay" width=40% />
+        <img src="assets/20241129_120237_logo.jpg" alt="mpay" width=400 />
     </a>
 </div>
 <div align="center">
@@ -25,7 +25,7 @@
 
 | <p align="center">gitee</p> | <p align="center">github</p> |
 | :----------: | :------------: |
-| <a href="https://gitee.com/technical-laohu/mpay"><img src="assets/20241122_113208_gitee.png" alt="mpay" width=160 /></a>|<a href="https://github.com/techhaha/mpay"><img src="assets/20241122_113331_github.png" alt="mpay" width=160 /></a>|
+| <a href="https://gitee.com/technical-laohu/mpay"><img src="assets/20241122_113208_gitee.png" alt="mpay" width=128 /></a>|<a href="https://github.com/techhaha/mpay"><img src="assets/20241122_113331_github.png" alt="mpay" width=128 /></a>|
 
 
 ## ⚙️ 工具特性
@@ -77,17 +77,17 @@ V免签是一款开源免费适用于个人收款使用的收款程序，原理�
 
 ### 🎯 服务商聚合码
 
-<img src="assets/20241210_112301_6f2fef2a7aaee96790eb86f90e3b107.png" width=70% />
+<img src="assets/20241210_112301_6f2fef2a7aaee96790eb86f90e3b107.png" width=640 />
 
 码支付说到底就是通过二维码来进行收款，日常使用的除了微信支付宝生成的二维码外，还有一类二维码是由收款服务商提供的，它能通过一张收款二维码，同时支持**微信**、**支付宝**、**云闪付**等多渠道付款，一般称为**聚合收款码**。
 
-<img src="assets/20241128_164241_image.png" width=70% />
+<img src="assets/20241128_164241_image.png" width=640 />
 
 这类收款码扫码之后需要用户自己输入指定金额来进行付款，然后查看收款通知，确认是否到账，最后确认订单支付成功。
 
 就像你去店子里买一瓶水，你扫二维码进去付款界面，就生成了一个订单，你付款成功之后，商店老板会去查看一下商户后台流水，确认订单是否支付成功，这是一个人工审核的过程。
 
-<img src="assets/20241128_164817_image.png" width=70% />
+<img src="assets/20241128_164817_image.png" width=640 />
 
 那么码支付的作用，就是让人工审核变成自动审核的，当用户通过网站购买商品的时候，码支付会生成一个订单并展示收银台界面，用户再扫码进入聚合码付款页面。
 
@@ -97,7 +97,7 @@ V免签是一款开源免费适用于个人收款使用的收款程序，原理�
 
 同一时间，**码支付后台会自动通过账号密码登陆聚合码服务平台的管理后台**，并通过API接口，循环查询最近的收款明细，通过比对金额和时间，确认是否付款到账，最后确认成功收款。
 
-<img src="assets/20241128_165320_image.png" width=70% />
+<img src="assets/20241128_165320_image.png" width=640 />
 
 当用户付款成功，并且后台检测到收款成功消息后，收钱台就会提示收款成功，并最终确认收款。
 
@@ -107,7 +107,7 @@ V免签是一款开源免费适用于个人收款使用的收款程序，原理�
 
 ### 🪁 微信、支付宝收款码
 
-<img src="assets/20241210_112331_e8d2c4043a3c57ad887aef92df1c253.png" width=70% />
+<img src="assets/20241210_112331_e8d2c4043a3c57ad887aef92df1c253.png" width=640 />
 
 普通的个人收款码，大多使用微信/支付宝来进行收款，依赖于微信/支付宝平台的推送服务和系统通知机制，就可以获取到收款金额的通知信息，从而可以实现支付回调，自动确认收款。
 目前主流的方式也是这种，来实现自动收款，简单方便，不过有一些小问题：

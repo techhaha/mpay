@@ -445,12 +445,12 @@ V免签是一款开源免费适用于个人收款使用的收款程序，原理�
 
 微信：**K103516**
 
-<img src="assets/wxqrcode.png" width=50% />
+<img src="assets/wxqrcode.png" width=480 />
 
 
 ## 💰 赞赏作者
 
-<img src="assets/20250217_111408_1739762042428.jpg" width=35% />
+<img src="assets/20250217_111408_1739762042428.jpg" width=360 />
 
 |姓名   | 金额  |
 |---|---|

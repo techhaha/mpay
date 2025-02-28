@@ -173,53 +173,71 @@
             }
             // 卸载插件
             plugin.uninstall = async (config) => {
+                const load = layer.load(2);
                 const res = await fetch('/api/Plugin/uninstallPlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
                 if (res.status !== 200) {
                     layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+                    layer.close(load);
                     return false;
                 }
                 const rec_info = await res.json();
                 if (rec_info.code === 0) {
                     layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('plugin-table'); });
+                    layer.close(load);
+                    return false;
                 } else {
                     layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+                    layer.close(load);
+                    return false;
                 }
             }
             // 安装插件
             plugin.install = async (config, step = 0) => {
+                // 加载中
+                const load = layer.load(2);
                 const res = await fetch('/api/Plugin/installPlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
                 if (res.status !== 200) {
+                    layer.close(load);
                     layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
                     return false;
                 }
                 const rec_info = await res.json();
                 // 错误信息
                 if (rec_info.code !== 0) {
+                    layer.close(load);
                     layer.msg(rec_info.msg, { icon: 2, time: 1200 });
                     return false;
                 }
                 const info = rec_info.data;
                 if (rec_info.state === 0) {
                     plugin.pay(info, config.platform, step);
+                    layer.close(load);
                     return false;
                 } else {
                     // 安装成功
+                    layer.close(load);
                     layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('plugin-table'); });
                     return false;
                 }
             }
             // 更新插件
             plugin.update = async (config) => {
+                const load = layer.load(2);
                 const res = await fetch('/api/Plugin/updatePlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
                 if (res.status !== 200) {
                     layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
+                    layer.close(load);
                     return false;
                 }
                 const rec_info = await res.json();
                 if (rec_info.code === 0) {
+                    layer.close(load);
                     layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('plugin-table'); });
+                    return false;
                 } else {
+                    layer.close(load);
                     layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+                    return false;
                 }
             }
             // 支付费用
@@ -247,6 +265,7 @@
                     },
                     yes: (index) => {
                         layer.close(index);
+                        layer.load(2);
                         plugin.install({ platform: platform }, 1);
                     },
                     btn2: (index) => {

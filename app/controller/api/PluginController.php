@@ -68,10 +68,8 @@ class PluginController extends BaseController
     {
         $platform = $this->request->post('platform');
         if (!$platform) return json(backMsg(1, '请选择插件'));
-        $res2 = $this->delPluginFile($platform);
-        if (!$res2) return json(backMsg(1, '插件文件不存在'));
-        $res1 = $this->delPlugin($platform);
-        if (!$res1) return json(backMsg(1, '插件配置不存在'));
+        $this->delPluginFile($platform);
+        $this->delPlugin($platform);
         return json(backMsg(0, '卸载成功'));
     }
     // 添加或更新插件

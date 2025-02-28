@@ -57,15 +57,36 @@
         <a href="javascript:;" class="layui-font-green" lay-event="pluginInstall">立即安装</a>
         {{# } }}
 	</script>
+    <script type="text/html" id="plugin-pay">
+        <div class="layui-bg-gray layui-padding-3" style="height: 100%;">
+            <div class="layui-card" style="max-width: 320px;min-width: 240px;margin: 0 auto;text-align: center;">
+                <div class="layui-card-header">
+                    <strong>请使用<span>{{= d.paytype==='alipay'?' 支付宝 ':' 微信支付 ' }}</span>付款</strong>
+                </div>
+                <div class="layui-card-body">
+                    <div class="price"><p><strong>{{= d.money }}</strong>元</p><p>商品：{{= d.name }}</p><p>订单：{{= d.orderid }}</p></div>
+                    <div class="layui-padding-3 paycode"><img id="qrcode" src="/static/img/loading.gif" width="100%" /></div>
+                    <div class="note">
+                        <p>支付<span>{{= d.money }}</span>元，不要多付或少付</p>
+                        <p><span>{{= d.closetime }}</span> 前支付</p>
+                        <p>支付完成点击确认支付，过期请不要支付</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </script>
     <script src="/component/layui/layui.js"></script>
     <script src="/component/pear/pear.js"></script>
+    <script src="/static/js/awesome-qr.min.js"></script>
     <script>
-        layui.use(['layer', 'form', 'common', 'layer'], function () {
+        const QR = AwesomeQR.AwesomeQR;
+        layui.use(['layer', 'form', 'common', 'layer', 'laytpl'], function () {
             let table = layui.table;
             let layer = layui.layer;
             let form = layui.form;
             let common = layui.common;
             let util = layui.util;
+            let laytpl = layui.laytpl;
 
             const cols = [[
                 { title: '收款平台名称', field: 'name', align: 'center', maxWidth: 180 },
@@ -102,17 +123,13 @@
             table.on('tool(plugin-table)', function (obj) {
                 const id = obj.data.id;
                 if (obj.event === 'pluginInstall') {
-                    layer.msg('功能开发中，有需要请联系作者');
+                    plugin.install({ platform: obj.data.platform });
                 } else if (obj.event === 'pluginUpdate') {
-                    layer.msg('功能开发中，有需要请联系作者');
+                    plugin.update({ platform: obj.data.platform });
                 } else if (obj.event === 'pluginUninstall') {
                     layer.confirm('卸载之后无法恢复，确认吗？', { icon: 3, title: '卸载插件' }, function (index) {
                         layer.close(index);
-                        config = {
-                            platform: obj.data.platform,
-                            classname: obj.data.class_name
-                        }
-                        plugin.uninstall(config);
+                        plugin.uninstall({ platform: obj.data.platform });
                     });
                 }
             });
@@ -169,25 +186,93 @@
                 }
             }
             // 安装插件
-            plugin.install = async (config) => {
+            plugin.install = async (config, step = 0) => {
                 const res = await fetch('/api/Plugin/installPlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
                 if (res.status !== 200) {
                     layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
                     return false;
                 }
                 const rec_info = await res.json();
-
+                // 错误信息
+                if (rec_info.code !== 0) {
+                    layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+                    return false;
+                }
+                const info = rec_info.data;
+                if (rec_info.state === 0) {
+                    plugin.pay(info, config.platform, step);
+                    return false;
+                } else {
+                    // 安装成功
+                    layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('plugin-table'); });
+                    return false;
+                }
             }
             // 更新插件
             plugin.update = async (config) => {
                 const res = await fetch('/api/Plugin/updatePlugin', { method: 'post', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-                if (res.status!== 200) {
+                if (res.status !== 200) {
                     layer.msg('请求失败，请重试！', { tips: 2, time: 1200 });
-                    return false; 
+                    return false;
                 }
                 const rec_info = await res.json();
+                if (rec_info.code === 0) {
+                    layer.msg(rec_info.msg, { icon: 1, time: 1200 }, () => { table.reload('plugin-table'); });
+                } else {
+                    layer.msg(rec_info.msg, { icon: 2, time: 1200 });
+                }
+            }
+            // 支付费用
+            plugin.pay = (config, platform, step) => {
+                if (step == 0) {
+                    plugin.payPage(config, platform);
+                } else {
+                    layer.alert('支付失败，请重试！', { icon: 0, title: '提示' }, function (index) {
+                        layer.close(index);
+                        plugin.payPage(config, platform);
+                    });
+                }
+            }
+            plugin.payPage = async (config, platform) => {
+                layer.open({
+                    type: 1,
+                    title: '支付费用',
+                    area: [common.isModile() ? '100%' : '360px', common.isModile() ? '100%' : 'auto'],
+                    content: laytpl(document.getElementById('plugin-pay').innerHTML).render(config),
+                    offset: '16px',
+                    anim: 1,
+                    btn: ['确认支付', '取消'],
+                    success: function () {
+                        plugin.setQrcode(config.codetype, config.payurl);
+                    },
+                    yes: (index) => {
+                        layer.close(index);
+                        plugin.install({ platform: platform }, 1);
+                    },
+                    btn2: (index) => {
+                        layer.close(index);
+                    }
+                })
+            }
+            // 设置二维码
+            plugin.setQrcode = async (codeType, payCode) => {
+                if (codeType == 0) {
+                    document.getElementById('qrcode').src = await getQrcode(payCode);
+                } else {
+                    document.getElementById('qrcode').src = payCode;
+                }
             }
         });
+        // 生成二维码
+        async function getQrcode(text) {
+            const qrcodeUrl = await new Promise((resolve) => {
+                new QR({
+                    text: text,
+                    size: 500,
+                }).draw().then((dataURL) => { resolve(dataURL); });
+            })
+            return qrcodeUrl;
+        }
     </script>
 </body>
 

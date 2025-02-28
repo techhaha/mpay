@@ -54,7 +54,7 @@ class Plugin
     {
         $app_plugin = cache('app_plugin');
         if ($app_plugin) return $app_plugin;
-        $app_plugin = self::getHttpResponse(self::$siteUrl . '/mpayapi', ['action' => 'getPluginList']);
+        $app_plugin = self::getHttpResponse(self::$siteUrl . '/MpayApi', ['action' => 'getPluginList']);
         $info = json_decode($app_plugin, true);
         if ($info['code'] === 0) cache('app_plugin', $info['data'], 36000);
         return $info['data'];
@@ -63,12 +63,23 @@ class Plugin
     public static function getNotifyMessage(): array
     {
         $message = cache('message');
-        if ($message) {
-            return json_decode($message, true);
-        }
-        $message = self::getHttpResponse(self::$siteUrl . '/mpay/message');
+        if ($message) return json_decode($message, true);
+        $message = self::getHttpResponse(self::$siteUrl . '/MpayApi', ['action' => 'message']);
         cache('message', $message, 36000);
         return json_decode($message, true);
+    }
+    // 安装插件
+    public static function installPlugin($platform): array
+    {
+        $res = self::getHttpResponse(self::$siteUrl . '/MpayApi', ['action' => 'installPlugin', 'platform' => $platform, 'host' => parse_url(request()->domain(), PHP_URL_HOST)]);
+        // halt($res);
+        return json_decode($res, true);
+    }
+    // 更新插件
+    public static function updatePlugin($platform): array
+    {
+        $res = self::getHttpResponse(self::$siteUrl . '/MpayApi', ['action' => 'updatePlugin', 'platform' => $platform, 'host' => parse_url(request()->domain(), PHP_URL_HOST)]);
+        return json_decode($res, true);
     }
     // 请求外部资源
     private static function getHttpResponse($url,  $post = null, $header = [], $timeout = 10)

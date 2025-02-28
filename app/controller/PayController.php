@@ -227,6 +227,9 @@ class PayController
         $params = $config['params'];
         // 实例监听客户端
         $payclient_name = $config['payclass'];
+        // 插件类文件是否存在
+        $payclient_path = root_path() . '/extend/payclient/' . $payclient_name . '.php';
+        if (!file_exists($payclient_path)) return json(['code' => 5, 'msg' => '监听客户端文件不存在']);
         $payclient_path = "\\payclient\\{$payclient_name}";
         $Payclient = new $payclient_path($pay_config);
         // 获取支付明细

@@ -61,14 +61,14 @@
         <div class="layui-bg-gray layui-padding-3" style="height: 100%;">
             <div class="layui-card" style="max-width: 320px;min-width: 240px;margin: 0 auto;text-align: center;">
                 <div class="layui-card-header">
-                    <strong>请使用<span>{{= d.paytype==='alipay'?' 支付宝 ':' 微信支付 ' }}</span>付款</strong>
+                    <strong>请使用{{- d.paytype==='alipay'?'<span class="layui-font-blue">支付宝</span>':'<span class="layui-font-green">微信支付</span>' }}付款</strong>
                 </div>
                 <div class="layui-card-body">
-                    <div class="price"><p><strong>{{= d.money }}</strong>元</p><p>商品：{{= d.name }}</p><p>订单：{{= d.orderid }}</p></div>
+                    <div class="price"><p><span class="layui-font-red layui-font-18">{{= d.money }}</span>元</p><p>商品：{{= d.name }}</p><p>订单：{{= d.orderid }}</p></div>
                     <div class="layui-padding-3 paycode"><img id="qrcode" src="/static/img/loading.gif" width="100%" /></div>
                     <div class="note">
-                        <p>支付<span>{{= d.money }}</span>元，不要多付或少付</p>
-                        <p><span>{{= d.closetime }}</span> 前支付</p>
+                        <p>支付<span class="layui-font-red">{{= d.money }}</span>元，不要多付或少付</p>
+                        <p><span class="layui-font-blue">{{= d.closetime }}</span> 前支付</p>
                         <p>支付完成点击确认支付，过期请不要支付</p>
                     </div>
                 </div>

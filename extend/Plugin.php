@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 class Plugin
 {
-    private static $siteUrl = 'http://localhost:60';
+    private static $siteUrl = 'https://api.zhaidashi.cn';
     // 获取全部插件（含本地）
     public static function getAllPlugins(array $local_plugin = []): array
     {

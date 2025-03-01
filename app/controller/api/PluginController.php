@@ -197,7 +197,7 @@ class PluginController extends BaseController
     {
         $dir_path = runtime_path() . "auth/";
         if (!is_dir($dir_path)) mkdir($dir_path, 755, true);
-        $auth_path = $dir_path . md5($config['platform'] . $config['class_name']) . '.json';
+        $auth_path = $dir_path . md5("{$config['platform']}payclient\\{$config['class_name']}") . '.json';
         return file_put_contents($auth_path, json_encode(['authcode' => $authcode])) !== false ? true : false;
     }
     // 保存插件类库文件

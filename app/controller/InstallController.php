@@ -226,4 +226,22 @@ EOT;
         $path = runtime_path() . 'install.lock';
         file_put_contents($path, time());
     }
+    // 更新数据库结构
+    public function update()
+    {
+        // 连接数据库
+        $db = Db::connect();
+        // 查询 params 列的类型
+        $result = $db->query("SHOW COLUMNS FROM `mpay_pay_account` WHERE Field = 'params'");
+        if ($result && $result[0]['Type'] != 'text') {
+            // 如果不是 text 类型，则修改为 text 类型
+            $sql = "ALTER TABLE `mpay_pay_account` MODIFY COLUMN `params` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '自定义查询' AFTER `pattern`;";
+            // 执行 SQL 语句更新数据库结构
+            $is_succ = $db->execute($sql);
+            if (!$is_succ) {
+                return json(backMsg(1, '数据库结构更新失败'));
+            }
+        }
+        return json(backMsg(0, '数据库结构检查并更新完成'));
+    }
 }

@@ -13,7 +13,7 @@ class ConsoleController extends BaseController
     // 后台主页
     public function index()
     {
-        View::assign('version', 'v1');
+        View::assign('version', 'V1');
         return View::fetch();
     }
     // 管理菜单

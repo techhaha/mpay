@@ -40,4 +40,16 @@ return array (
     'version' => '1.0',
     'state' => 1,
   ),
+  3 => 
+  array (
+    'platform' => 'alipayb',
+    'name' => '支付宝账单',
+    'class_name' => 'AliPayb',
+    'price' => NULL,
+    'describe' => '支付宝账单查询回调，免挂机，稳定不掉线',
+    'website' => 'https://open.alipay.com',
+    'helplink' => 'https://f0bmwzqjtq2.feishu.cn/docx/HBVrdrsACo36bzxUCSPcjOBNnyb',
+    'version' => '1.0',
+    'state' => 1,
+  ),
 );

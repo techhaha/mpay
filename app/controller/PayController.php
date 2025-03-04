@@ -320,6 +320,10 @@ class PayController
         // 添加扩展参数
         // $notify = array_merge($notify, unserialize($param->param));
         $notify['param'] = unserialize($param->param);
+        // 删除空值
+        foreach ($notify as $key => $val) {
+            if ($val === '') unset($notify[$key]);
+        }
         return $notify;
     }
     // 请求外部资源

@@ -66,7 +66,13 @@ class PayController
                 View::assign($act_order->toArray());
                 $passtime = strtotime($act_order->close_time) - time();
                 View::assign('passtime', $passtime > 0 ? $passtime : 0);
-                View::assign('payUrl', $channel->qrcode);
+                // Alipay免输
+                if (preg_match('/^alipay4#\d+$/', $channel->channel)) {
+                    $payurl = \payclient\AliPayf::getPayUrl($act_order->order_id, $act_order->money, $channel->qrcode);
+                    View::assign('payUrl', $payurl['data'] ?? $payurl['msg']);
+                } else {
+                    View::assign('payUrl', $channel->qrcode);
+                }
                 View::assign('code_type', $channel->type);
                 return View::fetch();
             } else {
@@ -165,8 +171,16 @@ class PayController
                 $is_money = $order->really_price == $new_order['price'];
                 // 订单核对
                 if ($is_payway && $is_channel && $is_money) {
-                    $res = $this->updateOrderState($order, $new_order['order_no']);
-                    $notify[] = $res;
+                    // 是否免输
+                    if (isset($new_order['remark'])) {
+                        if ($new_order['remark'] == $order->order_id) {
+                            $res = $this->updateOrderState($order, $new_order['order_no']);
+                            $notify[] = $res;
+                        }
+                    } else {
+                        $res = $this->updateOrderState($order, $new_order['order_no']);
+                        $notify[] = $res;
+                    }
                 }
             }
         }

@@ -37,7 +37,7 @@ class Order extends BaseModel
             // 商品金额
             'money'         => $data['money'],
             // 实际成交金额
-            'really_price'  => self::checkMoney($data['money'], $data['type'], $channel['aid'], $channel['cid']),
+            'really_price'  => self::checkMoney($data['money'], $data['type'], $channel['aid'], $channel['cid'], $channel['chan']),
             // 用户IP
             'clientip'      => isset($data['clientip']) ? $data['clientip'] : '',
             // 设备类型
@@ -145,7 +145,7 @@ class Order extends BaseModel
         if (!$channel_info) return backMsg(3, '用户账户无可用收款通道');
         // 选取收款通道
         $patt = PayAccount::find($channel_info->account_id);
-        $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern')];
+        $channel = ['aid' => $channel_info->account_id, 'cid' => $channel_info->id, 'patt' => $patt->getData('pattern'), 'chan' => $channel_info->channel];
         PayChannel::update(['last_time' => self::getFormatTime(), 'id' => $channel['cid']]);
         return backMsg(0, 'ok', $channel);
     }
@@ -162,9 +162,13 @@ class Order extends BaseModel
     //     return $params;
     // }
     // 检查金额
-    private static function checkMoney($money, $type, $aid, $cid): float
+    private static function checkMoney($money, $type, $aid, $cid, $chan): float
     {
         $money = (float) $money;
+        // Alipay免输
+        if (preg_match('/^alipay4#\d+$/', $chan)) {
+            return $money;
+        }
         // 查询有效订单
         $query = self::scope('activeOrder')->where(['type' => $type, 'aid' => $aid, 'cid' => $cid]);
         $activeOrders = $query->column('really_price');

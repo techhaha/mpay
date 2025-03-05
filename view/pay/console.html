@@ -180,7 +180,7 @@
         }
     </script>
     <script>
-        const payCode = '<?php echo htmlentities($payUrl); ?>';
+        const payCode = '<?php echo $payUrl; ?>';
         const codeType = '<?php echo htmlentities($code_type); ?>';
         const payType = '<?php echo htmlentities($type); ?>';
         const order = '<?php echo htmlentities($order_id); ?>';

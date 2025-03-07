@@ -309,7 +309,7 @@ EOT;
             'create_time' => date('Y-m-d H:i:s'),
         ];
 
-        $sql = "INSERT INTO `mpay_user` (`id`, `pid`, `secret_key`, `nickname`, `username`, `password`, `state`, `role`) VALUES (1, 1000, :secret_key, :nickname, :username, :password, 1, 1);";
+        $sql = "INSERT INTO `mpay_user` (`id`, `pid`, `secret_key`, `nickname`, `username`, `password`, `state`, `role`, `create_time`) VALUES (1, 1000, :secret_key, :nickname, :username, :password, 1, 1, :create_time);";
 
         try {
             $db->execute($sql, $info);

@@ -92,6 +92,7 @@ class PayManageController extends BaseController
         if ($check) {
             return json(backMsg(1, '编号已存在'));
         }
+        $info['last_time'] = date('Y-m-d H:i:s');
         $res = PayChannel::create($info);
         if ($res) {
             return json(backMsg(0, '添加成功'));

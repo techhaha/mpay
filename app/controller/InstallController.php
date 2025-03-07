@@ -7,85 +7,178 @@ namespace app\controller;
 use think\facade\Db;
 use think\Request;
 use think\facade\View;
+use think\facade\Log;
+use think\exception\ValidateException;
+use think\Validate;
 
 class InstallController
 {
+    private const INSTALL_LOCK_FILE = 'install.lock';
+
+    /**
+     * 连接数据库
+     * @return \think\db\Connection
+     */
+    private function connectDatabase()
+    {
+        return Db::connect();
+    }
+
+    /**
+     * 首页，检查是否已安装，若已安装则跳转到登录页，否则显示安装页面
+     * @return \think\response\Redirect|\think\response\View
+     */
     public function index()
     {
-        // 检查是否已经安装过
         if ($this->checkLock()) {
             return redirect('User/login');
-        };
+        }
         return View::fetch();
     }
 
+    /**
+     * 安装操作，检查环境、保存数据库配置信息
+     * @param Request $request
+     * @return \think\response\Json
+     */
     public function install(Request $request)
     {
-        // 检查是否已经安装过
         if ($this->checkLock()) {
             return json(backMsg(1, '已经安装'));
-        };
-        // 检查环境
+        }
+
         $envCheck = $this->checkEnvironment();
         if ($envCheck !== true) {
             return json(backMsg(1, $envCheck));
-        };
-        // 获取表单提交的数据库配置信息
+        }
+
         $dbConfig = $request->post();
-        // 保存数据库配置信息到配置文件
-        if ($this->saveDbConfig($dbConfig) === false) {
-            return json(backMsg(1, '配置保存失败'));
-        } else {
+        try {
+            $this->validateDbConfig($dbConfig);
+            $this->saveDbConfig($dbConfig);
             return json(backMsg(0, '配置保存成功'));
-        };
+        } catch (ValidateException $e) {
+            return json(backMsg(1, $e->getMessage()));
+        } catch (\Exception $e) {
+            Log::error("保存数据库配置失败: " . $e->getMessage());
+            return json(backMsg(1, '配置保存失败'));
+        }
     }
-    // 初始化数据库
+
+    /**
+     * 初始化数据库，创建表并初始化数据
+     * @param Request $request
+     * @return \think\response\Json
+     */
     public function init(Request $request)
     {
-        // 检查是否已经安装过
         if ($this->checkLock()) {
-            return backMsg(1, '已经安装');
-        };
-        // 获取表单提交的数据库配置信息
+            return json(backMsg(1, '已经安装'));
+        }
+
         $dbConfig = $request->post();
+        $startTime = microtime(true);
 
-        // 连接数据库并建表
-        $is_succ_tb = $this->createTables();
-
-        // 初始化数据记录
-        $is_succ_data = $this->initData($dbConfig);
-
-        // 安装检测
-        if (!$is_succ_tb) {
-            return json(backMsg(1, '数据表创建失败'));
+        try {
+            $this->validateInitData($dbConfig);
+            $this->connectDatabase()->transaction(function () use ($dbConfig) {
+                $this->createTables();
+                $this->initData($dbConfig);
+            });
+            $this->setLock();
+            $endTime = microtime(true);
+            Log::info("数据库初始化完成，耗时: " . ($endTime - $startTime) . " 秒");
+            return json(backMsg(0, '安装成功'));
+        } catch (ValidateException $e) {
+            return json(backMsg(1, $e->getMessage()));
+        } catch (\Exception $e) {
+            Log::error("数据库初始化失败: " . $e->getMessage());
+            return json(backMsg(1, '数据库初始化失败'));
         }
-        if (!$is_succ_data) {
-            return json(backMsg(1, '数据初始化失败'));
-        }
-        // 安装成功，写入安装锁文件
-        $this->setLock();
-        return json(backMsg(0, '安装成功'));
     }
+
+    /**
+     * 检查环境，包括 PHP 版本、文件上传写入权限、Fileinfo 扩展
+     * @return bool|string
+     */
     private function checkEnvironment()
     {
-        // 检查PHP版本
         if (version_compare(PHP_VERSION, '8.0', '<')) {
-            return 'PHP版本必须大于等于8.0';
+            return 'PHP 版本必须大于等于 8.0';
         }
-        // 检查文件上传写入权限
+
         if (!is_writable(sys_get_temp_dir())) {
             return '文件上传目录没有写入权限';
         }
-        // 检查Fileinfo扩展是否安装
+
         if (!extension_loaded('fileinfo')) {
-            return 'Fileinfo扩展未安装';
+            return 'Fileinfo 扩展未安装';
         }
+
         return true;
     }
-    private function saveDbConfig($dbConfig)
+
+    /**
+     * 验证数据库配置信息
+     * @param array $dbConfig
+     * @throws ValidateException
+     */
+    private function validateDbConfig(array $dbConfig)
+    {
+        $validate = new Validate();
+        $rule = [
+            'host' => 'require',
+            'name' => 'require',
+            'user' => 'require',
+            'pass' => 'require',
+            'port' => 'require|integer',
+            'charset' => 'require'
+        ];
+        if (!$validate->rule($rule)->check($dbConfig)) {
+            throw new ValidateException($validate->getError());
+        }
+    }
+
+    /**
+     * 验证初始化数据信息
+     * @param array $dbConfig
+     * @throws ValidateException
+     */
+    private function validateInitData(array $dbConfig)
+    {
+        $validate = new Validate();
+        $rule = [
+            'nickname' => 'require',
+            'username' => 'require',
+            'password' => 'require'
+        ];
+        if (!$validate->rule($rule)->check($dbConfig)) {
+            throw new ValidateException($validate->getError());
+        }
+    }
+
+    /**
+     * 保存数据库配置信息到 .env 文件
+     * @param array $dbConfig
+     * @throws \Exception
+     */
+    private function saveDbConfig(array $dbConfig)
     {
         $envPath = app()->getRootPath() . '.env';
-        $envContent = <<<EOT
+        $envContent = $this->generateEnvContent($dbConfig);
+        if (file_put_contents($envPath, $envContent) === false) {
+            throw new \Exception("无法写入 .env 文件");
+        }
+    }
+
+    /**
+     * 生成 .env 文件内容
+     * @param array $dbConfig
+     * @return string
+     */
+    private function generateEnvContent(array $dbConfig): string
+    {
+        return <<<EOT
 APP_DEBUG = false
 
 DB_TYPE = mysql
@@ -99,149 +192,179 @@ DB_PREFIX = mpay_
 
 DEFAULT_LANG = zh-cn
 EOT;
-        return file_put_contents($envPath, $envContent);
     }
 
+    /**
+     * 创建数据库表
+     * @throws \Exception
+     */
     private function createTables()
     {
-        // 连接数据库
-        $db = Db::connect();
-        if ($db === false) {
-            return false;
+        $db = $this->connectDatabase();
+        $tables = $this->getTableCreationSqls();
+
+        foreach ($tables as $tableName => $sql) {
+            try {
+                $db->execute("DROP TABLE IF EXISTS `$tableName`;");
+                $db->execute($sql);
+                Log::info("$tableName 表创建成功");
+            } catch (\Exception $e) {
+                throw new \Exception("创建 $tableName 表失败: " . $e->getMessage());
+            }
         }
-        // 创建order表的 SQL 语句
-        $sql = "CREATE TABLE `mpay_order` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `pid` int(11) NOT NULL DEFAULT '0' COMMENT '商户ID',
-  `order_id` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '订单号',
-  `type` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '支付类型',
-  `out_trade_no` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户订单号',
-  `notify_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '异步通知地址',
-  `return_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '跳转通知地址',
-  `name` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商品名称',
-  `really_price` float NOT NULL DEFAULT '0' COMMENT '实际支付金额',
-  `money` float NOT NULL DEFAULT '0' COMMENT '订单价格',
-  `clientip` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户IP地址',
-  `device` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '设备类型',
-  `param` varchar(720) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '扩展参数',
-  `state` tinyint(4) NOT NULL DEFAULT '0' COMMENT '订单状态',
-  `patt` tinyint(4) NOT NULL DEFAULT '0' COMMENT '开启回调监听',
-  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '订单创建时间',
-  `close_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '订单关闭时间',
-  `pay_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '支付时间',
-  `platform_order` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '收款平台订单号',
-  `aid` int(11) NOT NULL DEFAULT '0' COMMENT '收款账号ID',
-  `cid` int(11) NOT NULL DEFAULT '0' COMMENT '收款码ID',
-  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
-  PRIMARY KEY (`id`) USING BTREE
-) ENGINE=MyISAM DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;";
-
-        // 执行 SQL 语句创建表
-        $db->execute("DROP TABLE IF EXISTS `mpay_order`;");
-        $db->execute($sql);
-
-        // 创建pay_account表的 SQL 语句
-        $sql = "CREATE TABLE `mpay_pay_account` (
-  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '收款平台ID',
-  `pid` int(11) NOT NULL DEFAULT '0' COMMENT '用户ID',
-  `platform` varchar(255) NOT NULL DEFAULT '' COMMENT '收款平台',
-  `account` varchar(255) NOT NULL DEFAULT '' COMMENT '账号',
-  `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
-  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
-  `pattern` tinyint(4) NOT NULL DEFAULT '1' COMMENT '账号监听模式',
-  `params` text NOT NULL COMMENT '自定义查询',
-  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
-  PRIMARY KEY (`id`) USING BTREE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;";
-
-        // 执行 SQL 语句创建表
-        $db->execute("DROP TABLE IF EXISTS `mpay_pay_account`;");
-        $db->execute($sql);
-
-        // 创建pay_channel表的 SQL 语句
-        $sql = "CREATE TABLE `mpay_pay_channel` (
-  `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '渠道ID',
-  `account_id` int(11) NOT NULL DEFAULT '0' COMMENT '收款平台ID',
-  `channel` varchar(255) NOT NULL DEFAULT '' COMMENT '收款通道',
-  `type` tinyint(4) NOT NULL DEFAULT '0' COMMENT '保存类型',
-  `qrcode` varchar(255) NOT NULL DEFAULT '' COMMENT '二维码',
-  `last_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '最近使用',
-  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用',
-  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
-  PRIMARY KEY (`id`) USING BTREE
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;";
-
-        // 执行 SQL 语句创建表
-        $db->execute("DROP TABLE IF EXISTS `mpay_pay_channel`;");
-        $db->execute($sql);
-
-        // 创建user表的 SQL 语句
-        $sql = "CREATE TABLE `mpay_user` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `pid` int(11) NOT NULL DEFAULT '0' COMMENT '商户ID',
-  `secret_key` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户秘钥',
-  `nickname` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户昵称',
-  `username` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '账号',
-  `password` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '密码',
-  `state` tinyint(4) NOT NULL DEFAULT '1' COMMENT '启用状态 0:禁用 1:启用',
-  `role` tinyint(4) NOT NULL DEFAULT '0' COMMENT '用户角色 0:普通用户 1:管理员',
-  `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `delete_time` timestamp NULL DEFAULT NULL COMMENT '软删除',
-  PRIMARY KEY (`id`) USING BTREE
-) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8 ROW_FORMAT=DYNAMIC;";
-
-        // 执行 SQL 语句创建表
-        $db->execute("DROP TABLE IF EXISTS `mpay_user`;");
-        $db->execute($sql);
-        return true;
     }
 
-    private function initData($dbConfig)
+    /**
+     * 获取表创建的 SQL 语句
+     * @return array
+     */
+    private function getTableCreationSqls(): array
     {
-        // 连接数据库
-        $db = Db::connect();
+        return [
+            'mpay_order' => "
+                CREATE TABLE `mpay_order` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT,
+                    `pid` int(11) NOT NULL DEFAULT 0 COMMENT '商户 ID',
+                    `order_id` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '订单号',
+                    `type` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '支付类型',
+                    `out_trade_no` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户订单号',
+                    `notify_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '异步通知地址',
+                    `return_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '跳转通知地址',
+                    `name` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商品名称',
+                    `really_price` decimal(10, 2) NOT NULL DEFAULT 0 COMMENT '实际支付金额',
+                    `money` decimal(10, 2) NOT NULL DEFAULT 0 COMMENT '订单价格',
+                    `clientip` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户 IP 地址',
+                    `device` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '设备类型',
+                    `param` varchar(720) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '扩展参数',
+                    `state` tinyint(4) NOT NULL DEFAULT 0 COMMENT '订单状态',
+                    `patt` tinyint(4) NOT NULL DEFAULT 0 COMMENT '开启回调监听',
+                    `create_time` datetime COMMENT '订单创建时间',
+                    `close_time` datetime NULL DEFAULT NULL COMMENT '订单关闭时间',
+                    `pay_time` datetime NULL DEFAULT NULL COMMENT '支付时间',
+                    `platform_order` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '收款平台订单号',
+                    `aid` int(11) NOT NULL DEFAULT 0 COMMENT '收款账号 ID',
+                    `cid` int(11) NOT NULL DEFAULT 0 COMMENT '收款码 ID',
+                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
+                    PRIMARY KEY (`id`) USING BTREE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
+            ",
+            'mpay_pay_account' => "
+                CREATE TABLE `mpay_pay_account` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '收款平台 ID',
+                    `pid` int(11) NOT NULL DEFAULT 0 COMMENT '用户 ID',
+                    `platform` varchar(255) NOT NULL DEFAULT '' COMMENT '收款平台',
+                    `account` varchar(255) NOT NULL DEFAULT '' COMMENT '账号',
+                    `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
+                    `state` tinyint(4) NOT NULL DEFAULT 1 COMMENT '启用',
+                    `pattern` tinyint(4) NOT NULL DEFAULT 1 COMMENT '账号监听模式',
+                    `params` text NOT NULL COMMENT '自定义查询',
+                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
+                    PRIMARY KEY (`id`) USING BTREE
+                ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
+            ",
+            'mpay_pay_channel' => "
+                CREATE TABLE `mpay_pay_channel` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '渠道 ID',
+                    `account_id` int(11) NOT NULL DEFAULT 0 COMMENT '收款平台 ID',
+                    `channel` varchar(255) NOT NULL DEFAULT '' COMMENT '收款通道',
+                    `type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '保存类型',
+                    `qrcode` varchar(255) NOT NULL DEFAULT '' COMMENT '二维码',
+                    `last_time` datetime COMMENT '最近使用',
+                    `state` tinyint(4) NOT NULL DEFAULT 1 COMMENT '启用',
+                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
+                    PRIMARY KEY (`id`) USING BTREE
+                ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
+            ",
+            'mpay_user' => "
+                CREATE TABLE `mpay_user` (
+                    `id` int(11) NOT NULL AUTO_INCREMENT,
+                    `pid` int(11) NOT NULL DEFAULT 0 COMMENT '商户 ID',
+                    `secret_key` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户秘钥',
+                    `nickname` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户昵称',
+                    `username` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '账号',
+                    `password` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '密码',
+                    `state` tinyint(4) NOT NULL DEFAULT 1 COMMENT '启用状态 0:禁用 1:启用',
+                    `role` tinyint(4) NOT NULL DEFAULT 0 COMMENT '用户角色 0:普通用户 1:管理员',
+                    `create_time` datetime COMMENT '创建时间',
+                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
+                    PRIMARY KEY (`id`) USING BTREE
+                ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
+            "
+        ];
+    }
+
+    /**
+     * 初始化数据
+     * @param array $dbConfig
+     * @throws \Exception
+     */
+    private function initData(array $dbConfig)
+    {
+        $db = $this->connectDatabase();
         $info = [
             'secret_key' => md5(1000 . time() . mt_rand()),
             'nickname' => $dbConfig['nickname'],
             'username' => $dbConfig['username'],
             'password' => password_hash($dbConfig['password'], PASSWORD_DEFAULT),
+            'create_time' => date('Y-m-d H:i:s'),
         ];
-        // 初始化数据的 SQL 语句
+
         $sql = "INSERT INTO `mpay_user` (`id`, `pid`, `secret_key`, `nickname`, `username`, `password`, `state`, `role`) VALUES (1, 1000, :secret_key, :nickname, :username, :password, 1, 1);";
 
-        // 执行 SQL 语句插入初始数据
-        $is_succ = $db->execute($sql, $info);
-        if (!$is_succ) {
-            return false;
+        try {
+            $db->execute($sql, $info);
+            Log::info("mpay_user 表数据初始化成功");
+        } catch (\Exception $e) {
+            throw new \Exception("初始化 mpay_user 表数据失败: " . $e->getMessage());
         }
-        return true;
     }
+
+    /**
+     * 检查是否已安装
+     * @return bool
+     */
     private function checkLock()
     {
-        $path = runtime_path() . 'install.lock';
+        $path = runtime_path() . self::INSTALL_LOCK_FILE;
         return file_exists($path);
     }
+
+    /**
+     * 设置安装锁
+     * @throws \Exception
+     */
     private function setLock()
     {
-        $path = runtime_path() . 'install.lock';
-        file_put_contents($path, time());
+        $path = runtime_path() . self::INSTALL_LOCK_FILE;
+        if (file_put_contents($path, time()) === false) {
+            throw new \Exception("无法写入安装锁文件");
+        }
     }
-    // 更新数据库结构
+
+    /**
+     * 更新数据库结构
+     * @return \think\response\Json
+     */
     public function update()
     {
-        // 连接数据库
-        $db = Db::connect();
-        // 查询 params 列的类型
-        $result = $db->query("SHOW COLUMNS FROM `mpay_pay_account` WHERE Field = 'params'");
-        if ($result && $result[0]['Type'] != 'text') {
-            // 如果不是 text 类型，则修改为 text 类型
-            $sql = "ALTER TABLE `mpay_pay_account` MODIFY COLUMN `params` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '自定义查询' AFTER `pattern`;";
-            // 执行 SQL 语句更新数据库结构
-            $is_succ = $db->execute($sql);
-            if (!$is_succ) {
-                return json(backMsg(1, '数据库结构更新失败'));
-            }
+        if ($this->checkLock()) {
+            return json(backMsg(1, '已经安装'));
         }
-        return json(backMsg(0, '数据库结构检查并更新完成'));
+
+        $db = $this->connectDatabase();
+        try {
+            $result = $db->query("SHOW COLUMNS FROM `mpay_pay_account` WHERE Field = 'params'");
+            if ($result && $result[0]['Type'] != 'text') {
+                $sql = "ALTER TABLE `mpay_pay_account` MODIFY COLUMN `params` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '自定义查询' AFTER `pattern`;";
+                $is_succ = $db->execute($sql);
+                if (!$is_succ) {
+                    throw new \Exception("修改 mpay_pay_account 表 params 列类型失败");
+                }
+            }
+            return json(backMsg(0, '数据库结构检查并更新完成'));
+        } catch (\Exception $e) {
+            Log::error("更新数据库结构失败: " . $e->getMessage());
+            return json(backMsg(1, '数据库结构更新失败'));
+        }
     }
 }

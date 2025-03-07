@@ -63,10 +63,11 @@ class Plugin
     public static function getNotifyMessage(): array
     {
         $message = cache('message');
-        if ($message) return json_decode($message, true);
+        if ($message) return $message;
         $message = self::getHttpResponse(self::$siteUrl . '/MpayApi', ['action' => 'message']);
-        cache('message', $message, 36000);
-        return json_decode($message, true);
+        $info = json_decode($message, true);
+        if ($info['code'] === 0) cache('message', $info['data'], 36000);
+        return $info['data'];
     }
     // 安装插件
     public static function installPlugin($platform): array

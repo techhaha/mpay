@@ -30,6 +30,7 @@ class PayAccount extends BaseModel
     public static function getAccountConfig($aid, $pid = null): array|bool
     {
         $aid_info = self::find($aid);
+        if (!$aid_info) return false;
         // 插件配置
         $platform = PluginController::getPluginInfo($aid_info->getData('platform'));
         // 查询参数

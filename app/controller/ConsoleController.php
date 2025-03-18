@@ -28,6 +28,12 @@ class ConsoleController extends BaseController
     {
         // 加载菜单配置
         $message = \Plugin::getNotifyMessage();
+        if (empty($message)) {
+            $message = [
+                ["id" => 1, "title" => "应用更新", "children" => []],
+                ["id" => 2, "title" => "官方消息", "children" => []],
+            ];
+        }
         return json($message);
     }
     // 首页仪表盘

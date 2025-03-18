@@ -221,75 +221,68 @@ EOT;
     private function getTableCreationSqls(): array
     {
         return [
-            'mpay_order' => "
-                CREATE TABLE `mpay_order` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT,
-                    `pid` int(11) NOT NULL DEFAULT 0 COMMENT '商户 ID',
-                    `order_id` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '订单号',
-                    `type` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '支付类型',
-                    `out_trade_no` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户订单号',
-                    `notify_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '异步通知地址',
-                    `return_url` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '跳转通知地址',
-                    `name` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商品名称',
-                    `really_price` decimal(10, 2) NOT NULL DEFAULT 0 COMMENT '实际支付金额',
-                    `money` decimal(10, 2) NOT NULL DEFAULT 0 COMMENT '订单价格',
-                    `clientip` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户 IP 地址',
-                    `device` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '设备类型',
-                    `param` varchar(720) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '扩展参数',
-                    `state` tinyint(4) NOT NULL DEFAULT 0 COMMENT '订单状态',
-                    `patt` tinyint(4) NOT NULL DEFAULT 0 COMMENT '开启回调监听',
-                    `create_time` datetime COMMENT '订单创建时间',
-                    `close_time` datetime NULL DEFAULT NULL COMMENT '订单关闭时间',
-                    `pay_time` datetime NULL DEFAULT NULL COMMENT '支付时间',
-                    `platform_order` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '收款平台订单号',
-                    `aid` int(11) NOT NULL DEFAULT 0 COMMENT '收款账号 ID',
-                    `cid` int(11) NOT NULL DEFAULT 0 COMMENT '收款码 ID',
-                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
-                    PRIMARY KEY (`id`) USING BTREE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
-            ",
-            'mpay_pay_account' => "
-                CREATE TABLE `mpay_pay_account` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '收款平台 ID',
-                    `pid` int(11) NOT NULL DEFAULT 0 COMMENT '用户 ID',
-                    `platform` varchar(255) NOT NULL DEFAULT '' COMMENT '收款平台',
-                    `account` varchar(255) NOT NULL DEFAULT '' COMMENT '账号',
-                    `password` varchar(255) NOT NULL DEFAULT '' COMMENT '密码',
-                    `state` tinyint(4) NOT NULL DEFAULT 1 COMMENT '启用',
-                    `pattern` tinyint(4) NOT NULL DEFAULT 1 COMMENT '账号监听模式',
-                    `params` text NOT NULL COMMENT '自定义查询',
-                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
-                    PRIMARY KEY (`id`) USING BTREE
-                ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
-            ",
-            'mpay_pay_channel' => "
-                CREATE TABLE `mpay_pay_channel` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT COMMENT '渠道 ID',
-                    `account_id` int(11) NOT NULL DEFAULT 0 COMMENT '收款平台 ID',
-                    `channel` varchar(255) NOT NULL DEFAULT '' COMMENT '收款通道',
-                    `type` tinyint(4) NOT NULL DEFAULT 0 COMMENT '保存类型',
-                    `qrcode` varchar(255) NOT NULL DEFAULT '' COMMENT '二维码',
-                    `last_time` datetime COMMENT '最近使用',
-                    `state` tinyint(4) NOT NULL DEFAULT 1 COMMENT '启用',
-                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
-                    PRIMARY KEY (`id`) USING BTREE
-                ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
-            ",
-            'mpay_user' => "
-                CREATE TABLE `mpay_user` (
-                    `id` int(11) NOT NULL AUTO_INCREMENT,
-                    `pid` int(11) NOT NULL DEFAULT 0 COMMENT '商户 ID',
-                    `secret_key` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '商户秘钥',
-                    `nickname` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '用户昵称',
-                    `username` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '账号',
-                    `password` varchar(255) CHARACTER SET utf8mb4 NOT NULL DEFAULT '' COMMENT '密码',
-                    `state` tinyint(4) NOT NULL DEFAULT 1 COMMENT '启用状态 0:禁用 1:启用',
-                    `role` tinyint(4) NOT NULL DEFAULT 0 COMMENT '用户角色 0:普通用户 1:管理员',
-                    `create_time` datetime COMMENT '创建时间',
-                    `delete_time` datetime NULL DEFAULT NULL COMMENT '软删除',
-                    PRIMARY KEY (`id`) USING BTREE
-                ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 ROW_FORMAT=DYNAMIC;
-            "
+            'mpay_order' => "CREATE TABLE `mpay_order` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `pid` int(11) NOT NULL DEFAULT 0,
+                `order_id` varchar(255) NOT NULL DEFAULT '',
+                `type` varchar(255) NOT NULL DEFAULT '',
+                `out_trade_no` varchar(255) NOT NULL DEFAULT '',
+                `notify_url` varchar(255) NOT NULL DEFAULT '',
+                `return_url` varchar(255) NOT NULL DEFAULT '',
+                `name` varchar(255) NOT NULL DEFAULT '',
+                `really_price` decimal(10, 2) NOT NULL DEFAULT 0.00,
+                `money` decimal(10, 2) NOT NULL DEFAULT 0.00,
+                `clientip` varchar(255) NOT NULL DEFAULT '',
+                `device` varchar(255) NOT NULL DEFAULT '',
+                `param` varchar(720) NOT NULL DEFAULT '',
+                `state` tinyint(4) NOT NULL DEFAULT 0,
+                `patt` tinyint(4) NOT NULL DEFAULT 0,
+                `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+                `close_time` datetime DEFAULT NULL,
+                `pay_time` datetime DEFAULT NULL,
+                `platform_order` varchar(255) NOT NULL DEFAULT '',
+                `aid` int(11) NOT NULL DEFAULT 0,
+                `cid` int(11) NOT NULL DEFAULT 0,
+                `delete_time` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                INDEX `idx_order_id` (`order_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
+            'mpay_pay_account' => "CREATE TABLE `mpay_pay_account` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `pid` int(11) NOT NULL DEFAULT 0,
+                `platform` varchar(255) NOT NULL DEFAULT '',
+                `account` varchar(255) NOT NULL DEFAULT '',
+                `password` varchar(255) NOT NULL DEFAULT '',
+                `state` tinyint(4) NOT NULL DEFAULT 1,
+                `pattern` tinyint(4) NOT NULL DEFAULT 1,
+                `params` text NOT NULL,
+                `delete_time` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
+            'mpay_pay_channel' => "CREATE TABLE `mpay_pay_channel` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `account_id` int(11) NOT NULL DEFAULT 0,
+                `channel` varchar(255) NOT NULL DEFAULT '',
+                `type` tinyint(4) NOT NULL DEFAULT 0,
+                `qrcode` varchar(255) NOT NULL DEFAULT '',
+                `last_time` datetime DEFAULT CURRENT_TIMESTAMP,
+                `state` tinyint(4) NOT NULL DEFAULT 1,
+                `delete_time` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
+            'mpay_user' => "CREATE TABLE `mpay_user` (
+                `id` int(11) NOT NULL AUTO_INCREMENT,
+                `pid` int(11) NOT NULL DEFAULT 0,
+                `secret_key` varchar(255) NOT NULL DEFAULT '',
+                `nickname` varchar(255) NOT NULL DEFAULT '',
+                `username` varchar(255) NOT NULL DEFAULT '',
+                `password` varchar(255) NOT NULL DEFAULT '',
+                `state` tinyint(4) NOT NULL DEFAULT 1,
+                `role` tinyint(4) NOT NULL DEFAULT 0,
+                `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
+                `delete_time` datetime DEFAULT NULL,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;"
         ];
     }
 

@@ -66,6 +66,7 @@ class Plugin
         if ($message) return $message;
         $message = self::getHttpResponse(self::$siteUrl . '/MpayApi', ['action' => 'message']);
         $info = json_decode($message, true);
+        if($info === null) return [];
         if ($info['code'] === 0) cache('message', $info['data'], 36000);
         return $info['data'];
     }

@@ -134,6 +134,12 @@
                     </span><span>元</span></div>
                 <div class="qrcode"><img id="qrcode" src="/static/img/loading.gif">
                 </div>
+                <!-- 添加跳转按钮 -->
+                <div style="margin: 16px auto;display: none;">
+                    <button id="openApp" class="layui-btn layui-btn-normal">
+                        打开支付应用
+                    </button>
+                </div>
                 <div class="msg">
                     <p>请付款 <span class="note">
                             <?php echo htmlentities($really_price); ?>
@@ -283,6 +289,29 @@
             layer.alert('请使用微信打开此页面');
         } else if (payType === 'alipay' && environment === 'wxphone') {
             layer.alert('请使用支付宝打开此页面');
+        }
+        // 添加按钮控制逻辑
+        const openAppBtn = document.getElementById('openApp');
+        if (environment === 'phone') {
+            openAppBtn.parentNode.style.display = 'block';
+            if (payType === 'wxpay') {
+                openAppBtn.innerText = '截图并打开微信';
+                openAppBtn.className = 'layui-btn layui-btn-green';
+                openAppBtn.onclick = function () {
+                    window.location.href = 'weixin://';
+                };
+            } else if (payType === 'alipay') {
+                openAppBtn.innerText = '打开支付宝付款';
+                openAppBtn.className = 'layui-btn layui-btn-normal';
+                openAppBtn.onclick = function () {
+                    if (codeType == 0) {
+                        window.location.href = 'alipays://platformapi/startapp?appId=20000067&&url=' + payCode;
+                    } else {
+                        const currentUrl = window.location.href;
+                        window.location.href = 'alipays://platformapi/startapp?appId=20000067&&url=' + currentUrl;
+                    }
+                };
+            }
         }
         // 生成二维码
         async function getQrcode(text, QR) {

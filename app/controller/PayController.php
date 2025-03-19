@@ -165,6 +165,7 @@ class PayController
             foreach ($activeOrders as $order) {
                 // 支付方式核对
                 $is_payway = $order->type == $new_order['payway'];
+                if ($new_order['payway'] == '') $is_payway = true;
                 // 支付渠道核对
                 $is_channel = $cids[$order->cid] == $new_order['channel'];
                 // 金额核对

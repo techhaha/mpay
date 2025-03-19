@@ -305,9 +305,10 @@
                 openAppBtn.className = 'layui-btn layui-btn-normal';
                 openAppBtn.onclick = function () {
                     if (codeType == 0) {
-                        window.location.href = 'alipays://platformapi/startapp?appId=20000067&&url=' + payCode;
+                        const payUrl = encodeURIComponent(payCode);
+                        window.location.href = 'alipays://platformapi/startapp?appId=20000067&&url=' + payUrl;
                     } else {
-                        const currentUrl = window.location.href;
+                        const currentUrl = encodeURIComponent(window.location.href);
                         window.location.href = 'alipays://platformapi/startapp?appId=20000067&&url=' + currentUrl;
                     }
                 };

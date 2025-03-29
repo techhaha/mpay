@@ -258,7 +258,7 @@ EOT;
                 `params` text NOT NULL,
                 `delete_time` datetime DEFAULT NULL,
                 PRIMARY KEY (`id`)
-            ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
             'mpay_pay_channel' => "CREATE TABLE `mpay_pay_channel` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `account_id` int(11) NOT NULL DEFAULT 0,
@@ -269,7 +269,7 @@ EOT;
                 `state` tinyint(4) NOT NULL DEFAULT 1,
                 `delete_time` datetime DEFAULT NULL,
                 PRIMARY KEY (`id`)
-            ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
             'mpay_user' => "CREATE TABLE `mpay_user` (
                 `id` int(11) NOT NULL AUTO_INCREMENT,
                 `pid` int(11) NOT NULL DEFAULT 0,
@@ -282,7 +282,7 @@ EOT;
                 `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
                 `delete_time` datetime DEFAULT NULL,
                 PRIMARY KEY (`id`)
-            ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;"
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci ROW_FORMAT=DYNAMIC;",
         ];
     }
 
@@ -331,33 +331,6 @@ EOT;
         $path = runtime_path() . self::INSTALL_LOCK_FILE;
         if (file_put_contents($path, time()) === false) {
             throw new \Exception("无法写入安装锁文件");
-        }
-    }
-
-    /**
-     * 更新数据库结构
-     * @return \think\response\Json
-     */
-    public function update()
-    {
-        if ($this->checkLock()) {
-            return json(backMsg(1, '已经安装'));
-        }
-
-        $db = $this->connectDatabase();
-        try {
-            $result = $db->query("SHOW COLUMNS FROM `mpay_pay_account` WHERE Field = 'params'");
-            if ($result && $result[0]['Type'] != 'text') {
-                $sql = "ALTER TABLE `mpay_pay_account` MODIFY COLUMN `params` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL COMMENT '自定义查询' AFTER `pattern`;";
-                $is_succ = $db->execute($sql);
-                if (!$is_succ) {
-                    throw new \Exception("修改 mpay_pay_account 表 params 列类型失败");
-                }
-            }
-            return json(backMsg(0, '数据库结构检查并更新完成'));
-        } catch (\Exception $e) {
-            Log::error("更新数据库结构失败: " . $e->getMessage());
-            return json(backMsg(1, '数据库结构更新失败'));
         }
     }
 }

@@ -132,7 +132,6 @@ class InstallController
             'user' => 'require',
             'pass' => 'require',
             'port' => 'require|integer',
-            'charset' => 'require'
         ];
         if (!$validate->rule($rule)->check($dbConfig)) {
             throw new ValidateException($validate->getError());
@@ -187,7 +186,6 @@ DB_NAME = {$dbConfig['name']}
 DB_USER = {$dbConfig['user']}
 DB_PASS = {$dbConfig['pass']}
 DB_PORT = {$dbConfig['port']}
-DB_CHARSET = {$dbConfig['charset']}
 DB_PREFIX = mpay_
 
 DEFAULT_LANG = zh-cn

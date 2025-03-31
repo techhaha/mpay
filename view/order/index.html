@@ -39,9 +39,10 @@
 						</div>
 					</div>
 					<div class="layui-inline">
-						<label class="layui-form-label">用户ID</label>
+						<label class="layui-form-label">平台流水号</label>
 						<div class="layui-input-inline">
-							<input type="text" name="pid" autocomplete="off" class="layui-input" placeholder="请输入">
+							<input type="text" name="platform_order" autocomplete="off" class="layui-input"
+								placeholder="请输入">
 						</div>
 					</div>
 					<div class="layui-inline">
@@ -127,6 +128,15 @@
 			清空过期
 		</button>
 	</script>
+	<script type="text/html" id="platformTpl">
+		<div>
+			{{# 
+				let platforms = JSON.parse(sessionStorage.getItem('platforms')) || {};
+				let platformName = platforms[d.platform] || '已卸载';
+				return `${platformName} [${d.aid}:${d.cid}]`;
+			}}
+		</div>
+    </script>
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
 	<script>
@@ -203,60 +213,63 @@
 			(async () => {
 				const data = await fetch('/api/Plugin/pluginOption').then(res => res.json());
 				let option_str = `<option value="">收款平台</option>`;
+				let platforms = {};
 				data.forEach(val => {
 					option_str += `<option value="${val.platform}">${val.name}</option>`;
+					platforms[val.platform] = val.name;
 				});
 				const select = document.querySelector('select[name="platform"]');
 				select.innerHTML = option_str;
 				form.render('select');
+				// 会话存储
+				sessionStorage.setItem('platforms', JSON.stringify(platforms));
+				// 表格列参数
+				let cols = [[
+					{ type: 'checkbox' },
+					{ title: '订单号', field: 'order_id', align: 'center', minWidth: 165, templet: '<div><a href="javascript:;" class="layui-font-blue" lay-event="showOrder">{{= d.order_id }}</a></div>' },
+					// { title: '用户', field: 'pid', align: 'center', width: 85 },
+					{ title: '商家订单号', field: 'out_trade_no', align: 'center', minWidth: 180 },
+					{ title: '商品', field: 'name', align: 'center', minWidth: 180 },
+					{ title: '订单金额', field: 'money', align: 'center', minWidth: 85 },
+					{ title: '成交金额', field: 'really_price', align: 'center', minWidth: 85 },
+					{ title: '支付状态', field: 'state', align: 'center', minWidth: 85, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
+					{ title: '支付时间', field: 'pay_time', align: 'center', minWidth: 160, templet: '<div>{{= d.pay_time == d.create_time ? "- -" : d.pay_time}}</div>' },
+					{ title: '支付平台', field: 'type', align: 'center', width: 120, templet: '<div>{{# if(d.type=="wxpay"){return`<div class="paytype"><img src="/static/img/wxpay.ico"width="15"><span>微信支付</span></div>`}if(d.type=="alipay"){return`<div class="paytype"><img src="/static/img/alipay.ico"width="15"><span>支付宝</span></div>`}if(d.type=="unionpay"){return`<div class="paytype"><img src="/static/img/unionpay.ico"width="15"><span>云闪付</span></div>`} }}</div>' },
+					{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: '#platformTpl' },
+					{ title: '操作', align: 'center', width: 120, fixed: 'right', templet: '<div><strong><a href="javascript:;" data-id="{{= d.id }}" class="layui-font-green {{= d.state==1 ? "orderSet-paid" : "orderSet-paying" }}">设置</a></strong></div>' }
+				]]
+				// 表格渲染
+				table.render({
+					id: 'orders-table',
+					elem: '#orders-table',
+					url: '/api/Order/getOrders',
+					page: true,
+					cols: cols,
+					skin: 'line',
+					toolbar: '#order-toolbar',
+					defaultToolbar: [{
+						title: '刷新',
+						layEvent: 'refresh',
+						icon: 'layui-icon-refresh',
+					}, 'filter', 'print', 'exports'],
+					done: function () {
+						dropdown.render({
+							elem: '.orderSet-paying',
+							data: [{ title: '改已支付', type: 1 }, { type: '-' }, { title: '手动补单', type: 3 }, { title: '删除订单', type: 0 }],
+							click: function (data, othis) {
+								order.setOrder(data, this.elem);
+							}
+						});
+						dropdown.render({
+							elem: '.orderSet-paid',
+							data: [{ title: '改未支付', type: 2 }, { type: '-' }, { title: '重新通知', type: 4 }, { title: '删除订单', type: 0 }],
+							click: function (data, othis) {
+								order.setOrder(data, this.elem);
+							}
+						});
+					},
+				});
 			})()
-			// 表格列参数
-			let cols = [[
-				{ type: 'checkbox' },
-				{ title: '订单号', field: 'order_id', align: 'center', minWidth: 165, templet: '<div><a href="javascript:;" class="layui-font-blue" lay-event="showOrder">{{= d.order_id }}</a></div>' },
-				// { title: '用户', field: 'pid', align: 'center', width: 85 },
-				{ title: '商家订单号', field: 'out_trade_no', align: 'center', minWidth: 180 },
-				{ title: '商品', field: 'name', align: 'center', minWidth: 180 },
-				{ title: '订单金额', field: 'money', align: 'center', minWidth: 85 },
-				{ title: '成交金额', field: 'really_price', align: 'center', minWidth: 85 },
-				{ title: '支付状态', field: 'state', align: 'center', minWidth: 85, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
-				{ title: '支付时间', field: 'pay_time', align: 'center', minWidth: 160, templet: '<div>{{= d.pay_time == d.create_time ? "- -" : d.pay_time}}</div>' },
-				{ title: '支付平台', field: 'type', align: 'center', width: 120, templet: '<div>{{# if(d.type=="wxpay"){return`<div class="paytype"><img src="/static/img/wxpay.ico"width="15"><span>微信支付</span></div>`}if(d.type=="alipay"){return`<div class="paytype"><img src="/static/img/alipay.ico"width="15"><span>支付宝</span></div>`}if(d.type=="unionpay"){return`<div class="paytype"><img src="/static/img/unionpay.ico"width="15"><span>云闪付</span></div>`} }}</div>' },
-				{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: '<div>{{# return`${d.payAccount.platform} [${d.aid}:${d.cid}]` }}</div>' },
-				{ title: '操作', align: 'center', width: 120, fixed: 'right', templet: '<div><strong><a href="javascript:;" data-id="{{= d.id }}" class="layui-font-green {{= d.state==1 ? "orderSet-paid" : "orderSet-paying" }}">设置</a></strong></div>' }
-			]]
-			// 表格渲染
-			table.render({
-				id: 'orders-table',
-				elem: '#orders-table',
-				url: '/api/Order/getOrders',
-				page: true,
-				cols: cols,
-				skin: 'line',
-				toolbar: '#order-toolbar',
-				defaultToolbar: [{
-					title: '刷新',
-					layEvent: 'refresh',
-					icon: 'layui-icon-refresh',
-				}, 'filter', 'print', 'exports'],
-				done: function () {
-					dropdown.render({
-						elem: '.orderSet-paying',
-						data: [{ title: '改已支付', type: 1 }, { type: '-' }, { title: '手动补单', type: 3 }, { title: '删除订单', type: 0 }],
-						click: function (data, othis) {
-							order.setOrder(data, this.elem);
-						}
-					});
-					dropdown.render({
-						elem: '.orderSet-paid',
-						data: [{ title: '改未支付', type: 2 }, { type: '-' }, { title: '重新通知', type: 4 }, { title: '删除订单', type: 0 }],
-						click: function (data, othis) {
-							order.setOrder(data, this.elem);
-						}
-					});
-				},
-			});
-
 			// 事件处理
 
 			// 表格单元格事件

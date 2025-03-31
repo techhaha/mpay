@@ -70,41 +70,32 @@ class Order extends BaseModel
     public static function serchOrders($query)
     {
         $select = [];
-        $_select = [];
-        $allow_field = ['id', 'order_id', 'pid', 'type', 'out_trade_no', 'notify_url', 'return_url', 'name', 'really_price', 'money', 'clientip', 'device', 'state', 'create_time_start', 'create_time_end', 'close_time', 'pay_time', 'platform', 'platform_order', 'aid', 'cid',];
+        $allow_field = ['id', 'order_id', 'pid', 'type', 'out_trade_no', 'name', 'really_price', 'money', 'state', 'create_time_start', 'create_time_end', 'close_time', 'pay_time', 'platform', 'platform_order', 'aid', 'cid',];
         foreach ($query as $key => $value) {
             if (in_array($key, $allow_field) && isset($value)) {
                 if ($key === 'name') {
-                    $select[] = ['Order.' . $key, 'like', '%' . $value . '%'];
+                    $select[] = [$key, 'like', '%' . $value . '%'];
                     continue;
                 }
                 if ($key === 'create_time_start') {
-                    $select[] = ['Order.' . 'create_time', '>', $value];
+                    $select[] = ['create_time', '>', $value];
                     continue;
                 }
                 if ($key === 'create_time_end') {
-                    $select[] = ['Order.' . 'create_time', '<', $value];
+                    $select[] = ['create_time', '<', $value];
                     continue;
                 }
-                if ($key === 'platform') {
-                    $_select['platform'] = $value;
-                    continue;
-                }
-                $select[] = ['Order.' . $key, '=', $value];
+                $select[] = [$key, '=', $value];
             }
         }
-        return self::with('payAccount')
-            ->hasWhere('payAccount', function ($query) use ($_select) {
-                $query->where($_select);
-            })
-            ->where($select);
+        return self::where($select);
     }
     // 查询订单详细
     public static function showOrderDetail($id)
     {
         $order = self::find($id);
-        $a_list = PayAccount::find($order->aid);
-        $c_list = PayChannel::find($order->cid);
+        $a_list = PayAccount::withTrashed()->find($order->aid);
+        $c_list = PayChannel::withTrashed()->find($order->cid);
         if (!$order) {
             return [];
         }

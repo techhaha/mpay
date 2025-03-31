@@ -240,6 +240,7 @@ EOT;
                 `create_time` datetime DEFAULT CURRENT_TIMESTAMP,
                 `close_time` datetime DEFAULT NULL,
                 `pay_time` datetime DEFAULT NULL,
+                `platform` varchar(15) NOT NULL DEFAULT '',
                 `platform_order` varchar(255) NOT NULL DEFAULT '',
                 `aid` int(11) NOT NULL DEFAULT 0,
                 `cid` int(11) NOT NULL DEFAULT 0,

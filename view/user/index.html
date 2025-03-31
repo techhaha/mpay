@@ -256,13 +256,7 @@
             util.on({
                 'copyinfo': (ele) => {
                     const info = ele.attr('data-info');
-                    if (navigator.clipboard) {
-                        navigator.clipboard.writeText(info).then(() => {
-                            layer.msg('复制成功');
-                        });
-                    } else {
-                        layer.msg('复制失败，请手动复制');
-                    }
+                    copyText(info);
                 },
                 'resetKey': (ele) => {
                     layer.confirm('重置密钥后，将无法使用原密钥，是否继续？', { icon: 3, title: '重置密钥' }, function (index) {
@@ -297,8 +291,34 @@
 
         });
         fetch('https://v1.hitokoto.cn?c=d&c=i&c=k&encode=text').then(res => res.text()).then(data => { document.getElementById('yiyan').innerHTML = data || '人无横财不富，马无夜草不肥'; })
-
-
+        // 复制文本到剪贴板
+        function copyText(text) {
+            if (navigator.clipboard && window.isSecureContext === false) {
+                navigator.clipboard.writeText(text).then(() => {
+                    layer.msg('复制成功');
+                }).catch(err => {
+                    copyToClipboardFallback(text);
+                });
+            } else {
+                copyToClipboardFallback(text);
+            }
+        }
+        // 传统复制文本到剪贴板
+        function copyToClipboardFallback(text) {
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                layer.msg('复制成功');
+            } catch (err) {
+                layer.msg('复制失败，请手动复制');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
     </script>
 </body>
 

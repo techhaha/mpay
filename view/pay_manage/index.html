@@ -168,13 +168,7 @@
 			table.on('toolDouble(account-table)', function (obj) {
 				if (obj.event === 'copy') {
 					const text = obj.tr[0].querySelector('td[data-field="checkUrl"]>div').innerText;
-					if (navigator.clipboard) {
-						navigator.clipboard.writeText(text).then(() => {
-							layer.msg('复制成功');
-						});
-					} else {
-						layer.msg('复制失败，请手动复制');
-					}
+					copyText(text);
 				}
 			});
 			// 表格头部按钮事件
@@ -331,6 +325,34 @@
 				}
 			}
 		})
+		// 复制文本到剪贴板
+		function copyText(text) {
+			if (navigator.clipboard && window.isSecureContext === false) {
+				navigator.clipboard.writeText(text).then(() => {
+					layer.msg('复制成功');
+				}).catch(err => {
+					copyToClipboardFallback(text);
+				});
+			} else {
+				copyToClipboardFallback(text);
+			}
+		}
+		// 传统复制文本到剪贴板
+		function copyToClipboardFallback(text) {
+			const textarea = document.createElement('textarea');
+			textarea.value = text;
+			textarea.style.position = 'fixed';
+			document.body.appendChild(textarea);
+			textarea.select();
+			try {
+				document.execCommand('copy');
+				layer.msg('复制成功');
+			} catch (err) {
+				layer.msg('复制失败，请手动复制');
+			} finally {
+				document.body.removeChild(textarea);
+			}
+		}
 	</script>
 </body>
 

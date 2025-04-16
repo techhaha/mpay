@@ -32,6 +32,7 @@
                             <option value="wxpay2">赞赏码</option>
                             <option value="wxpay3">经营码</option>
                             <option value="wxpay4">商家码</option>
+                            <option value="wxpay5">店员码</option>
                             <!-- <?php } ?> -->
                             <!-- <?php if ($platform == 'alipay') { ?> -->
                             <option value="alipay1">收钱码</option>
@@ -60,7 +61,7 @@
                 <div class="layui-form-item">
                     <blockquote class="layui-elem-quote">
                         <!-- <?php if ($platform == 'wxpay') { ?> -->
-                        <p><strong>手机监控：</strong>微信个人码与经营码只能二选一，不能同时添加，商家码监听需要关注“微信收款商业版”公众号，赞赏码正常添加。</p>
+                        <p><strong>手机监控：</strong>微信个人码与经营码只能二选一，不能同时添加，且经营码只能通过个人码通道1添加成功，不然不回调；商家码监听需要关注“微信收款商业版”公众号，赞赏码和店员码正常添加。</p>
                         <p><strong>电脑监控：</strong>所有收款码均可监控，需要将收款通知聊天窗口单独拖出来</p>
                         <!-- <?php } ?> -->
                         <!-- <?php if ($platform == 'alipay') { ?> -->

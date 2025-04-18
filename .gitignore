@@ -13,3 +13,6 @@ runtime/*
 
 app/*
 !app/controller/TestController.php
+
+# 忽略 config/extend 目录下所有文件
+config/extend/*

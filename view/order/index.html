@@ -128,15 +128,6 @@
 			清空过期
 		</button>
 	</script>
-	<script type="text/html" id="platformTpl">
-		<div>
-			{{# 
-				let platforms = JSON.parse(sessionStorage.getItem('platforms')) || {};
-				let platformName = platforms[d.platform] || '已卸载';
-				return `${platformName} [${d.aid}:${d.cid}]`;
-			}}
-		</div>
-    </script>
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
 	<script>
@@ -223,6 +214,11 @@
 				form.render('select');
 				// 会话存储
 				sessionStorage.setItem('platforms', JSON.stringify(platforms));
+				let platformTpl = (d) => {
+					let platforms = JSON.parse(sessionStorage.getItem('platforms')) || {};
+					let platformName = platforms[d.platform] || '已卸载';
+					return `${platformName} [${d.aid}:${d.cid}]`;
+				}
 				// 表格列参数
 				let cols = [[
 					{ type: 'checkbox' },
@@ -235,7 +231,7 @@
 					{ title: '支付状态', field: 'state', align: 'center', minWidth: 85, templet: '<div>{{# if(d.state==1){return`<span class="layui-badge layui-bg-green">成功</span>`}else{if(new Date(d.close_time)>new Date("<?php echo $servertime ?>")){return`<span class="layui-badge layui-bg-orange">等待</span>`}else{return`<span class="layui-badge layui-bg-gray">过期</span>`} } }}</div>' },
 					{ title: '支付时间', field: 'pay_time', align: 'center', minWidth: 160, templet: '<div>{{= d.pay_time == d.create_time ? "- -" : d.pay_time}}</div>' },
 					{ title: '支付平台', field: 'type', align: 'center', width: 120, templet: '<div>{{# if(d.type=="wxpay"){return`<div class="paytype"><img src="/static/img/wxpay.ico"width="15"><span>微信支付</span></div>`}if(d.type=="alipay"){return`<div class="paytype"><img src="/static/img/alipay.ico"width="15"><span>支付宝</span></div>`}if(d.type=="unionpay"){return`<div class="paytype"><img src="/static/img/unionpay.ico"width="15"><span>云闪付</span></div>`} }}</div>' },
-					{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: '#platformTpl' },
+					{ title: '收款平台[账号:终端]', field: 'platform', align: 'center', minWidth: 160, templet: platformTpl },
 					{ title: '操作', align: 'center', width: 120, fixed: 'right', templet: '<div><strong><a href="javascript:;" data-id="{{= d.id }}" class="layui-font-green {{= d.state==1 ? "orderSet-paid" : "orderSet-paying" }}">设置</a></strong></div>' }
 				]]
 				// 表格渲染

@@ -7,6 +7,7 @@ namespace app\controller\api;
 use app\BaseController;
 use app\model\PayAccount;
 use app\model\PayChannel;
+use \think\facade\Log;
 
 class PayManageController extends BaseController
 {
@@ -125,30 +126,59 @@ class PayManageController extends BaseController
     // 上传二维码图片
     public function uploadQrcode()
     {
-        $img = $this->request->file('codeimg');
-        if (!$img) {
-            return json(backMsg(1, '请选择要上传的文件'));
-        }
-        // 验证文件类型
-        $allowedTypes = ['image/png', 'image/jpeg', 'image/gif'];
-        $fileMimeType = $img->getMime();
-        if (!in_array($fileMimeType, $allowedTypes)) {
-            return json(backMsg(1, '只允许上传PNG、JPEG或GIF格式的图片'));
-        }
-        // 生成唯一文件名
-        $filename = 'img_' . time() . '_' . uniqid() . '.' . $img->getOriginalExtension();
-        // 设置文件保存路径
-        $path = public_path() . '/files/qrcode/';
-        if (!is_dir($path)) {
-            mkdir($path, 0755, true);
-        }
-        // 移动文件到指定目录
-        $info = $img->move($path, $filename);
-        if ($info) {
-            $imgpath = '/files/qrcode/' . $filename;
-            return json(backMsg(0, '上传成功', ['imgpath' => $imgpath]));
-        } else {
-            return json(backMsg(1, '上传失败'));
+        try {
+            // 获取上传的文件
+            $img = $this->request->file('codeimg');
+            if (!$img) {
+                return json(backMsg(1, '请选择要上传的文件'));
+            }
+
+            // 验证文件大小，防止大文件攻击
+            $maxSize = 2 * 1024 * 1024; // 2MB
+            if ($img->getSize() > $maxSize) {
+                return json(backMsg(1, '文件大小不能超过 2MB'));
+            }
+
+            // 验证文件类型，防止恶意文件上传
+            $allowedTypes = ['image/png', 'image/jpeg', 'image/gif'];
+            $fileMimeType = $img->getMime();
+            if (!in_array($fileMimeType, $allowedTypes)) {
+                return json(backMsg(1, '只允许上传 PNG、JPEG 或 GIF 格式的图片'));
+            }
+
+            // 二次验证文件类型，通过文件内容判断
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $realMimeType = finfo_file($finfo, $img->getRealPath());
+            finfo_close($finfo);
+            if (!in_array($realMimeType, $allowedTypes)) {
+                return json(backMsg(1, '文件类型验证失败，请上传有效的图片文件'));
+            }
+
+            // 生成唯一文件名，避免文件名冲突
+            $filename = 'img_' . time() . '_' . uniqid() . '.' . $img->getOriginalExtension();
+
+            // 过滤文件名，防止路径遍历攻击
+            $filename = preg_replace('/[^a-zA-Z0-9_\-\.]/', '', $filename);
+
+            // 设置文件保存路径
+            $path = public_path() . '/files/qrcode/';
+            if (!is_dir($path)) {
+                if (!mkdir($path, 0755, true)) {
+                    return json(backMsg(1, '创建目录失败'));
+                }
+            }
+
+            // 移动文件到指定目录
+            $info = $img->move($path, $filename);
+            if ($info) {
+                $imgpath = '/files/qrcode/' . $filename;
+                return json(backMsg(0, '上传成功', ['imgpath' => $imgpath]));
+            } else {
+                return json(backMsg(1, '上传失败'));
+            }
+        } catch (\Exception $e) {
+            Log::error('上传过程中出现异常: ' . $e->getMessage());
+            return json(backMsg(1, '上传过程中出现异常，请稍后重试'));
         }
     }
     // 获取账号交易流水

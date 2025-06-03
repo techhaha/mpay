@@ -250,7 +250,7 @@
 						account.channelList(id);
 						break;
 					case 3:
-						alert('收款统计');
+						account.tradeList(id);
 						break;
 					case 4:
 						account.orderList(id);
@@ -269,6 +269,17 @@
 					area: [common.isModile() ? '100%' : '500px', common.isModile() ? '100%' : '600px'],
 					content: `/PayManage/editAccount?id=${id}`,
 				});
+			}
+			// 收款统计
+			account.tradeList = function (aid) {
+				// 先尝试关闭已存在的标签
+				if (parent.layui.tab) {
+					parent.layui.tab.delTabByElem('content', 'payStatistics');
+				}
+				// 重新打开标签
+				parent.layui.tab.addTabOnlyByElem('content',
+					{ id: 'payStatistics', title: '收款统计', url: `/PayManage/payStatistics`, close: true }
+				)
 			}
 			// 终端列表
 			account.orderList = function (aid) {

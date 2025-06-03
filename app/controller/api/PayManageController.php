@@ -7,6 +7,8 @@ namespace app\controller\api;
 use app\BaseController;
 use app\model\PayAccount;
 use app\model\PayChannel;
+use app\model\Order;
+use think\facade\Db;
 use \think\facade\Log;
 
 class PayManageController extends BaseController
@@ -208,4 +210,73 @@ class PayManageController extends BaseController
             return json(['code' => 1, 'msg' => $records['msg']]);
         }
     }
+
+    public function payStatisticsList()
+    {
+        $query = $this->request->get();
+        $limit = $query['limit'] ?? 10;
+        $page = $query['page'] ?? 1;
+        $start_time = $query['time_start'] ?? date('Y-m-d H:i:s', strtotime('today'));
+        $end_time = $query['time_end'] ?? date('Y-m-d H:i:s', strtotime('tomorrow') - 1);
+        // 确保日期时间格式正确
+        $start_time = date('Y-m-d H:i:s', strtotime($start_time));
+        $end_time = date('Y-m-d H:i:s', strtotime($end_time));
+
+        $accounts = Db::table('mpay_pay_account', 'PayAccount')
+            ->alias('PayAccount')
+            ->join('mpay_order Order', 'PayAccount.id = Order.aid AND Order.delete_time IS NULL AND Order.state = 1', 'LEFT')
+            ->field([
+                'PayAccount.*',
+                'SUM(CASE WHEN DATE(Order.pay_time) = CURDATE() THEN Order.really_price ELSE 0 END) as day',
+                'SUM(CASE WHEN DATE(Order.pay_time) = DATE_SUB(CURDATE(), INTERVAL 1 DAY) THEN Order.really_price ELSE 0 END) as yesterday',
+                'SUM(CASE WHEN YEARWEEK(Order.pay_time, 1) = YEARWEEK(CURDATE(), 1) THEN Order.really_price ELSE 0 END) as week',
+                'SUM(CASE WHEN DATE_FORMAT(Order.pay_time, "%Y-%m") = DATE_FORMAT(CURDATE(), "%Y-%m") THEN Order.really_price ELSE 0 END) as month',
+                'SUM(CASE WHEN YEAR(Order.pay_time) = YEAR(CURDATE()) THEN Order.really_price ELSE 0 END) as year',
+                'SUM(IFNULL(Order.really_price, 0)) as total',
+                "SUM(CASE WHEN Order.pay_time BETWEEN '$start_time' AND '$end_time' THEN Order.really_price ELSE 0 END) as income"
+            ])
+            ->where('PayAccount.delete_time IS NULL')
+            ->group('PayAccount.id')
+            ->order('PayAccount.id', 'DESC')
+            ->paginate(['list_rows' => $limit, 'page' => $page]);
+
+        return json([
+            'code' => 0,
+            'msg' => 'OK',
+            'count' => $accounts->total(),
+            'data' => $accounts->items()
+        ]);
+    }
+
+    // 收款统计
+    // public function payStatisticsList()
+    // {
+    //     $query = $this->request->get();
+    //     // 定义统计字段
+    //     $fields = [
+    //         "SUM(IF(DATE(pay_time) = CURDATE(), really_price, 0)) as day",
+    //         "SUM(IF(DATE(pay_time) = CURDATE() - INTERVAL 1 DAY, really_price, 0)) as yesterday",
+    //         "SUM(IF(YEARWEEK(pay_time, 1) = YEARWEEK(CURDATE(), 1), really_price, 0)) as week",
+    //         "SUM(IF(DATE_FORMAT(pay_time, '%Y-%m') = DATE_FORMAT(CURDATE(), '%Y-%m'), really_price, 0)) as month",
+    //         "SUM(IF(YEAR(pay_time) = YEAR(CURDATE()), really_price, 0)) as year",
+    //         "SUM(really_price) as total"
+    //     ];
+
+    //     $where = ['state', 1;
+
+    //     // 合并 pay_account 表字段和统计字段
+    //     $allFields = array_merge([PayAccount::getTable() . '.*'], $fields);
+
+    //     $accounts = PayAccount::hasWhere('order', $where, '*', 'LEFT')
+    //         ->field($allFields)
+    //         ->group(PayAccount::getTable() . '.id')
+    //         ->order('id', 'desc')
+    //         ->paginate(['list_rows' => $query['limit'] ?? 10, 'page' => $query['page'] ?? 1]);
+
+    //     if ($accounts) {
+    //         return json(['code' => 0, 'msg' => PayAccount::getLastSql(), 'count' => $accounts->total(), 'data' => $accounts->items()]);
+    //     } else {
+    //         return json(['code' => 1, 'msg' => '无数据记录', 'count' => 0, 'data' => []]);
+    //     }
+    // }
 }

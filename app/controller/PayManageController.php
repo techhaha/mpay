@@ -74,4 +74,9 @@ class PayManageController extends BaseController
         View::assign(['id' => $id]);
         return View::fetch();
     }
+    // 收款统计
+    public function payStatistics()
+    {
+        return View::fetch();
+    }
 }

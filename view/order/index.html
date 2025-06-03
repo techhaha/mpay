@@ -219,6 +219,11 @@
 					let platformName = platforms[d.platform] || '已卸载';
 					return `${platformName} [${d.aid}:${d.cid}]`;
 				}
+				const urlParams = new URLSearchParams(window.location.search);
+				const where = {};
+				urlParams.forEach((value, key) => {
+					where[key] = value;
+				});
 				// 表格列参数
 				let cols = [[
 					{ type: 'checkbox' },
@@ -239,6 +244,7 @@
 					id: 'orders-table',
 					elem: '#orders-table',
 					url: '/api/Order/getOrders',
+					where: where,
 					page: true,
 					cols: cols,
 					skin: 'line',

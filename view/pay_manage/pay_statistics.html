@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>收款管理</title>
+	<link rel="stylesheet" href="/component/pear/css/pear.css" />
+	<style>
+		.account-trade {
+			padding: 15px;
+		}
+	</style>
+</head>
+
+<body class="pear-container">
+	<div class="layui-card">
+		<div class="layui-card-body">
+			<form class="layui-form layui-form-pane" action="" id="serch-form">
+				<div class="layui-form-item">
+					<div class="layui-inline">
+						<label class="layui-form-label">时间段</label>
+						<div class="layui-inline" id="create_time">
+							<div class="layui-input-inline">
+								<input type="text" name="time_start" autocomplete="off" placeholder="开始"
+									class="layui-input">
+							</div>
+							<div class="layui-form-mid">-</div>
+							<div class="layui-input-inline">
+								<input type="text" name="time_end" autocomplete="off" placeholder="结束"
+									class="layui-input">
+							</div>
+						</div>
+					</div>
+					<div class="layui-inline">
+						<button type="submit" class="pear-btn pear-btn-md pear-btn-primary" lay-submit
+							lay-filter="query">
+							<i class="layui-icon layui-icon-search"></i>
+							查询
+						</button>
+						<button type="button" lay-on="reset" class="pear-btn pear-btn-md">
+							<i class="layui-icon layui-icon-refresh"></i>
+							重置
+						</button>
+					</div>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="layui-card">
+		<div class="layui-card-body">
+			<table id="account-table" lay-filter="account-table"></table>
+		</div>
+	</div>
+	<script src="/component/layui/layui.js"></script>
+	<script src="/component/pear/pear.js"></script>
+	<script>
+		layui.use(['table', 'form', 'common', 'dropdown', 'util'], function () {
+			let table = layui.table;
+			let form = layui.form;
+			let common = layui.common;
+			let dropdown = layui.dropdown;
+			let util = layui.util;
+			let laydate = layui.laydate;
+
+
+			const now = new Date();
+			const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+			const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+			laydate.render({
+				elem: '#create_time',
+				range: ['input[name="time_start"]', 'input[name="time_end"]'],
+				rangeLinked: true,
+				type: 'datetime',
+				fullPanel: true,
+				weekStart: 1,
+				// 当天开始日期 - 当天结束日期
+				value: util.toDateString(startOfDay, 'yyyy-MM-dd HH:mm:ss') + ' - ' + util.toDateString(endOfDay, 'yyyy-MM-dd HH:mm:ss')
+			});
+
+			let cols = [[
+				{ type: 'checkbox' },
+				{ title: '平 台', field: 'platform', align: 'center', templet: '' },
+				{ title: '账 号', field: 'account', align: 'center' },
+				{ title: '时段查询收款', field: 'income', align: 'center', templet: '<div><strong>{{# return d.income ?? 0 }}</strong></div>' },
+				{ title: '今日收款', field: 'day', align: 'center', templet: '<div><strong>{{# return d.day ?? 0 }}</strong></div>' },
+				{ title: '昨日收款', field: 'yesterday', align: 'center', templet: '<div><strong>{{# return d.yesterday ?? 0 }}</strong></div>' },
+				{ title: '本周收款', field: 'week', align: 'center', templet: '<div><strong>{{# return d.week ?? 0 }}</strong></div>' },
+				{ title: '本月收款', field: 'month', align: 'center', templet: '<div><strong>{{# return d.month ?? 0 }}</strong></div>' },
+				{ title: '当年收款', field: 'year', align: 'center', templet: '<div><strong>{{# return d.year ?? 0 }}</strong></div>' },
+				{ title: '总计收款', field: 'total', align: 'center', templet: '<div><strong>{{# return d.total ?? 0 }}</strong></div>' },
+			]]
+
+			table.render({
+				id: 'account-table',
+				elem: '#account-table',
+				url: '/api/PayManage/payStatisticsList',
+				page: true,
+				cols: cols,
+				skin: 'line',
+				defaultToolbar: [{
+					title: '刷新',
+					layEvent: 'refresh',
+					icon: 'layui-icon-refresh',
+				}, 'filter', 'print', 'exports'],
+			});
+
+			// 表单自定义事件监听
+			form.on('submit(query)', function (obj) {
+				const field = obj.field;
+				let new_field = {};
+				for (const key in field) {
+					if (field.hasOwnProperty.call(field, key)) {
+						const value = field[key];
+						if (value) {
+							new_field[key] = value;
+						}
+					}
+				}
+				table.reload('account-table', { where: new_field });
+				return false;
+			});
+			// 监听重置按钮
+			util.on({
+				reset: function () {
+					document.querySelector('#serch-form').reset();
+					table.reload('account-table', { where: {} });
+				}
+			});
+		})
+	</script>
+</body>
+
+</html>

@@ -210,6 +210,6 @@ class Order extends BaseModel
     // 模型多对一关联
     public function payAccount()
     {
-        return $this->belongsTo(PayAccount::class, 'aid', 'id');
+        return $this->belongsTo(PayAccount::class, 'id', 'aid');
     }
 }

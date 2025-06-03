@@ -106,10 +106,11 @@
 	<script src="/component/layui/layui.js"></script>
 	<script src="/component/pear/pear.js"></script>
 	<script>
-		layui.use(['table', 'form', 'common', 'util'], function () {
+		layui.use(['table', 'form', 'common', 'dropdown', 'util'], function () {
 			let table = layui.table;
 			let form = layui.form;
 			let common = layui.common;
+			let dropdown = layui.dropdown;
 			let util = layui.util;
 
 			// 渲染插件选项
@@ -130,10 +131,11 @@
 				{ title: '账 号', field: 'account', align: 'center' },
 				{ title: '启用状态', field: 'state', align: 'center', templet: '#account-state' },
 				{ title: '监听模式', field: 'pattern', align: 'center' },
-				{ title: '监听地址 / 自定义模版', field: 'checkUrl', align: 'center', minWidth: 300, event: 'copy', templet: '#account-checkUrl' },
+				{ title: '监听地址 / 自定义模版', field: 'checkUrl', align: 'center', minWidth: 240, event: 'copy', templet: '#account-checkUrl' },
 				{ title: '收款平台流水', field: 'trade', align: 'center', templet: '#account-trade' },
-				{ title: '收款码数量', field: 'channel', align: 'center', templet: '<div><a href="javascript:;" lay-event="channelList"><span class="layui-badge layui-bg-green">{{= d.channel }}</span></a></div>' },
-				{ title: '操作', align: 'center', fixed: 'right', templet: '<div><a href="javascript:;" class="layui-font-green" lay-event="edit"><strong>编辑</strong></a></div>' }
+				{ title: '收款码数量', field: 'channel_num', align: 'center', templet: '<div><a href="javascript:;" lay-event="channelList"><span class="layui-badge layui-bg-green">{{= d.channel_num }}</span></a></div>' },
+				{ title: '今日收款', field: 'income', align: 'center', templet: '<div><strong>{{# return d.income ?? 0 }}</strong></div>' },
+				{ title: '操作', align: 'center', fixed: 'right', templet: '<div><a href="javascript:;" class="layui-font-green edit" data-aid="{{= d.id }}"><strong>编辑</strong></a></div>' }
 			]]
 
 			table.render({
@@ -148,7 +150,17 @@
 					title: '刷新',
 					layEvent: 'refresh',
 					icon: 'layui-icon-refresh',
-				}, 'filter', 'print', 'exports']
+				}, 'filter', 'print', 'exports'],
+				done: function () {
+					dropdown.render({
+						elem: '.edit',
+						align: 'center',
+						data: [{ title: '编辑', id: 1 }, { type: '-' }, { title: '二维码', id: 2 }, { title: '收款统计', id: 3 }, { title: '收款明细', id: 4 }],
+						click: function (data, othis) {
+							account.doEdit(data, this.elem);
+						}
+					});
+				}
 			});
 
 			// 事件处理
@@ -226,6 +238,27 @@
 			// 操作方法
 			let account = {};
 
+			// 编辑操作
+			account.doEdit = function (data, elem) {
+				const type = data.id;
+				const id = elem.attr('data-aid');
+				switch (type) {
+					case 1:
+						account.editAccount(id);
+						break;
+					case 2:
+						account.channelList(id);
+						break;
+					case 3:
+						alert('收款统计');
+						break;
+					case 4:
+						account.orderList(id);
+						break;
+				}
+
+			}
+
 			// 编辑
 			account.editAccount = function (id) {
 				layer.open({
@@ -236,6 +269,18 @@
 					area: [common.isModile() ? '100%' : '500px', common.isModile() ? '100%' : '600px'],
 					content: `/PayManage/editAccount?id=${id}`,
 				});
+			}
+			// 终端列表
+			account.orderList = function (aid) {
+				// 先尝试关闭已存在的标签
+				if (parent.layui.tab) {
+					parent.layui.tab.delTabByElem('content', 'order');
+				}
+				// 重新打开标签
+				parent.layui.tab.addTabOnlyByElem('content',
+					{ id: 'order', title: '订单管理', url: `/Order/index?aid=${aid}`, close: true }
+				)
+				parent.layui.tab.changeTabTitleById('content', 'order', `【${aid}】订单明细`);
 			}
 			// 终端列表
 			account.channelList = function (id) {

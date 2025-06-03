@@ -24,7 +24,25 @@ class PayAccount extends BaseModel
                 $select[] = [$key, '=', $value];
             }
         }
-        return self::withCount(['payChannel' => 'channel'])->where($select);
+        return self::withCount(['payChannel' => 'channel_num'])->withSum(['order' => function ($query, &$alias) {
+            $query->whereDay('pay_time')->where('state', 1);
+            $alias = 'income';
+        }], 'really_price')->where($select);
+    }
+    public static function findAccount($query)
+    {
+        $select = [];
+        $allow_field = ['state', 'platform', 'account', 'pattern'];
+        foreach ($query as $key => $value) {
+            if (in_array($key, $allow_field) && isset($value)) {
+                if ($key === 'account') {
+                    $select[] = [$key, 'like', '%' . $value . '%'];
+                    continue;
+                }
+                $select[] = [$key, '=', $value];
+            }
+        }
+        return self::where($select);
     }
     // 获取账号配置
     public static function getAccountConfig($aid, $pid = null): array|bool
@@ -85,5 +103,10 @@ class PayAccount extends BaseModel
     public function payChannel()
     {
         return $this->hasMany(PayChannel::class, 'account_id', 'id');
+    }
+    // 一对多关联
+    public function order()
+    {
+        return $this->hasMany(Order::class, 'aid', 'id');
     }
 }

@@ -194,7 +194,7 @@ class PayManageController extends BaseController
         if ($config === false) return json(backMsg(1, '账号配置文件错误'));
         if ($req_aid != $config['aid'] || $req_pid != session('pid')) return json(backMsg(1, '监听收款配置不一致'));
         // 登陆账号
-        $pay_config = ['username' => $config['account'], 'password' => $config['password']];
+        $pay_config = ['username' => $config['account'], 'password' => $config['password'], 'aid' => $config['aid']];
         // 收款查询
         $params = $config['params'];
         // 实例监听客户端

@@ -68,7 +68,14 @@ class PayController
                 View::assign('passtime', $passtime > 0 ? $passtime : 0);
                 // Alipay免输
                 if (preg_match('/^alipay4#\d+$/', $channel->channel)) {
-                    $payurl = \payclient\AliPayf::getPayUrl($act_order->order_id, $act_order->money, $channel->qrcode);
+                    $chan = request()->get('chan', '');
+                    if ($chan && $chan == 'Alipayf') {
+                        $payurl = \payclient\AliPayf::getPayUrl($act_order->order_id, $act_order->money, $channel->qrcode, 1);
+                        View::assign('payUrl', $payurl['data'] ?? $payurl['msg']);
+                        View::assign('payclient', 'Alipayf');
+                    } else {
+                        $payurl = \payclient\AliPayf::getPayUrl($act_order->order_id, $act_order->money, $channel->qrcode);
+                    }
                     View::assign('payUrl', $payurl['data'] ?? $payurl['msg']);
                 } else {
                     View::assign('payUrl', $channel->qrcode);
@@ -237,7 +244,7 @@ class PayController
         $config = PayAccount::getAccountConfig($req_aid);
         if ($config === false) return json(['code' => 4, 'msg' => '监听收款配置错误']);
         // 登陆账号
-        $pay_config = ['username' => $config['account'], 'password' => $config['password']];
+        $pay_config = ['username' => $config['account'], 'password' => $config['password'], 'aid' => $config['aid']];
         // 配置参数
         $params = $config['params'];
         // 实例监听客户端

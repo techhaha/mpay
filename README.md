@@ -28,6 +28,15 @@
 | <a href="https://gitee.com/technical-laohu/mpay"><img src="assets/20241122_113208_gitee.png" alt="mpay" width=128 /></a>|<a href="https://github.com/techhaha/mpay"><img src="assets/20241122_113331_github.png" alt="mpay" width=128 /></a>|
 
 
+## 🚀 Mpay v2 项目
+
+<div style="background-color: #f0f8ff; border: 2px solid #4169e1; border-radius: 10px; padding: 20px; margin: 20px 0;">
+    <h3 style="color: #4169e1; margin-top: 0;">Mpay v2 项目</h3>
+    <p style="font-size: 16px;">基于 webman 框架开发的全新版本，提供更稳定、更高效的收款体验</p>
+    <a href="https://gitee.com/technical-laohu/mpay_v2_webman" target="_blank" style="display: inline-block; background-color: #4169e1; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-top: 10px;">访问 Mpay v2 项目</a>
+</div>
+
+
 ## ⚙️ 工具特性
 
 - 开源程序，个人免费使用，不断更新

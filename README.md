@@ -30,11 +30,10 @@
 
 ## 🚀 Mpay v2 项目
 
-<div style="background-color: #f0f8ff; border: 2px solid #4169e1; border-radius: 10px; padding: 20px; margin: 20px 0;">
-    <h3 style="color: #4169e1; margin-top: 0;">Mpay v2 项目</h3>
-    <p style="font-size: 16px;">基于 webman 框架开发的全新版本，提供更稳定、更高效的收款体验</p>
-    <a href="https://gitee.com/technical-laohu/mpay_v2_webman" target="_blank" style="display: inline-block; background-color: #4169e1; color: white; padding: 10px 20px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-top: 10px;">访问 Mpay v2 项目</a>
-</div>
+**基于 webman 框架开发的全新版本支付中台，提供更稳定、更高效的收款体验** [立即访问Gitee](https://gitee.com/technical-laohu/mpay_v2_webman)、[立即访问Github](https://github.com/techhaha/mpay_v2)
+
+面向多商户、多通道、多支付方式的统一收款、支付路由、订单管理、退款、转账、清算和资金流水场景，支持直连API通道收款、个人免签收款、第三方码牌商户收款。
+
 
 
 ## ⚙️ 工具特性

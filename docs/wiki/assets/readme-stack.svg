@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="32" viewBox="0 0 640 32" role="img" aria-labelledby="title desc">
+  <title id="title">MPAY 技术栈与最低版本</title>
+  <desc id="desc">ThinkPHP 8、Layui 2、PHP 8.2 及以上、MySQL 5.7.9 及以上、易支付 V1。</desc>
+  <g font-family="Arial, sans-serif" font-size="12" font-weight="600" text-anchor="middle">
+    <rect x="0.5" y="0.5" width="123" height="31" rx="7" fill="#edf9f5" stroke="#b8e4d6"/>
+    <text x="62" y="21" fill="#087f63">ThinkPHP 8</text>
+    <rect x="132.5" y="0.5" width="111" height="31" rx="7" fill="#eaf9f8" stroke="#b2e4df"/>
+    <text x="188" y="21" fill="#008577">Layui 2</text>
+    <rect x="252.5" y="0.5" width="119" height="31" rx="7" fill="#f1f2fb" stroke="#d6daf0"/>
+    <text x="312" y="21" fill="#565b93">PHP 8.2+</text>
+    <rect x="380.5" y="0.5" width="143" height="31" rx="7" fill="#edf6fc" stroke="#bfd9eb"/>
+    <text x="452" y="21" fill="#286789">MySQL 5.7.9+</text>
+    <rect x="532.5" y="0.5" width="107" height="31" rx="7" fill="#fff7e9" stroke="#efd5a6"/>
+    <text x="586" y="21" fill="#96641b">ePay V1</text>
+  </g>
+</svg>

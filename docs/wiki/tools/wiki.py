@@ -129,9 +129,14 @@ def check() -> list[Path]:
                 parts = urlsplit(match.group(2))
                 if parts.scheme or parts.netloc:
                     continue
-                target = (path.parent / unquote(parts.path)).resolve()
+                # A README table of contents may target its own explicit anchor.
+                # Empty paths refer to the current file, not its parent directory.
+                target = (path.parent / unquote(parts.path)).resolve() if parts.path else path
                 if target not in allowed or not target.is_file():
                     raise ValueError(f'{path}: missing or non-public target {match.group(2)}')
+                if parts.fragment and target.suffix == '.md':
+                    if unquote(parts.fragment) not in anchors(target.read_text(encoding='utf-8')):
+                        raise ValueError(f'{path}: missing heading anchor {match.group(2)}')
     return public
 
 

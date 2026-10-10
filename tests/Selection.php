@@ -12,6 +12,7 @@ final class TestSelection
         'unit/installation.php' => 'p2',
         'unit/admin_ui.php' => 'p2',
         'unit/catalog_numbering.php' => 'p2',
+        'unit/worker_commands.php' => 'p2',
         'integration/redesign.php' => 'p2',
         'integration/numbering.php' => 'p2',
         'integration/default_routing.php' => 'p2',

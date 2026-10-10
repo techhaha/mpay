@@ -9,7 +9,7 @@ Type=simple
 User=mpay
 Group=mpay
 WorkingDirectory=/srv/mpay-v1/app
-ExecStart=/www/server/php/82/bin/php /srv/mpay-v1/app/think payment:%i --max-seconds=3600
+ExecStart=/www/server/php/82/bin/php /srv/mpay-v1/app/think payment:%i
 Restart=always
 RestartSec=5
 KillSignal=SIGTERM

@@ -20,7 +20,7 @@ final class PaymentWatchCommand extends Command
             ->setDescription('按账号采集账单及码牌流水；与通知/维护入口分别守护')
             ->addOption('once', null, Option::VALUE_NONE, '执行一批到期账号后退出')
             ->addOption('limit', null, Option::VALUE_REQUIRED, '单轮最多处理账号/延后记录数（1～1000）', '100')
-            ->addOption('max-seconds', null, Option::VALUE_REQUIRED, '常驻正常轮换期限（60～86400 秒），守护须配置自动续启', '3600');
+            ->addOption('max-seconds', null, Option::VALUE_REQUIRED, '可选运行期限（60～86400 秒）；不指定则持续运行，到期后由守护续启');
     }
 
     /** 已分类的账号故障不会结束整批；程序或数据库错误非零退出，持久游标和租约承担重启恢复。 */
@@ -32,7 +32,8 @@ final class PaymentWatchCommand extends Command
         try {
             $once = (bool) $input->getOption('once');
             $limit = $this->integerOption($input, 'limit', 1, 1000);
-            $maximum = $this->integerOption($input, 'max-seconds', 60, 86400);
+            // 未指定期限时持续运行；仅显式参数启用轮次之间的正常退出，不中断正在采集的批次。
+            $maximum = $input->getOption('max-seconds') === null ? null : $this->integerOption($input, 'max-seconds', 60, 86400);
             $control->acquire($this->app->getRuntimePath(), 'watch');
             $graceful = $control->install();
             $output->writeln('采集入口已启动；退出恢复：' . ($graceful ? '信号平滑退出及租约恢复' : '外部守护及租约恢复'));
@@ -41,7 +42,7 @@ final class PaymentWatchCommand extends Command
             $processed = 0;
             $counts = ['deferred' => 0, 'completed' => 0, 'retry' => 0, 'lease_lost' => 0];
             do {
-                if ($control->stopping() || (!$once && (hrtime(true) - $started) / 1000000000 >= $maximum)) {
+                if ($control->stopping() || (!$once && $maximum !== null && (hrtime(true) - $started) / 1000000000 >= $maximum)) {
                     break;
                 }
                 $control->heartbeat($this->app->getRuntimePath(), 'watch', $owner, true);

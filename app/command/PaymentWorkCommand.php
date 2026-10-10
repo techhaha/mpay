@@ -22,7 +22,7 @@ final class PaymentWorkCommand extends Command
         $this->setName('payment:work')->setDescription('持续派发业务通知并轮换处理订单过期、匹配、恢复和运行文件清理')
             ->addOption('once', null, Option::VALUE_NONE, '只执行有界批次，不常驻')
             ->addOption('limit', null, Option::VALUE_REQUIRED, '单次批次最多轮数（1～1000），每轮一条通知及一个小维护阶段', '100')
-            ->addOption('max-seconds', null, Option::VALUE_REQUIRED, '常驻轮换期限（60～86400 秒），到期退出由守护续启', '3600');
+            ->addOption('max-seconds', null, Option::VALUE_REQUIRED, '可选运行期限（60～86400 秒）；不指定则持续运行，到期后由守护续启');
     }
 
     /** 数据库/程序故障非零退出；网络失败由派发服务记录重试，不吞异常后无限空转。 */
@@ -34,7 +34,8 @@ final class PaymentWorkCommand extends Command
         try {
             $once = (bool) $input->getOption('once');
             $limit = $this->integerOption($input, 'limit', 1, 1000);
-            $maximum = $this->integerOption($input, 'max-seconds', 60, 86400);
+            // 默认持续处理通知；显式期限只在两轮之间检查，当前通知及维护回写完成后才退出。
+            $maximum = $input->getOption('max-seconds') === null ? null : $this->integerOption($input, 'max-seconds', 60, 86400);
             $control->acquire($this->app->getRuntimePath(), 'work');
             $graceful = $control->install();
             $output->writeln('通知/维护入口已启动；退出恢复：' . ($graceful ? '信号平滑退出及租约恢复' : '外部守护及租约恢复'));
@@ -46,7 +47,7 @@ final class PaymentWorkCommand extends Command
             $phases = ['expire', 'execution', 'release'];
             while (!$control->stopping() && (!$once || $round < $limit)) {
                 $elapsed = (hrtime(true) - $started) / 1000000000;
-                if ($elapsed >= $maximum) { break; }
+                if ($maximum !== null && $elapsed >= $maximum) { break; }
                 $control->heartbeat($this->app->getRuntimePath(), 'work', $owner, true); $heartbeat = true;
                 // 一条通知后轮换一个维护阶段；不先清空全部账务或历史记录才发送业务通知。
                 $result = $dispatcher->dispatchOne($owner);

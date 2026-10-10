@@ -5,10 +5,10 @@
 
 [program:mpay-v1-work]
 directory=%(ENV_MPAY_V1_ROOT)s
-command="%(ENV_MPAY_PHP_BIN)s" "%(ENV_MPAY_V1_ROOT)s/think" payment:work --max-seconds=3600
+command="%(ENV_MPAY_PHP_BIN)s" "%(ENV_MPAY_V1_ROOT)s/think" payment:work
 numprocs=1
 autostart=true
-; 命令定期以 0 正常轮换，需 true 才会续启；启动持续失败仍受 startretries 限制。
+; 命令默认持续运行；进程退出后自动恢复，启动持续失败仍受 startretries 限制。
 autorestart=true
 startsecs=3
 startretries=3
@@ -24,7 +24,7 @@ stdout_logfile_backups=3
 
 [program:mpay-v1-watch]
 directory=%(ENV_MPAY_V1_ROOT)s
-command="%(ENV_MPAY_PHP_BIN)s" "%(ENV_MPAY_V1_ROOT)s/think" payment:watch --max-seconds=3600
+command="%(ENV_MPAY_PHP_BIN)s" "%(ENV_MPAY_V1_ROOT)s/think" payment:watch
 numprocs=1
 autostart=true
 autorestart=true

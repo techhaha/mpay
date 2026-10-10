@@ -1,0 +1,35 @@
+; MPAY V1 独立 PHP-FPM 主配置，不能直接覆盖宝塔的共享 php-fpm.conf。
+; 显式 --fpm-config 加载本文件，只有本应用一个 pool。替换用户、Nginx 组与绝对路径。
+[global]
+pid = /srv/mpay-v1/run/fpm.pid
+error_log = /srv/mpay-v1/logs/fpm-error.log
+daemonize = no
+
+[mpay-v1]
+user = mpay
+group = mpay
+listen = /srv/mpay-v1/run/fpm.sock
+listen.owner = mpay
+listen.group = www
+listen.mode = 0660
+listen.backlog = 128
+; 工程初值，容量未实测；不能把八个子进程当作已承诺的吞吐量。
+pm = ondemand
+pm.max_children = 8
+pm.process_idle_timeout = 10s
+pm.max_requests = 500
+chdir = /srv/mpay-v1/app
+clear_env = yes
+catch_workers_output = yes
+security.limit_extensions = .php
+request_terminate_timeout = 60s
+php_admin_flag[display_errors] = off
+php_admin_flag[log_errors] = on
+php_admin_value[error_log] = /srv/mpay-v1/logs/php-error.log
+php_admin_value[date.timezone] = Asia/Shanghai
+php_admin_value[memory_limit] = 256M
+php_admin_value[max_execution_time] = 50
+php_admin_value[upload_max_filesize] = 2M
+php_admin_value[post_max_size] = 3M
+php_admin_value[upload_tmp_dir] = /srv/mpay-v1/state/upload-tmp
+; 应用使用 ThinkPHP Session 驱动；此处不另建原生 PHP Session 或更改应用的 file 驱动。

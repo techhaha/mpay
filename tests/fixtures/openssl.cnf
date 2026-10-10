@@ -1,0 +1,4 @@
+# 仅供隔离 RSA 夹具生成；不依赖本机 OpenSSL 安装目录，也不改变运行环境配置。
+[req]
+distinguished_name = test_dn
+[test_dn]

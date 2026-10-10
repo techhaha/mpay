@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MPAY 安装命令生成助手</title>
+<style>
+:root{font:16px/1.7 system-ui,sans-serif;color:#28333e;background:#f6f7f9}body{margin:0}main{max-width:900px;margin:40px auto;padding:0 22px}section{background:white;border:1px solid #e2e6e9;border-radius:8px;padding:24px;margin:20px 0}h1{font-size:28px}h2{font-size:19px;margin-top:0}label{display:block;margin:16px 0 4px;font-weight:600}input,textarea{box-sizing:border-box;width:100%;padding:11px;border:1px solid #ccd4da;border-radius:4px;font:inherit}textarea{font:13px/1.7 ui-monospace,monospace;min-height:90px;background:#fafbfc;resize:vertical}button,a.download{display:inline-block;border:0;border-radius:4px;background:#008577;color:white;padding:10px 17px;font:inherit;cursor:pointer;text-decoration:none;margin:10px 8px 0 0}small,.hint{color:#64717d;font-size:14px}.error{color:#b32b2b}output{display:block}code{background:#edf1f3;padding:2px 5px}.row{margin:20px 0}.status{min-height:24px}input:focus,textarea:focus,button:focus-visible{outline:2px solid #008577;outline-offset:2px}
+</style>
+<main>
+<h1>MPAY 安装命令生成助手</h1>
+<p>填写一次路径，生成可以复制的完整命令。此页面可以下载后离线打开，不连接服务器，不执行命令，也不需要填写密码或 KEY。</p>
+<section>
+<h2>1. 从你的服务器复制这三项</h2>
+<form id="settings">
+<label for="site">MPAY 网站域名</label><input id="site" name="site" value="pay.example.com" required><small>只填写域名，例如 pay.example.com；不带 https:// 和页面路径。</small>
+<label for="root">程序目录</label><input id="root" name="root" value="/www/wwwroot/pay.example.com" required><small>包含 think、app、public 等文件的目录，不要填到 public 里面。</small>
+<label for="php">PHP 命令行文件</label><input id="php" name="php" value="/www/server/php/82/bin/php" required><small>请确认这是你选择的 PHP 8.2 或更高版本。示例路径中的 82 不是强制要求。</small>
+<button type="submit">生成我的命令</button><p id="error" class="error" role="alert"></p>
+</form>
+</section>
+<section hidden id="results">
+<h2>2. 按教程复制使用</h2>
+<p class="hint">下面的命令包含你填写的真实路径。先完成网页安装，再添加后台任务。不要把整页所有命令一起粘贴执行。</p>
+<div id="blocks"></div>
+<h2>3. 保存一份操作清单</h2><p>清单仅包含域名和路径，不包含凭证。重新换目录或 PHP 后，请重新生成。</p>
+<button type="button" id="download">下载我的命令清单</button>
+<p class="status" id="status" role="status"></p>
+</section>
+<section>
+<h2>可选：生成手机通知密钥</h2>
+<p>配置手机监听时使用。生成后，把同一个值分别复制到 MPAY 通道的“通知密钥”和转发工具的 Secret。不要把它当作应用 KEY 或管理员密码。</p>
+<label for="notification-secret">本次生成的通知密钥</label><input id="notification-secret" readonly autocomplete="off" placeholder="点击下方按钮生成">
+<button type="button" id="generate-secret">生成新的通知密钥</button><button type="button" id="copy-secret">复制通知密钥</button>
+<p class="hint">使用浏览器安全随机数生成，只保留在当前页面，不上传、不写入命令清单；刷新后不保留。已有通道不要随意重新生成替换，修改时要同步通知工具。</p>
+<p id="secret-status" role="status"></p>
+</section>
+</main>
+<script>
+'use strict';
+// Standalone documentation helper. Never execute a command or send these inputs over the network.
+const form=document.querySelector('#settings'), results=document.querySelector('#results');
+let blocks=[];
+const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
+form.addEventListener('submit',event=>{
+ event.preventDefault();
+ const domain=form.elements.site.value.trim().toLowerCase();
+ const root=form.elements.root.value.trim().replace(/\/+$/,''), php=form.elements.php.value.trim();
+ const safePath=value=>/^\/[a-zA-Z0-9_./-]+$/.test(value)&&!value.split('/').includes('..')&&!value.split('/').includes('.');
+ const labels=domain.split('.');
+ const validDomain=labels.length>=2&&domain.length<=253&&labels.every(label=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
+ const error=document.querySelector('#error');error.textContent='';results.hidden=true;
+ if(!validDomain){error.textContent='域名格式不正确，请从网站设置复制域名，不包含协议、端口或路径。';return;}
+ if(!safePath(root)||!safePath(php)){error.textContent='请使用完整服务器路径，只包含字母、数字、下划线、短横线、点和斜线。不要填写相对路径或包含空格的路径。';return;}
+ if(root.endsWith('/public')){error.textContent='程序目录应是 public 的上一级，请复制含有 think 文件的目录。';return;}
+ blocks=[
+  ['网页安装地址','在浏览器地址栏粘贴。先确保网站域名与 HTTPS 已配置。','https://'+domain+'/install'],
+  ['网站运行目录','在网站设置中的“运行目录”选择 public；完整路径应与下面一致。',root+'/public'],
+  ['检查命令行 PHP','在服务器终端执行，查看第一行 PHP 版本。',quote(php)+' -v'],
+  ['检查 MPAY 环境','在服务器终端执行；阅读输出，不把命令退出当作实际收款通过。',quote(php)+' '+quote(root+'/think')+' system:doctor'],
+  ['任务一：流水采集','名称可填 MPAY 流水采集。把这一行粘贴到进程守护的启动命令；工作目录使用下面的程序目录。',quote(php)+' '+quote(root+'/think')+' payment:watch --max-seconds=3600'],
+  ['任务二：通知与维护','名称可填 MPAY 通知与维护。启动命令如下；与任务一分开添加，开启退出后自动重启。',quote(php)+' '+quote(root+'/think')+' payment:work --max-seconds=3600'],
+  ['两个任务的工作目录','粘贴到进程守护的运行目录／工作目录字段。',root]
+ ];
+ const container=document.querySelector('#blocks');container.replaceChildren();
+ blocks.forEach(([title,hint,value])=>{
+  const row=document.createElement('div');row.className='row';
+  const heading=document.createElement('h3');heading.textContent=title;
+  const description=document.createElement('p');description.className='hint';description.textContent=hint;
+  const input=document.createElement('textarea');input.readOnly=true;input.value=value;input.setAttribute('aria-label',title);
+  const copy=document.createElement('button');copy.type='button';copy.textContent='复制';
+  copy.addEventListener('click',async()=>{
+   try{await navigator.clipboard.writeText(value);document.querySelector('#status').textContent='已复制：'+title;}
+   catch{input.focus();input.select();document.querySelector('#status').textContent='浏览器未开放剪贴板，内容已选中，请按 Ctrl+C 复制。';}
+  });
+  row.append(heading,description,input,copy);container.append(row);
+ });
+ document.querySelector('#status').textContent='命令已生成，请按教程逐项使用。';results.hidden=false;
+});
+document.querySelector('#download').addEventListener('click',()=>{
+ const text='MPAY 操作清单\n\n'+blocks.map(([title,hint,value])=>title+'\n'+hint+'\n'+value).join('\n\n');
+ const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'}));
+ const link=document.createElement('a');link.href=url;link.download='mpay-commands.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+});
+document.querySelector('#generate-secret').addEventListener('click',()=>{
+ const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);
+ document.querySelector('#notification-secret').value=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');
+ document.querySelector('#secret-status').textContent='已生成，请复制到两处对应字段。';
+});
+document.querySelector('#copy-secret').addEventListener('click',async()=>{
+ const input=document.querySelector('#notification-secret');
+ if(!input.value){document.querySelector('#secret-status').textContent='请先生成通知密钥。';return;}
+ try{await navigator.clipboard.writeText(input.value);document.querySelector('#secret-status').textContent='通知密钥已复制。';}
+ catch{input.focus();input.select();document.querySelector('#secret-status').textContent='内容已选中，请按 Ctrl+C 复制。';}
+});
+</script>
+</html>

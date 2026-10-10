@@ -1,0 +1,48 @@
+# 隔离 HTTP 开发站模板，放入 Nginx http 上下文；生产使用同目录 HTTPS 模板。
+# 替换域名、public 根目录及 MPAY 专属 socket；同一实例可列出多个域名，不在应用中固定 site_url。
+map $request_uri $mpay_v1_path_info {
+    ~^([^?]*) $1;
+}
+
+server {
+    listen 127.0.0.1:18083;
+    server_name pay.example.com;
+    root /srv/mpay-v1/app/public;
+    index index.php;
+    # 为 2 MiB 图片及 multipart 边界留空间；应用仍执行 2 MiB + 64 KiB 的上传请求上限。
+    client_max_body_size 3m;
+    autoindex off;
+    # 不记录 query/body/Cookie：易支付查询参数可能携带 KEY 或签名材料。
+    access_log off;
+    if (-f /srv/mpay-v1/run/maintenance.flag) { return 503; }
+
+    location ~ /\. { deny all; }
+
+    # 上传目录只允许登记图片的静态后缀，不把上传内容交给 PHP，也不作为路由兜底。
+    location ~* ^/storage/.+\.(?:png|jpe?g|webp)$ {
+        limit_except GET HEAD { deny all; }
+        disable_symlinks on;
+        add_header X-Content-Type-Options nosniff always;
+        try_files $uri =404;
+    }
+    location /storage/ { return 404; }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+    # 只有固定前端控制器交给 PHP；PATH_INFO 保留原业务路径，避免重写后全部命中首页。
+    location = /index.php {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+        fastcgi_param PATH_INFO $mpay_v1_path_info;
+        fastcgi_read_timeout 65s;
+        fastcgi_pass unix:/srv/mpay-v1/run/fpm.sock;
+    }
+    # 易支付 .php 是协议路径，实际仍由显式 ThinkPHP 路由处理，不能当作任意磁盘脚本执行。
+    location ~ ^/(submit|mapi|api)\.php$ {
+        rewrite ^ /index.php last;
+    }
+    location ~* \.php(?:/|$) {
+        return 404;
+    }
+}

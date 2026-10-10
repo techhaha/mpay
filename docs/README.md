@@ -1,0 +1,16 @@
+# MPAY 文档
+
+公开使用手册、接口说明和开发指南统一维护在 [Wiki 源文件](wiki/Home.md)。
+
+| 阅读目标 | 入口 |
+| --- | --- |
+| 不熟悉服务器和接入概念 | [新手准备](wiki/新手-准备资料与名词.md) · [宝塔建站](wiki/新手-宝塔建站准备.md) · [复制命令助手](wiki/新手-复制命令助手.md) |
+| 首次部署和开始收款 | [安装](wiki/V1-03-安装与环境要求.md) · [第一笔收款](wiki/V1-04-完成第一笔收款.md) |
+| 应用、通道和路由 | [应用](wiki/V1-05-应用与接入凭证.md) · [通道](wiki/V1-06-收款通道与支付方式.md) · [路由](wiki/V1-08-默认路由与轮询策略.md) |
+| 接入业务网站 | [接入指南](wiki/V1-15-业务网站接入.md) · [接口参考](wiki/V1-16-易支付V1接口参考.md) |
+| 部署和维护 | [后台任务](wiki/V1-18-部署与后台任务.md) · [备份恢复](wiki/V1-19-备份恢复与域名迁移.md) |
+| 二次开发 | [目录结构](wiki/V1-21-开发环境与目录结构.md) · [插件开发](wiki/V1-23-支付插件开发.md) · [字段规则](wiki/V1-24-config-schema字段规则.md) |
+
+在线文档：[Gitee Wiki](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub Wiki](https://github.com/techhaha/mpay/wiki)。
+
+公开正文的唯一维护源为 docs/wiki；同步方法见 [Wiki 工具说明](wiki/tools/README.md)。设计讨论、实现计划、交接和环境验证记录仍保存在 docs 的维护资料中，与面向用户的手册分开。

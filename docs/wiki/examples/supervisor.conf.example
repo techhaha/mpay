@@ -1,0 +1,41 @@
+; MPAY V1 专属程序配置。将此文件安装到独立 Supervisor 配置的 include 目录前先替换/设置变量。
+; Supervisor >= 3.2；启动 supervisord 的环境需有 MPAY_V1_ROOT、MPAY_PHP_BIN、MPAY_LOG_DIR。
+; 以应用专属用户运行 Supervisor；未设置 user，不尝试切换或接管其他应用身份。
+; pcntl 可选；没有信号处理时使用外部守护终止与数据库租约恢复。路径与日志目录必须预先建立且不位于 public。
+
+[program:mpay-v1-work]
+directory=%(ENV_MPAY_V1_ROOT)s
+command="%(ENV_MPAY_PHP_BIN)s" "%(ENV_MPAY_V1_ROOT)s/think" payment:work --max-seconds=3600
+numprocs=1
+autostart=true
+; 命令定期以 0 正常轮换，需 true 才会续启；启动持续失败仍受 startretries 限制。
+autorestart=true
+startsecs=3
+startretries=3
+stopsignal=TERM
+stopwaitsecs=120
+stopasgroup=true
+killasgroup=true
+umask=0077
+redirect_stderr=true
+stdout_logfile=%(ENV_MPAY_LOG_DIR)s/work-worker.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=3
+
+[program:mpay-v1-watch]
+directory=%(ENV_MPAY_V1_ROOT)s
+command="%(ENV_MPAY_PHP_BIN)s" "%(ENV_MPAY_V1_ROOT)s/think" payment:watch --max-seconds=3600
+numprocs=1
+autostart=true
+autorestart=true
+startsecs=3
+startretries=3
+stopsignal=TERM
+stopwaitsecs=120
+stopasgroup=true
+killasgroup=true
+umask=0077
+redirect_stderr=true
+stdout_logfile=%(ENV_MPAY_LOG_DIR)s/watch-worker.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=3

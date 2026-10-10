@@ -1,0 +1,13 @@
+{extend name="layouts/admin" /}
+{block name="content"}
+<section class="admin-intro"><h1>应用管理</h1><div class="admin-actions"><button id="apps-sign" type="button" class="layui-btn layui-btn-primary">签名工具</button><button id="apps-new" type="button" class="layui-btn">新增应用</button></div></section>
+<div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+<section class="layui-card"><div class="layui-card-body">
+<form id="apps-filters" class="layui-form admin-filters">
+<label>名称 / PID<input name="search" class="layui-input" placeholder="搜索应用名称或 PID" maxlength="128"></label>
+<label>接入状态<select name="status"><option value="">全部状态</option><option value="1">已启用</option><option value="0">已停用</option></select></label>
+<div class="admin-filter-buttons"><button type="submit" class="layui-btn">查询</button><button type="reset" class="layui-btn layui-btn-primary">重置</button><button id="apps-refresh" type="button" class="layui-btn layui-btn-primary">刷新</button></div>
+</form></div></section>
+<div id="apps-list" class="admin-app-grid" aria-live="polite"></div>
+{/block}
+{block name="scripts"}<script src="/assets/js/admin-applications.js?v=20261009route-cards"></script>{/block}

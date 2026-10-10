@@ -1,0 +1,10 @@
+{extend name="layouts/admin" /}
+{block name="content"}
+<section class="admin-intro"><h1>插件管理</h1><div class="admin-actions"><button id="plugin-refresh" class="layui-btn" type="button"><i class="layui-icon layui-icon-refresh" aria-hidden="true"></i>刷新插件列表</button><button class="admin-help-button" type="button" data-help="扫描本地插件，将名称、版本、支持方式和配置字段同步到数据库。保留启停选择与已填写的配置。">ⓘ</button></div></section>
+<div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+<section class="layui-card"><div class="layui-card-body">
+<div class="admin-catalog-summary"><span>已安装 <b class="admin-count-badge" id="plugin-count">—</b></span><span>已启用 <b class="admin-count-badge" id="plugin-enabled-count">—</b></span></div>
+<form id="plugin-filter" class="layui-form admin-filters admin-filter-panel"><label>插件名称 / 编码<input class="layui-input" id="plugin-search" placeholder="搜索插件"></label><label>状态<select id="plugin-status"><option value="">全部状态</option><option value="1">已启用</option><option value="0">已停用</option></select></label><div class="admin-filter-buttons"><button type="submit" class="layui-btn">查询</button><button type="reset" class="layui-btn layui-btn-primary">重置</button></div></form>
+<table id="plugin-table" lay-filter="plugin-table"></table>
+</div></section>
+{/block}

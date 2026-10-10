@@ -1,0 +1,84 @@
+/* MPAY 公共色板：安装、登录、后台和收银台共用；平台品牌素材保持原色。
+ * 明亮主色用于标记，深色实心按钮单独配白字；侧栏沿用原 V1 深蓝灰底色。
+ * 此文件在 Layui 之后、页面样式之前加载，不改组件布局、动画或交互。
+ */
+:root {
+    color-scheme: light;
+    --mpay-brand: #00bb9e;
+    --mpay-primary: #16baaa;
+    --mpay-primary-hover: #12ac9d;
+    --mpay-primary-dark: #087e73;
+    --mpay-on-primary: #05352f;
+    --mpay-action: #008577;
+    --mpay-action-hover: #00786b;
+    --mpay-on-action: #ffffff;
+    --mpay-sidebar: #28333e;
+    --mpay-sidebar-hover: #34424f;
+    --mpay-sidebar-text: #d3d3d3;
+    --mpay-sidebar-muted: #b8c1cc;
+    --mpay-sidebar-line: #ffffff26;
+    --mpay-primary-soft: #e9faf7;
+    --mpay-primary-border: #abe6dc;
+    --mpay-focus-ring: #16baaa24;
+    --mpay-text: #303640;
+    --mpay-heading: #202731;
+    --mpay-muted: #667085;
+    --mpay-placeholder: #8b95a5;
+    --mpay-disabled: #a3acb9;
+    --mpay-border: #e5e9ef;
+    --mpay-input-border: #d9dfe7;
+    --mpay-surface: #fff;
+    --mpay-background: #f7f8fa;
+    --mpay-surface-muted: #f8fafc;
+    --mpay-neutral-soft: #f0f2f5;
+    --mpay-blue: #1e9fff;
+    --mpay-on-blue: #ffffff;
+    --mpay-link: #126fc0;
+    --mpay-info-soft: #edf6ff;
+    --mpay-info-border: #c7e4ff;
+    --mpay-success: #16b777;
+    --mpay-success-text: #128050;
+    --mpay-success-soft: #eafaf1;
+    --mpay-success-border: #bcebd3;
+    --mpay-warning: #ffb800;
+    --mpay-on-warning: #513900;
+    --mpay-warning-text: #956000;
+    --mpay-warning-soft: #fff7e0;
+    --mpay-warning-border: #f4dda2;
+    --mpay-danger: #d83932;
+    --mpay-danger-text: #c23129;
+    --mpay-danger-soft: #fff0ee;
+    --mpay-danger-border: #f7ccc7;
+    --mpay-shadow: 0 2px 8px #20273105;
+    --mpay-shadow-hover: 0 3px 12px #20273108;
+}
+
+/* 只给默认按钮设主色；官方 primary/normal/warm/danger 和颜色类保留各自语义。 */
+.layui-btn {border-radius:4px}
+.layui-btn:where(:not(.layui-btn-primary):not(.layui-btn-normal):not(.layui-btn-warm):not(.layui-btn-danger):not(.layui-btn-disabled):not([class*="layui-bg-"])) {
+    background:var(--mpay-action);color:var(--mpay-on-action);font-weight:500;
+}
+.layui-btn:where(:not(.layui-btn-primary):not(.layui-btn-normal):not(.layui-btn-warm):not(.layui-btn-danger):not(.layui-btn-disabled):not([class*="layui-bg-"])):hover {
+    background:var(--mpay-action-hover);color:var(--mpay-on-action);opacity:1;
+}
+.layui-btn-primary {background:var(--mpay-surface);color:var(--mpay-text);border-color:var(--mpay-input-border)}
+.layui-btn-primary:hover {color:var(--mpay-primary-dark);border-color:var(--mpay-primary);background:var(--mpay-primary-soft);opacity:1}
+.layui-btn-normal {background:var(--mpay-link);color:var(--mpay-on-blue)}
+.layui-btn-normal:hover {color:var(--mpay-on-blue)}
+.layui-btn-warm {background:var(--mpay-warning);color:var(--mpay-on-warning)}
+.layui-btn-warm:hover {color:var(--mpay-on-warning)}
+.layui-btn-danger {background:var(--mpay-danger);color:#fff}
+/* disabled 必须盖过默认实心及描边的悬停效果，避免误示为可执行。 */
+.layui-btn:disabled,.layui-btn-disabled,.layui-btn:disabled:hover,.layui-btn-disabled:hover {
+    background:var(--mpay-neutral-soft)!important;color:var(--mpay-disabled)!important;border-color:var(--mpay-border)!important;cursor:not-allowed;opacity:1;
+}
+.layui-input,.layui-textarea,.layui-select {border-color:var(--mpay-input-border);color:var(--mpay-text)}
+.layui-input::placeholder,.layui-textarea::placeholder {color:var(--mpay-placeholder)}
+.layui-input:focus,.layui-textarea:focus {border-color:var(--mpay-primary)!important;box-shadow:0 0 0 2px var(--mpay-focus-ring)}
+.layui-form-radioed>i,.layui-form-radio:hover>i {color:var(--mpay-primary)}
+.layui-form-checked[lay-skin=primary]>i,.layui-form-onswitch {border-color:var(--mpay-primary)!important;background:var(--mpay-primary);color:var(--mpay-on-primary)}
+.layui-form-select dl dd.layui-this,.layui-select-panel-wrap dd.layui-this {background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
+.layui-form-select dl dd:hover,.layui-select-panel-wrap dd:hover {background:var(--mpay-surface-muted)}
+.layui-laypage-curr .layui-laypage-em {background:var(--mpay-primary)}
+.layui-laypage .layui-laypage-curr em {color:var(--mpay-on-primary)}
+:focus-visible {outline:2px solid var(--mpay-primary-dark);outline-offset:3px}

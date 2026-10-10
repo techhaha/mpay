@@ -1,0 +1,57 @@
+{extend name="layouts/base" /}
+{block name="body_class"}auth-page install-page{/block}
+{block name="styles"}<link rel="stylesheet" href="/assets/css/install.css?v=20261010classic">{/block}
+{block name="content"}
+<section class="install-card layui-card" id="installer">
+    <header class="auth-brand">
+        <img class="mpay-logo" src="/assets/brand/mpay-logo.svg" alt="MPAY 码支付" width="180" height="45">
+        <h1>安装 MPAY</h1><p>让个人收款更加轻松便捷</p>
+    </header>
+    <ol class="install-steps" aria-label="安装步骤">
+        <li data-step-label="0" aria-current="step"><span>1</span>环境检查</li>
+        <li data-step-label="1"><span>2</span>连接数据库</li>
+        <li data-step-label="2"><span>3</span>初始化系统</li>
+        <li data-step-label="3"><span>4</span>完成安装</li>
+    </ol>
+    <div id="install-feedback" class="install-feedback" role="status" aria-live="polite">正在检查安装环境…</div>
+    <section data-step="0" aria-labelledby="install-environment-title">
+        <h2 id="install-environment-title">检查运行环境</h2><p class="mpay-help">系统将检查 PHP 扩展和目录权限。所有项目通过后即可继续。</p>
+        <table class="layui-table install-checks"><thead><tr><th scope="col">检查项目</th><th scope="col">当前状态</th></tr></thead><tbody id="install-checks"></tbody></table>
+        <div class="install-actions"><button type="button" id="install-recheck" class="layui-btn layui-btn-primary">重新检查</button><button type="button" id="install-next" class="layui-btn" disabled>下一步</button></div>
+    </section>
+    <form data-step="1" id="install-database" hidden>
+        <h2>连接数据库</h2><p class="mpay-help">请填写已创建的空数据库信息。安装程序将在该数据库中建立 MPAY 所需的数据表。</p>
+        <fieldset>
+            <div class="install-grid">
+                <label class="install-wide">数据库地址<input class="layui-input" name="host" value="127.0.0.1" maxlength="253" autocomplete="off" placeholder="服务器 IP 或主机名" required></label>
+                <label>端口<input class="layui-input" name="port" type="number" value="3306" min="1" max="65535" step="1" required></label>
+                <label>数据库名<input class="layui-input" name="name" maxlength="64" pattern="[A-Za-z0-9_-]+" autocomplete="off" required></label>
+                <label>数据库用户名<input class="layui-input" name="user" maxlength="128" autocomplete="off" required></label>
+                <label>数据库密码<input class="layui-input" name="pass" type="password" maxlength="1024" autocomplete="off"></label>
+            </div>
+            <p class="mpay-help">支持 MySQL 5.7.9 及以上版本。数据库需允许站点服务器连接。</p>
+            <div class="install-actions"><button type="button" class="layui-btn layui-btn-primary" data-back="0">上一步</button><button type="submit" class="layui-btn">检查连接并继续</button></div>
+        </fieldset>
+    </form>
+    <form data-step="2" id="install-administrator" hidden>
+        <h2>设置管理员</h2><p class="mpay-help">安装后将自动创建默认应用与收款路由。</p>
+        <fieldset>
+            <div class="install-grid">
+                <label class="install-wide">管理员账号<input class="layui-input" name="username" maxlength="64" autocomplete="username" required></label>
+                <label>管理员密码<input class="layui-input" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required><small>至少 12 个字符，最多 72 字节</small></label>
+                <label>确认密码<input class="layui-input" name="password_confirmation" type="password" minlength="12" maxlength="72" autocomplete="new-password" required></label>
+            </div>
+            <p class="mpay-help">安装完成后，可在后台“应用管理”中查看 PID 和 KEY，并配置收款通道。</p>
+            <div class="install-actions"><button type="button" class="layui-btn layui-btn-primary" data-back="1">上一步</button><button type="submit" class="layui-btn">立即安装</button></div>
+        </fieldset>
+    </form>
+    <section data-step="3" class="install-complete" hidden>
+        <i class="layui-icon layui-icon-ok-circle" aria-hidden="true"></i><h2>安装已完成</h2>
+        <p>默认应用和收款路由已就绪。登录后添加收款通道，再将应用 PID 和 KEY 填入业务网站。</p>
+        <a href="/admin/login" class="layui-btn">进入管理后台</a>
+    </section>
+    <button type="button" id="install-result" class="layui-btn layui-btn-primary" hidden>检查安装结果</button>
+    <noscript><p class="install-feedback">请启用 JavaScript 后完成安装。</p></noscript>
+</section>
+{/block}
+{block name="scripts"}<script src="/assets/js/install.js?v=20261009default-routing"></script>{/block}

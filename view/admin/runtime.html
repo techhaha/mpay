@@ -1,0 +1,12 @@
+{extend name="layouts/admin" /}
+{block name="content"}
+<section class="admin-intro"><h1>运行维护</h1><div class="admin-actions"><a class="layui-btn layui-btn-primary" href="/admin/ingress">通道回调日志</a><button id="runtime-doctor" type="button" class="layui-btn layui-btn-primary">环境诊断</button><button id="runtime-refresh" type="button" class="layui-btn layui-btn-primary">刷新</button></div></section><div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+<div id="runtime-workers" class="admin-status-cards"></div>
+<section class="layui-card"><div class="layui-card-header">采集状态</div><div class="layui-card-body"><form id="runtime-filters" class="layui-form admin-filters admin-filter-panel">
+<label>收款通道<select name="configuration_id"><option value="">全部通道</option></select></label>
+<label>采集状态<select name="status"><option value="">全部状态</option></select></label>
+<div class="admin-filter-buttons"><button type="submit" class="layui-btn">查询</button><button type="reset" class="layui-btn layui-btn-primary">重置</button></div>
+</form><table id="runtime-collections" lay-filter="runtime-collections"></table></div></section>
+<details class="layui-card admin-details"><summary class="layui-card-header">环境与当前记录</summary><div class="layui-card-body"><dl id="runtime-overview" class="admin-facts"></dl></div></details>
+{/block}
+{block name="scripts"}<script src="/assets/js/admin-runtime.js?v=20261009plugin-ownership"></script>{/block}

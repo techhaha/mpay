@@ -1,0 +1,241 @@
+/* 后台布局与业务展示；公共色板与基础组件配色统一由 theme.css 提供。 */
+.admin-setting-form fieldset{border:0;padding:0;margin:0;min-width:0}.admin-settings-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:22px;align-items:start}.admin-settings-grid .admin-setting-form{max-width:none}@media(max-width:1200px){.admin-settings-grid{grid-template-columns:1fr;gap:0}}
+.admin-filters>.admin-all-dates{flex:0 0 auto;align-self:end;padding-bottom:10px}
+.admin-page{background:var(--mpay-background);color:var(--mpay-heading)}:where(.admin-page,.mpay-admin-layer) [class^="admin-"],:where(.admin-page,.mpay-admin-layer) [class*=" admin-"]{box-sizing:border-box}.admin-page [hidden],.mpay-admin-layer [hidden],.admin-login [hidden]{display:none!important}
+.admin-intro{display:flex;justify-content:space-between;align-items:center;gap:18px;margin:0 0 23px}.admin-intro h1{font-size:25px;font-weight:600;margin:0}.admin-intro p{margin:5px 0 0;font-size:12px;color:var(--mpay-muted)}.admin-actions,.admin-inline-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.admin-actions .layui-btn+.layui-btn,.admin-inline-actions .layui-btn+.layui-btn{margin-left:0}.admin-page .layui-btn,.mpay-admin-layer .layui-btn{border-radius:5px;font-size:13px}.admin-page .layui-btn .layui-icon{margin-right:4px}.admin-link{border:0;background:none;padding:0;color:var(--mpay-link);cursor:pointer;font-size:12px}.admin-link:hover{text-decoration:underline}.admin-link.danger{color:var(--mpay-danger-text)}
+.admin-page .layui-card{border:1px solid var(--mpay-border);border-radius:7px;box-shadow:var(--mpay-shadow);margin-bottom:22px}.admin-page .layui-card-header{padding:17px 20px;font-size:15px;font-weight:500;line-height:22px;border-color:var(--mpay-border)}.admin-page .layui-card-body{padding:21px}.admin-page .layui-input,.admin-page .layui-textarea,.mpay-admin-layer .layui-input,.mpay-admin-layer .layui-textarea{border-color:var(--mpay-input-border);border-radius:4px;font-size:13px;color:var(--mpay-text)}.admin-page .layui-form-checked[lay-skin=primary]>i,.mpay-admin-layer .layui-form-checked[lay-skin=primary]>i,.admin-page .layui-form-onswitch,.mpay-admin-layer .layui-form-onswitch{border-color:var(--mpay-primary)!important;background:var(--mpay-primary)}.admin-page .layui-form-radioed>i,.mpay-admin-layer .layui-form-radioed>i{color:var(--mpay-primary-dark)}
+.admin-filters{display:flex;flex-wrap:wrap;gap:14px;align-items:end}.admin-filters>label{flex:1 1 150px;max-width:230px;font-size:12px;color:var(--mpay-muted)}.admin-filters>label>.layui-input,.admin-filters>label>.layui-form-select{margin-top:7px}.admin-filter-buttons{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}.admin-filter-buttons .layui-btn+.layui-btn{margin-left:0}.admin-filters .admin-filter-buttons{margin:0}.admin-filter-panel{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--mpay-border)}.admin-advanced{background:var(--mpay-surface-muted);border-radius:5px;margin-top:14px;padding:15px}.admin-advanced summary{cursor:pointer;font-size:12px;color:var(--mpay-muted)}.admin-advanced[open] summary{margin-bottom:14px}.admin-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}.admin-field{min-width:0}.admin-field>label,.admin-label{display:block;font-size:13px;color:var(--mpay-text);margin:0 0 8px;font-weight:400}.admin-field.full{grid-column:1/-1}.admin-field.is-required>label:first-of-type:before{content:'*';color:var(--mpay-danger);margin-right:4px}.admin-field .layui-textarea{height:80px;min-height:78px}.admin-hint,.admin-help{font-size:12px;color:var(--mpay-muted);line-height:1.8;margin-top:7px}.admin-unit{position:relative}.admin-unit input{padding-right:46px}.admin-unit>span{position:absolute;right:12px;top:10px;font-size:12px;color:var(--mpay-muted)}.admin-help-button{background:none;border:0;display:inline-flex;align-items:center;padding:2px 4px;margin-left:3px;color:var(--mpay-muted);cursor:help;font-size:14px;vertical-align:middle}.admin-help-button:hover,.admin-help-button:focus{color:var(--mpay-primary-dark)}.admin-section-title{font-size:14px;font-weight:600;padding-left:10px;border-left:3px solid var(--mpay-primary);margin:24px 0 16px}.admin-section-title:first-child{margin-top:0}.admin-muted{font-size:12px;color:var(--mpay-muted)}
+.admin-feedback:empty{display:none}.admin-feedback{font-size:13px;line-height:1.8;overflow-wrap:anywhere;border:1px solid var(--mpay-info-border);border-radius:5px;padding:12px 15px;margin:0 0 17px;background:var(--mpay-info-soft);color:var(--mpay-muted)}.admin-feedback[data-tone=error]{background:var(--mpay-danger-soft);border-color:var(--mpay-danger-border);color:var(--mpay-danger-text)}.admin-feedback[data-tone=loading]{background:var(--mpay-surface-muted);color:var(--mpay-muted)}.admin-feedback[data-tone=success]{background:var(--mpay-success-soft);color:var(--mpay-success-text)}.admin-notice{padding:12px 14px;border:1px solid var(--mpay-border);background:var(--mpay-surface-muted);border-radius:5px;font-size:12px;line-height:1.8;margin:0 0 18px;color:var(--mpay-muted)}.admin-notice.warning{background:var(--mpay-warning-soft);border-color:var(--mpay-warning-border);color:var(--mpay-warning-text)}.admin-tag{display:inline-flex;align-items:center;gap:5px;border:0;border-radius:4px;font-size:11px;line-height:19px;padding:2px 8px;white-space:nowrap;background:var(--mpay-neutral-soft);color:var(--mpay-muted)}.admin-tag:before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}.admin-tag.green{background:var(--mpay-success-soft);color:var(--mpay-success-text)}.admin-tag.blue{background:var(--mpay-info-soft);color:var(--mpay-link)}.admin-tag.orange{background:var(--mpay-warning-soft);color:var(--mpay-warning-text)}.admin-tag.red{background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
+.admin-table-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:13px}.admin-table-scroll{overflow:auto}.admin-table-scroll td{overflow-wrap:anywhere}.admin-page .layui-table-view{border-color:var(--mpay-border);border-radius:5px;overflow:hidden}.admin-page .layui-table-header{border-color:var(--mpay-border);background:var(--mpay-surface-muted)}.admin-page .layui-table th{background:var(--mpay-surface-muted);color:var(--mpay-muted);font-weight:400}.admin-page .layui-table td{border-bottom-color:var(--mpay-border);color:var(--mpay-text)}.admin-page .layui-table-cell{font-size:12px}.admin-page .layui-laypage-curr .layui-laypage-em,.mpay-admin-layer .layui-laypage-curr .layui-laypage-em{background:var(--mpay-primary)}.admin-pages{display:flex;justify-content:flex-end;margin-top:12px}.admin-pages:empty{display:none}.admin-row-title{display:block;font-size:13px;color:var(--mpay-heading);font-weight:500}.admin-row-sub{display:block;font-size:11px;line-height:18px;color:var(--mpay-muted)}.admin-money{font:600 14px Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--mpay-heading)}.admin-pay-label{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.admin-pay-label img{width:19px;height:19px;object-fit:contain}.admin-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:210px;gap:14px;color:var(--mpay-muted);text-align:center}.admin-empty>.layui-icon{font-size:35px;color:var(--mpay-disabled)}.admin-empty p{font-size:13px}.admin-facts{display:grid;grid-template-columns:140px minmax(0,1fr);gap:13px 18px;margin:16px 0 24px;font-size:13px}.admin-facts dt{color:var(--mpay-muted)}.admin-facts dd{margin:0;overflow-wrap:anywhere;white-space:pre-wrap;color:var(--mpay-text)}.admin-facts.compact{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}.admin-fact label{display:block;font-size:12px;color:var(--mpay-muted);margin-bottom:7px}.admin-fact p{font-size:13px;overflow-wrap:anywhere}.admin-details summary{padding:12px 0;font-size:13px;color:var(--mpay-muted);cursor:pointer}.admin-code{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.8 Consolas,monospace;padding:13px;border:1px solid var(--mpay-border);background:var(--mpay-surface-muted);border-radius:4px;margin-top:12px}
+.mpay-admin-layer{border-radius:8px!important;overflow:hidden}.mpay-admin-layer .layui-layer-title{height:58px;line-height:58px;background:var(--mpay-surface);border-bottom:1px solid var(--mpay-border);font-size:16px;font-weight:500;color:var(--mpay-heading);padding:0 24px}.mpay-admin-layer .layui-layer-setwin{top:21px}.admin-dialog-body{padding:22px 24px;max-height:calc(100vh - 190px);overflow-y:auto}.admin-dialog-footer{padding:16px 24px;display:flex;justify-content:flex-end;gap:10px;background:var(--mpay-surface);border-top:1px solid var(--mpay-border)}.admin-dialog-footer .layui-btn+.layui-btn{margin-left:0}.mpay-admin-drawer .admin-dialog-body{height:calc(100vh - 129px);max-height:calc(100vh - 129px)}.admin-dialog fieldset{border:0;padding:0;min-width:0}.admin-page .layui-tabs-header,.mpay-admin-layer .layui-tabs-header{display:flex;gap:24px;height:auto;min-height:48px;padding:0 1px;border-color:var(--mpay-border);overflow:auto}.admin-page .layui-tabs-header>li,.mpay-admin-layer .layui-tabs-header>li{padding:0 2px;line-height:46px;white-space:nowrap;font-size:13px}.admin-page .layui-tabs-header .layui-this,.mpay-admin-layer .layui-tabs-header .layui-this{color:var(--mpay-primary-dark)}.admin-page .layui-tabs-header .layui-this:after,.mpay-admin-layer .layui-tabs-header .layui-this:after{border-color:var(--mpay-primary)}.admin-page .layui-tabs-body,.mpay-admin-layer .layui-tabs-body{padding:20px 0 0}.admin-form-static{min-height:38px;padding:8px 12px;background:var(--mpay-surface-muted);border:1px solid var(--mpay-border);border-radius:4px;font-size:13px;color:var(--mpay-muted)}.admin-save-row{border-top:1px solid var(--mpay-border);margin-top:23px;padding-top:18px;display:flex;align-items:center;justify-content:space-between;gap:15px}.admin-secret{font-family:Consolas,monospace;word-break:break-all}.admin-qr-preview{display:block;max-width:220px;max-height:220px;object-fit:contain;border:1px solid var(--mpay-border);margin:12px 0}.admin-upload{padding:18px;border:1px dashed var(--mpay-input-border);background:var(--mpay-surface-muted);border-radius:5px}.admin-keep-secret{margin-top:9px;font-size:12px;color:var(--mpay-muted)}
+.admin-app-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.admin-app-card{border:1px solid var(--mpay-border);background:var(--mpay-surface);border-radius:8px;overflow:hidden}.admin-app-main{padding:22px;cursor:pointer;outline-offset:-3px}.admin-app-heading{display:flex;gap:13px;align-items:center}.admin-app-icon{width:43px;height:43px;border-radius:10px;background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);display:flex;align-items:center;justify-content:center;font-size:21px;flex-shrink:0}.admin-app-name{font-size:17px;font-weight:500;color:var(--mpay-heading);overflow-wrap:anywhere}.admin-app-pid{display:flex;align-items:center;gap:9px;color:var(--mpay-muted);font-size:12px;margin-top:19px}.admin-app-payments{display:flex;gap:12px;align-items:center;min-height:30px;margin-top:19px}.admin-app-foot{border-top:1px solid var(--mpay-border);display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:var(--mpay-surface)}.admin-app-summary{display:flex;align-items:center;gap:14px;margin-bottom:22px}.admin-app-summary h2{font-size:20px;margin-bottom:5px}
+.admin-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;margin-bottom:22px}.admin-metric{border:1px solid var(--mpay-border);background:var(--mpay-surface);border-radius:7px;padding:22px}.admin-metric-title{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--mpay-muted)}.admin-metric strong{display:block;font:550 30px Arial,sans-serif;font-variant-numeric:tabular-nums;color:var(--mpay-heading);margin:17px 0 4px}.admin-metric small{font-size:11px;color:var(--mpay-muted)}.admin-grid-two{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:22px}.admin-grid-equal{display:grid;grid-template-columns:1fr 1fr;gap:22px}.admin-task-row{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:16px 0;border-bottom:1px solid var(--mpay-border)}.admin-task-row:first-child{padding-top:0}.admin-task-row:last-child{border-bottom:0;padding-bottom:0}.admin-task-row h3{font-size:13px;margin:0 0 5px}.admin-task-row small{font-size:11px;color:var(--mpay-muted)}.admin-task-number{font:23px Arial,sans-serif;color:var(--mpay-muted)}.admin-stat-extra{display:flex;gap:24px;flex-wrap:wrap;padding-top:16px;font-size:12px;color:var(--mpay-muted)}.admin-setting-form{max-width:850px}.admin-password-card{max-width:760px}.admin-security-summary{display:flex;align-items:center;gap:14px}.admin-security-summary .admin-avatar{width:45px;height:45px;font-size:20px}.admin-security-summary h2{font-size:17px}.admin-security-summary p{font-size:12px;color:var(--mpay-muted);margin-top:6px}.admin-login{max-width:360px;margin:9vh auto}.admin-login .admin-card{margin-top:26px;border:0;border-radius:7px}.admin-login h1{font-size:21px;text-align:center;margin-bottom:22px}.admin-login .layui-input{height:44px}.admin-submit{width:100%;height:44px;line-height:44px}.admin-login .admin-feedback{margin-top:18px}.admin-member-table .layui-input{min-width:65px;max-width:110px}.admin-member-table td{padding:10px}.admin-member-table .layui-form-select .layui-input{max-width:none}.admin-page footer{font-size:11px;color:var(--mpay-muted);margin-top:20px}.admin-status-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-bottom:22px}.admin-worker-card{padding:22px;border:1px solid var(--mpay-border);background:var(--mpay-surface);border-radius:7px}.admin-worker-card h2{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:16px;margin-bottom:18px}.admin-worker-card p{font-size:12px;line-height:1.9;color:var(--mpay-muted)}
+@media(max-width:1300px){.admin-app-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-grid-two{grid-template-columns:1fr}.admin-filters>label{max-width:none}.admin-metric{padding:19px 17px}.admin-metric strong{font-size:26px}}@media(max-width:960px){.admin-grid-equal{grid-template-columns:1fr}}@media(max-width:620px){.admin-intro{align-items:flex-start}.admin-intro h1{font-size:22px}.admin-intro>.admin-actions{justify-content:flex-end;max-width:52%}.admin-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.admin-app-grid,.admin-status-cards,.admin-form-grid{grid-template-columns:1fr}.admin-field.full{grid-column:auto}.admin-dialog-body{padding:20px 17px}.admin-dialog-footer{padding:14px 17px}.admin-facts{grid-template-columns:1fr;gap:5px}.admin-facts dd{margin-bottom:12px}.admin-filters>label{flex-basis:42%;min-width:0}}
+
+/* 同一语义共用颜色；保留 Layui 组件结构，只调整品牌、对比度和阅读层级。 */
+.admin-page .layui-table-cell,.mpay-admin-layer .layui-table-cell{font-size:13px}
+.admin-page .layui-table th,.mpay-admin-layer .layui-table th{color:var(--mpay-muted)}
+.admin-row-title{font-size:14px;font-weight:600}
+.admin-row-sub,.admin-muted,.admin-hint,.admin-help,.admin-facts dt,.admin-fact label,
+.admin-filters>label,.admin-page footer,.admin-metric-title,.admin-task-row small{color:var(--mpay-muted)}
+.admin-row-sub{font-size:12px}
+.admin-filters>label{font-size:13px}
+.admin-money{font-size:16px;color:var(--mpay-heading)}
+.admin-link{font-size:13px;padding:5px 6px;min-height:30px;border-radius:4px;line-height:20px}
+.admin-link:hover{background:var(--mpay-info-soft);text-decoration:none}
+.admin-inline-actions{flex-wrap:nowrap;gap:5px}
+.admin-page .layui-table-cell .admin-inline-actions{height:100%}
+.admin-tag{height:auto;min-height:24px;font-size:12px;line-height:20px;padding:2px 9px;background:var(--mpay-neutral-soft);color:var(--mpay-text)}
+.admin-tag.green{background:var(--mpay-success-soft);color:var(--mpay-success-text)}
+.admin-tag.blue{background:var(--mpay-info-soft);color:var(--mpay-link)}
+.admin-tag.orange{background:var(--mpay-warning-soft);color:var(--mpay-warning-text)}
+.admin-tag.red{background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
+.admin-reference{font:12px/1.7 Consolas,monospace;color:var(--mpay-muted)}
+a.admin-reference{color:var(--mpay-link)}
+.admin-count-badge{display:inline-flex;min-width:30px;min-height:28px;padding:2px 9px;align-items:center;justify-content:center;border-radius:14px;font-size:15px;font-weight:600;background:var(--mpay-neutral-soft);color:var(--mpay-muted)}
+.admin-count-badge.attention{background:var(--mpay-warning);color:var(--mpay-on-warning)}
+.admin-queue-link{color:inherit;border-radius:5px;padding-right:8px}
+.admin-queue-link:hover{background:var(--mpay-surface-muted)}
+.admin-queue-link .admin-task-number{display:flex;gap:10px;align-items:center}
+.admin-queue-link .layui-icon{font-size:13px;color:var(--mpay-muted)}
+
+
+/* 应用路由按支付方式分卡；局部调整官方 card 排版，不改变表单和弹层组件行为。 */
+.admin-route-mode{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:4px 0 18px;padding:14px 16px;background:var(--mpay-surface-muted);border-radius:6px}
+.admin-route-mode strong{font-size:14px;color:var(--mpay-heading)}
+.admin-route-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;align-items:start}
+.admin-route-grid>.admin-route-card{min-width:0;margin:0;border:1px solid var(--mpay-border);border-radius:8px;box-shadow:none;background:var(--mpay-surface)}
+.admin-route-card .admin-route-card-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;height:auto;line-height:1.6;padding:16px 18px;border-bottom:1px solid var(--mpay-border);background:var(--mpay-surface);border-radius:8px 8px 0 0}
+.admin-route-card-heading .admin-pay-label{font-size:15px;font-weight:600}
+.admin-route-card-heading .admin-pay-label img{width:23px;height:23px}
+.admin-route-card>.admin-route-config{padding:18px}
+.admin-route-summary strong{display:block;font-size:15px;font-weight:500;overflow-wrap:anywhere;margin-bottom:6px}
+.admin-route-summary{margin-bottom:14px}
+.admin-route-binding{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0}
+.admin-route-binding .admin-field>label{margin-bottom:4px}
+.admin-route-preview-area{padding:16px 18px;background:var(--mpay-surface-muted);border-top:1px solid var(--mpay-border);border-radius:0 0 8px 8px}
+.admin-route-preview-controls{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:end}
+.admin-route-preview-area .admin-feedback{margin:12px 0 0;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.admin-route-unavailable{grid-column:1/-1}
+.admin-route-unavailable>.layui-card-body{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px}
+@media(max-width:680px){.admin-route-grid{grid-template-columns:1fr;gap:14px}.admin-route-unavailable{grid-column:auto}.admin-route-mode{padding:12px}.admin-route-card .admin-route-card-heading,.admin-route-card>.admin-route-config,.admin-route-preview-area{padding:14px}.admin-route-preview-controls{gap:8px}}
+.admin-app-card:hover{border-color:var(--mpay-primary-border);box-shadow:var(--mpay-shadow-hover)}
+.admin-app-foot .admin-link:first-child{font-weight:600}
+.admin-details>summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.admin-details>summary::-webkit-details-marker{display:none}
+.admin-details>summary::after{content:'›';font-size:20px;font-weight:400;transform:rotate(90deg);color:var(--mpay-muted)}
+.admin-details[open]>summary::after{transform:rotate(-90deg)}
+.admin-details>summary:hover{background:var(--mpay-surface-muted)}
+
+/* 选择框保持框架的浅色选中/悬停层次；独立面板和表单内面板遵循同一主题。 */
+.admin-page .layui-form-select dl dd.layui-this,.mpay-admin-layer .layui-form-select dl dd.layui-this,
+.admin-page .layui-select-panel-wrap dd.layui-this{background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);font-weight:600}
+.admin-page .layui-form-select dl dd:hover,.mpay-admin-layer .layui-form-select dl dd:hover,
+.admin-page .layui-select-panel-wrap dd:hover{background:var(--mpay-surface-muted)}
+.admin-page .layui-input:focus,.admin-page .layui-textarea:focus,.admin-login .layui-input:focus,
+.mpay-admin-layer .layui-input:focus,.mpay-admin-layer .layui-textarea:focus{outline:none;outline-offset:0;border-color:var(--mpay-primary)!important;box-shadow:0 0 0 2px var(--mpay-focus-ring)}
+.admin-page .layui-form-select .layui-input,.mpay-admin-layer .layui-form-select .layui-input{padding-right:30px}
+.admin-page .layui-select-panel-wrap{font-size:13px}
+.admin-page :focus-visible,.mpay-admin-layer :focus-visible{outline-color:var(--mpay-primary)}
+
+/* 异步内容或动态成员增加时仍在视口内；滚动仅发生在正文，页尾操作始终可见。 */
+.mpay-admin-layer:not(.mpay-admin-drawer){top:50%!important;left:50%!important;transform:translate(-50%,-50%);max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px)}
+.mpay-admin-layer .layui-layer-content{overflow:visible}
+.mpay-admin-layer .admin-dialog{display:flex;flex-direction:column;max-height:calc(100dvh - 82px)}
+.mpay-admin-layer .admin-dialog-body{flex:1 1 auto;min-height:0;max-height:none;overflow:auto;overscroll-behavior:contain}
+.mpay-admin-layer .admin-dialog-footer{flex:0 0 auto}
+.mpay-admin-drawer{max-width:100vw;height:100dvh!important}
+.mpay-admin-drawer .layui-layer-content,.mpay-admin-drawer .admin-dialog{height:calc(100dvh - 58px)!important;max-height:calc(100dvh - 58px)}
+.mpay-admin-drawer .admin-dialog-body{height:auto;max-height:none}
+.mpay-admin-layer .layui-layer-title{flex:0 0 auto;padding-right:50px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.order-detail-content>.admin-form-grid{grid-template-columns:repeat(3,minmax(0,1fr));padding:18px;background:var(--mpay-surface-muted);border:1px solid var(--mpay-border);border-radius:6px;margin-bottom:18px;gap:12px}
+.order-detail-content .admin-fact .admin-money{font-size:22px;margin:0}
+.admin-member-table{min-width:620px}
+.admin-member-table td:first-child{min-width:240px}
+.admin-member-table [data-member-field]{font-size:13px}
+.mpay-admin-confirm{max-width:calc(100vw - 24px);border-radius:7px}
+.mpay-admin-confirm .layui-layer-btn .layui-layer-btn0{background:var(--mpay-action);border-color:var(--mpay-action);color:var(--mpay-on-action)}
+@media(max-width:620px){
+    .admin-page .layui-card-body{padding:16px}
+    .admin-dialog-footer{flex-wrap:wrap}
+    .admin-dialog-footer .layui-btn{min-height:40px}
+    .admin-filters>label{flex-basis:calc(50% - 7px)}
+    .admin-filters .admin-filter-buttons{width:100%}
+    .admin-app-payments{flex-wrap:wrap;gap:8px}
+    .admin-app-foot{padding:10px 14px}
+    .order-detail-content>.admin-form-grid{padding:14px 10px;gap:8px}
+    .order-detail-content .admin-fact .admin-money{font-size:19px}
+    .order-detail-content .admin-fact label{font-size:11px;line-height:1.6}
+}
+
+/* 表格行高/水平对齐使用官方 lineStyle/cols.align，单元格保持表格默认的垂直居中。 */
+.admin-page .layui-table-view td,.mpay-admin-layer .layui-table-view td,.admin-member-table td{vertical-align:middle}
+
+
+
+.layui-table-view [align=center] .admin-inline-actions{justify-content:center}
+.admin-member-table td:not(:first-child),.admin-member-table th:not(:first-child){text-align:center}
+.admin-member-table td .layui-input{margin-inline:auto}
+
+
+
+/* 目录管理沿用表格对齐与品牌图标；两种图片预览保留原比例。 */
+.admin-catalog-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:16px}
+.admin-catalog-summary{display:flex;gap:24px;margin-bottom:20px;align-items:center;color:var(--mpay-muted)}
+.admin-catalog-summary>span{display:flex;align-items:center;gap:8px}
+.admin-catalog-table{min-width:620px}
+.admin-catalog-table td{vertical-align:middle}
+.admin-catalog-table th:not(:first-child),.admin-catalog-table td:not(:first-child){text-align:center}
+.admin-catalog-table .admin-inline-actions{justify-content:center}
+.admin-catalog-image{height:68px;margin-bottom:10px;display:flex;align-items:center;justify-content:center;background:var(--mpay-surface-muted);border:1px dashed var(--mpay-border);border-radius:5px;color:var(--mpay-muted);font-size:12px}
+.admin-catalog-image img{max-width:180px;max-height:44px;object-fit:contain}
+.admin-catalog-image[data-image-box=icon] img{max-width:40px;max-height:40px}
+
+/* 禁用动作保留原因提示，并与可执行的危险操作明确区分。 */
+.admin-inline-actions .admin-link:disabled {color:var(--mpay-muted);opacity:.65;cursor:not-allowed;text-decoration:none;}
+
+/* 日期图标与其他 Layui 输入控件一致；点击仍落到真实输入框，不另造日历入口。 */
+.admin-date-field{display:block;position:relative;width:100%;font-weight:normal}
+.admin-date-field>.layui-input{padding-right:34px}
+.admin-date-field>.layui-icon-date{position:absolute;right:11px;top:50%;transform:translateY(-50%);color:var(--mpay-muted);pointer-events:none}
+/* 范围使用 Layui 官方双输入绑定；只安排表单宽度，不覆盖日历主题。 */
+.admin-filters>label.admin-date-filter{flex:0 1 340px;max-width:none;min-width:300px}
+.admin-date-range{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:8px}
+.admin-date-range>.layui-input{min-width:0;padding:0 10px}
+.admin-date-range.is-disabled{pointer-events:none;opacity:.6}
+/* 抽屉仅在存在业务动作时显示底栏；关闭由右上角、遮罩及 Esc 提供。 */
+.mpay-admin-drawer .admin-dialog-footer:empty{display:none}
+
+/* 通道向导仅定制官方 tabs/radio/collapse 的视觉，组件的选择和切换仍由 Layui 管理。 */
+.admin-channel-wizard .admin-dialog-body{height:min(430px,calc(100dvh - 180px));padding:0 28px 24px;background:var(--mpay-surface)}
+.admin-channel-wizard .layui-tabs{margin:0}
+.mpay-admin-layer .admin-channel-wizard .layui-tabs-header{margin:0;padding:20px 0;background:var(--mpay-surface);gap:0;border:0;overflow:visible;display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.mpay-admin-layer .admin-channel-wizard .layui-tabs-header>li{position:relative;display:flex;flex-direction:column;align-items:center;gap:8px;line-height:22px;padding:8px 2px;white-space:normal;color:var(--mpay-muted);font-size:13px;text-align:center}
+.mpay-admin-layer .admin-channel-wizard .layui-tabs-header>li:not(:last-child):before{content:'';position:absolute;left:calc(50% + 24px);right:calc(-50% + 24px);top:22px;height:1px;background:var(--mpay-border)}
+.mpay-admin-layer .admin-channel-wizard .layui-tabs-header>li:after{display:none}
+.mpay-admin-layer .admin-channel-wizard .layui-tabs-header>.layui-this{background:transparent;color:var(--mpay-primary-dark);font-weight:600}
+.admin-step-number{display:inline-flex;align-items:center;justify-content:center;width:27px;height:27px;flex:0 0 27px;border:1px solid var(--mpay-border);border-radius:50%;color:var(--mpay-muted);background:var(--mpay-surface);font-size:13px;font-weight:500}
+.layui-this>.admin-step-number,.admin-step-complete>.admin-step-number{background:var(--mpay-primary);border-color:var(--mpay-primary);color:var(--mpay-on-primary)}
+.admin-step-complete>.admin-step-number{font-size:0}
+.admin-step-complete>.admin-step-number:after{content:'\e605';font-family:layui-icon;font-size:15px}
+.mpay-admin-layer .admin-channel-wizard .layui-tabs-body{padding-top:16px}
+.admin-channel-wizard .admin-channel-basic{padding:0;background:var(--mpay-surface)}
+.admin-channel-basic>.admin-section-title{margin-top:0;margin-bottom:20px}
+.admin-channel-strategies{margin-top:24px;border-color:var(--mpay-border);border-radius:4px;overflow:hidden;background:var(--mpay-surface)}
+.admin-channel-strategies .layui-colla-title{background:var(--mpay-surface);padding-left:40px;font-weight:500;height:46px;line-height:46px;color:var(--mpay-text)}
+.admin-channel-strategies .layui-colla-content{padding:20px 22px}
+.admin-channel-wizard .admin-dialog-footer{background:var(--mpay-surface);padding:18px 28px}
+.admin-channel-wizard .admin-dialog-footer>[data-dialog-close]{margin-right:auto;border-color:transparent;background:transparent;color:var(--mpay-muted)}
+.admin-channel-wizard .admin-dialog-footer>.layui-btn{min-width:92px}
+.admin-payment-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding-top:6px}
+.admin-channel-option{min-width:0}
+.admin-channel-option>.layui-form-radio{display:block;margin:0;padding:0;width:100%;white-space:normal}
+.admin-channel-choice{position:relative;display:flex;align-items:center;justify-content:center;gap:16px;min-height:124px;padding:20px;border:1px solid var(--mpay-border);border-radius:9px;background:var(--mpay-surface);transition:border-color .15s,box-shadow .15s}
+.admin-payment-logo{width:132px;max-width:100%;height:48px;object-fit:contain}
+.admin-choice-check{position:absolute;right:10px;top:10px;color:var(--mpay-disabled);font-size:17px}
+.layui-form-radio:hover>.admin-channel-choice{border-color:var(--mpay-primary-border)}
+.layui-form-radioed>.admin-channel-choice{border-color:var(--mpay-primary);box-shadow:none;background:var(--mpay-surface)}
+.layui-form-radioed>.admin-channel-choice>.admin-choice-check{color:var(--mpay-primary-dark)}
+.channel-plugin-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.channel-plugin-choices .admin-channel-choice{justify-content:flex-start;min-height:108px;padding:22px}
+.admin-plugin-choice-icon{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;color:var(--mpay-muted)}
+.admin-plugin-choice-icon .layui-icon{font-size:23px}
+.admin-plugin-choice-label{min-width:0;display:flex;flex-direction:column;gap:8px;align-items:flex-start;padding-right:6px}
+.admin-plugin-choice-label strong{font-size:14px;font-weight:500;color:var(--mpay-heading);line-height:22px}
+.admin-channel-wizard .channel-settings{padding:0;background:var(--mpay-surface)}
+.admin-channel-wizard .channel-settings:empty{display:none}
+.admin-channel-editor .admin-form-grid{margin-bottom:20px}
+.admin-channel-editor .admin-channel-basic{margin-top:24px}
+.admin-channel-editor .channel-settings:not(:empty){margin-top:24px;padding-top:22px;border-top:1px solid var(--mpay-border)}
+.admin-plugin-description{white-space:pre-line;line-height:1.8;padding:14px 16px;background:var(--mpay-surface-muted);border-radius:5px;color:var(--mpay-text);font-size:13px}
+@media(max-width:620px){
+    .admin-channel-wizard .admin-dialog-body{padding:0 16px 18px}
+    .mpay-admin-layer .admin-channel-wizard .layui-tabs-header{margin:0;padding:16px 0;gap:0}
+    .mpay-admin-layer .admin-channel-wizard .layui-tabs-header>li{flex-direction:column;gap:7px;padding:8px 1px;font-size:12px;text-align:center}
+    .admin-channel-wizard .admin-channel-basic,.admin-channel-wizard .channel-settings{padding:0}
+    .admin-payment-choices{gap:10px;grid-template-columns:1fr}
+    .admin-payment-choices .admin-channel-choice{min-height:78px;padding:16px}
+    .admin-payment-logo{height:35px;width:118px}
+    .channel-plugin-choices{grid-template-columns:1fr}
+    .admin-channel-wizard .admin-dialog-footer{padding:14px 16px;gap:8px}
+    .admin-channel-wizard .admin-dialog-footer>.layui-btn{min-width:70px;padding:0 12px}
+}
+/* 小屏仅调整 Layui 双日历排列，选择/确认逻辑仍完全由组件处理。 */
+@media(max-width:620px){
+    .admin-filters>label.admin-date-filter{flex-basis:100%;min-width:0}
+    .admin-page .layui-laydate-range{width:274px;max-width:calc(100vw - 24px);max-height:calc(100dvh - 24px);overflow:auto;left:calc(50% - 137px)!important;top:12px!important}
+    .admin-page .layui-laydate-range .layui-laydate-main{display:block;max-width:100%}
+    .admin-page .layui-laydate-range .layui-laydate-footer{position:sticky;bottom:0;height:auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;background:var(--mpay-surface);z-index:1}
+    .admin-page .layui-laydate-range .layui-laydate-preview{flex-basis:100%;padding:0;text-align:left}
+    .admin-page .layui-laydate-range .laydate-footer-btns{position:static}
+}
+
+/* 商户响应按纯文本换行展示，最长片段在弹层内滚动。 */
+.admin-response-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto}
+
+/* 仅用于 cols.templet 声明的双行内容，不改变 Layui 单元格、分页或固定列的盒模型。 */
+.admin-two-line{line-height:22px}
+
+
+
+
+
+/* 统计卡以小图标区分内容，数字保持中性色；图标不代表交易状态。 */
+.admin-metric{position:relative}
+.admin-metric-title{justify-content:flex-start;gap:9px;color:var(--mpay-text)}
+.admin-metric-title>.admin-help-button{margin-left:auto}
+.admin-metric-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:32px;height:32px;border-radius:8px;background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);font-size:18px}
+.admin-metric-icon.success{background:var(--mpay-success-soft);color:var(--mpay-success-text)}
+.admin-metric-icon.blue{background:var(--mpay-info-soft);color:var(--mpay-link)}
+.admin-metric strong{font-weight:600}
+.admin-tag{font-weight:500}
+.admin-tag.green:before{background:var(--mpay-success)}
+.admin-tag.blue:before{background:var(--mpay-blue)}
+.admin-tag.orange:before{background:var(--mpay-warning)}
+.admin-tag.red:before{background:var(--mpay-danger)}
+@media(max-width:620px){
+    .admin-metric{padding:16px 12px}
+    .admin-metric-title{font-size:12px;gap:6px}
+    .admin-metric-icon{width:24px;height:24px;font-size:15px}
+    .admin-metric-title>.admin-help-button{padding:2px;flex-shrink:0}
+}

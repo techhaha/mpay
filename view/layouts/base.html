@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="csrf-token" content="{$csrf_token|htmlspecialchars}">
+    <title>{$title|htmlspecialchars}</title>
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/assets/layui/css/layui.css">
+    <link rel="stylesheet" href="/assets/css/theme.css?v=20261010classic">
+    <link rel="stylesheet" href="/assets/css/app.css?v=20261010classic">
+    {block name="styles"}{/block}
+</head>
+<body class="{block name="body_class"}{/block}">
+    {block name="chrome"}{/block}
+    <main class="mpay-shell">{block name="content"}{/block}</main>
+    <script src="/assets/layui/layui.js"></script>
+    <script src="/assets/js/http.js"></script>
+    <script src="/assets/js/form.js?v=20261009layui"></script>
+    <script src="/assets/js/brand.js?v=20261009catalog"></script>
+    {block name="shared_scripts"}{/block}
+    {block name="scripts"}{/block}
+</body>
+</html>

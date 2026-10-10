@@ -1,0 +1,12 @@
+{extend name="layouts/admin" /}
+{block name="content"}
+<section class="admin-intro"><h1>收款配置</h1><div class="admin-actions"><button id="payment-types-manage" type="button" class="layui-btn layui-btn-primary">支付方式</button><button id="configuration-refresh" type="button" class="layui-btn layui-btn-primary">刷新</button><button id="configuration-new" type="button" class="layui-btn" disabled><i class="layui-icon layui-icon-add-1" aria-hidden="true"></i>新增通道</button></div></section>
+<div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div><section class="layui-card"><div class="layui-card-body">
+<form id="configuration-filters" class="layui-form admin-filters admin-filter-panel"><label>通道名称<input name="search" class="layui-input" placeholder="搜索通道"></label>
+<label>支付方式<select name="pay_type" data-payment-filter><option value="">全部方式</option></select></label>
+<label>状态<select name="enabled"><option value="">全部状态</option><option value="1">已启用</option><option value="0">已停用</option></select></label>
+<div class="admin-filter-buttons"><button type="submit" class="layui-btn">查询</button><button type="reset" class="layui-btn layui-btn-primary">重置</button></div></form>
+<table id="configuration-channels" lay-filter="configuration-channels"></table><div id="configuration-empty"></div>
+</div></section>
+{/block}
+{block name="scripts"}<script src="/assets/js/admin-configurations.js?v=20261009channel-wizard"></script>{/block}

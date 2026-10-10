@@ -1,0 +1,36 @@
+<a class="admin-skip-link" href="#admin-main">跳到页面内容</a>
+<header class="admin-header">
+    <button id="admin-menu-toggle" class="admin-icon-button" type="button" aria-label="收起导航" title="收起导航" aria-controls="admin-navigation" aria-expanded="true"><i class="layui-icon layui-icon-shrink-right" aria-hidden="true"></i></button>
+    <nav class="admin-breadcrumb" aria-label="当前位置"><a href="/admin/dashboard">首页</a><span aria-hidden="true">/</span><span id="admin-current-page" aria-current="page"></span></nav>
+    <div class="admin-header-actions">
+        <!-- 预留开发者消息入口，与向业务网站发送支付结果的“商户通知”分开。 -->
+        <button class="admin-icon-button" type="button" aria-label="开发者通知" data-help="开发者通知暂未开放"><i class="layui-icon layui-icon-notice" aria-hidden="true"></i></button>
+        <button id="admin-account-menu" class="admin-account-menu" type="button" aria-label="账户菜单" aria-haspopup="menu"><span class="admin-avatar" id="admin-avatar" aria-hidden="true"><i class="layui-icon layui-icon-username"></i></span><span id="admin-username">{$username|htmlspecialchars}</span><i class="layui-icon layui-icon-down" aria-hidden="true"></i></button>
+    </div>
+    <button id="admin-logout" type="button" hidden>退出所有登录</button>
+</header>
+<aside class="admin-sidebar" id="admin-sidebar" aria-label="管理导航">
+    <div class="admin-brand-row">
+        <a class="admin-brand" href="/admin/dashboard" aria-label="MPAY 工作台">
+            <img class="admin-brand-full" src="/assets/brand/mpay-logo-light.svg" alt="MPAY" width="132" height="30">
+            <img class="admin-brand-mark" src="/assets/brand/mpay-mark.svg" alt="" width="42" height="24">
+        </a>
+    </div>
+    <ul class="layui-nav layui-nav-tree admin-nav" id="admin-navigation" lay-filter="admin-navigation" lay-bar="disabled" aria-label="后台导航">
+        <li class="admin-nav-label" lay-unselect>概览</li>
+        <li class="layui-nav-item"><a href="/admin/dashboard" aria-label="工作台"><i class="layui-icon layui-icon-home" aria-hidden="true"></i><span>工作台</span></a></li>
+        <li class="admin-nav-label" lay-unselect>交易管理</li>
+        <li class="layui-nav-item"><a href="/admin/orders" aria-label="交易订单"><i class="layui-icon layui-icon-form" aria-hidden="true"></i><span>交易订单</span></a></li>
+        <li class="layui-nav-item"><a href="/admin/receipts" aria-label="到账流水"><i class="layui-icon layui-icon-rmb" aria-hidden="true"></i><span>到账流水</span></a></li>
+        <li class="admin-nav-label" lay-unselect>收款接入</li>
+        <li class="layui-nav-item"><a href="/admin/configurations" aria-label="收款配置"><i class="layui-icon layui-icon-component" aria-hidden="true"></i><span>收款配置</span></a></li>
+        <li class="layui-nav-item"><a href="/admin/plugins" aria-label="插件管理"><i class="layui-icon layui-icon-util" aria-hidden="true"></i><span>插件管理</span></a></li>
+        <li class="layui-nav-item"><a href="/admin/poll-groups" aria-label="轮询组"><i class="layui-icon layui-icon-app" aria-hidden="true"></i><span>轮询组</span></a></li>
+        <li class="layui-nav-item"><a href="/admin/applications" aria-label="应用管理"><i class="layui-icon layui-icon-template-1" aria-hidden="true"></i><span>应用管理</span></a></li>
+        <li class="admin-nav-label" lay-unselect>系统维护</li>
+        <li class="layui-nav-item"><a href="/admin/runtime" aria-label="运行维护"><i class="layui-icon layui-icon-console" aria-hidden="true"></i><span>运行维护</span></a></li>
+        <li class="layui-nav-item"><a href="/admin/audit" aria-label="操作日志"><i class="layui-icon layui-icon-list" aria-hidden="true"></i><span>操作日志</span></a></li>
+        <li class="layui-nav-item"><a href="/admin/settings" aria-label="系统设置"><i class="layui-icon layui-icon-set" aria-hidden="true"></i><span>系统设置</span></a></li>
+    </ul>
+    <div class="admin-nav-footer"><span class="admin-version">V1</span><span class="admin-brand-caption">让个人收款更加轻松便捷</span></div>
+</aside>

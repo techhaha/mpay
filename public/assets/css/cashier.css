@@ -1,0 +1,39 @@
+/* 收银台共用全站色板；付款金额、备注和二维码独立分区，状态仅展示服务端交易结果。 */
+.cashier-page {max-width:580px;margin:24px auto;padding:28px;background:var(--mpay-surface);border:1px solid var(--mpay-border);border-radius:12px;box-shadow:var(--mpay-shadow)}
+.cashier-header {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;padding-bottom:20px;border-bottom:1px solid var(--mpay-border)}
+.cashier-brand {font-weight:800;letter-spacing:2px;color:var(--mpay-heading);font-size:19px}
+.cashier-status {font-weight:600;padding:5px 10px;background:var(--mpay-info-soft);color:var(--mpay-link);border-radius:20px;font-size:13px}
+.cashier-test {padding:12px;margin-bottom:18px;border:1px solid var(--mpay-warning-border);background:var(--mpay-warning-soft);color:var(--mpay-warning-text);border-radius:8px;line-height:1.7;font-weight:600}
+.cashier-page h1 {font-size:22px;line-height:1.5;margin-bottom:10px;overflow-wrap:anywhere;text-align:center;font-weight:500}
+.cashier-page h2 {font-size:16px;margin:22px 0 12px}
+.cashier-order {text-align:center;color:var(--mpay-muted);font-size:12px;overflow-wrap:anywhere}
+.cashier-amounts {display:flex;flex-wrap:wrap;gap:24px;margin:24px 0 12px;padding:20px;background:var(--mpay-surface-muted);border-radius:8px}
+.cashier-amounts>div {flex:1;min-width:170px}
+.cashier-amounts span,.cashier-remark>span {display:block;color:var(--mpay-muted);font-size:13px;margin-bottom:8px}
+.cashier-amounts strong {font-size:32px;font-weight:700;letter-spacing:.3px;font-variant-numeric:tabular-nums;color:var(--mpay-heading)}
+#cashier-receipt-money {color:var(--mpay-primary-dark)}
+.cashier-hint {color:var(--mpay-muted);line-height:1.7;font-size:13px}
+.cashier-methods {display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+.cashier-methods .layui-btn {display:inline-flex;align-items:center;justify-content:center;gap:9px;margin:0;height:44px;min-width:150px;background:var(--mpay-surface);color:var(--mpay-text);border:1px solid var(--mpay-input-border)}
+.cashier-methods .layui-btn:hover{border-color:var(--mpay-primary);background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
+.cashier-payment-brand{text-align:center;padding-top:20px}
+.cashier-qr {text-align:center;margin:18px auto 14px;background:var(--mpay-surface);max-width:300px;min-height:120px}
+.cashier-qr canvas,.cashier-qr img {display:block;width:100%;height:auto;max-width:300px;margin:auto;image-rendering:pixelated}
+.cashier-remark {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;background:var(--mpay-warning-soft);border:1px solid var(--mpay-warning-border);border-radius:8px;padding:14px;margin-top:16px}
+.cashier-remark>span {width:100%;text-align:center;margin-bottom:0;color:var(--mpay-warning-text)}
+.cashier-remark strong {font:700 22px monospace;letter-spacing:1px;color:var(--mpay-warning-text);overflow-wrap:anywhere}
+.cashier-countdown {text-align:center;font-size:13px;color:var(--mpay-muted);margin:16px 0}
+.cashier-countdown strong {font-variant-numeric:tabular-nums;color:var(--mpay-heading)}
+.cashier-notice {margin-top:20px;padding:14px 16px;border-radius:8px;background:var(--mpay-info-soft);color:var(--mpay-link);line-height:1.8;overflow-wrap:anywhere}
+.cashier-page[data-status="2"] .cashier-notice {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
+.cashier-page[data-status="2"] .cashier-status {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
+.cashier-error {margin-top:12px;color:var(--mpay-danger-text);background:var(--mpay-danger-soft);border-radius:8px;padding:12px;line-height:1.7;overflow-wrap:anywhere}
+.cashier-actions {justify-content:center;display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.cashier-actions .layui-btn {margin:0}
+.cashier-page footer {text-align:center;font-size:12px;line-height:1.7;color:var(--mpay-muted);margin-top:24px}
+.cashier-page [hidden] {display:none!important}
+@media(max-width:600px){.cashier-page{margin:0;padding:20px 16px;border-radius:10px}.cashier-amounts{gap:16px;padding:16px}.cashier-amounts>div{min-width:120px}.cashier-amounts strong{font-size:28px}.cashier-order{font-size:11px}}
+
+
+.cashier-page[data-status="3"] .cashier-status{background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
+.cashier-page[data-status="4"] .cashier-status,.cashier-page[data-status="5"] .cashier-status{background:var(--mpay-neutral-soft);color:var(--mpay-muted)}

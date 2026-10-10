@@ -1,0 +1,15 @@
+{extend name="layouts/base" /}
+{block name="body_class"}admin-page{/block}
+{block name="styles"}
+<link rel="stylesheet" href="/assets/css/admin.css?v=20261010classic">
+<link rel="stylesheet" href="/assets/css/admin-layout.css?v=20261010classic">
+{/block}
+{block name="chrome"}
+<!-- 后台框架独立于页面正文；登录、安装及收银台继续使用基础布局。 -->
+{include file="admin/header" /}
+{/block}
+{block name="shared_scripts"}
+<script src="/assets/js/admin-layout.js?v=20261009layui"></script>
+{include file="admin/scripts" /}
+<script src="/assets/js/admin-catalog.js?v=20261009channel-config"></script>
+{/block}

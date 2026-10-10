@@ -1,0 +1,12 @@
+{extend name="layouts/admin" /}
+{block name="content"}
+<section class="admin-intro"><h1>账户安全</h1><div class="admin-actions"></div></section><section class="layui-card"><div class="layui-card-body admin-security-summary"><span class="admin-avatar"><i class="layui-icon layui-icon-username" aria-hidden="true"></i></span><div><h2>{$username|htmlspecialchars}</h2><p>当前管理员</p></div></div></section>
+<div class="admin-grid-equal"><section class="layui-card"><div class="layui-card-header">修改登录密码 <button class="admin-help-button" type="button" data-help="修改成功后，所有登录会话失效，请使用新密码重新登录。" aria-label="修改密码影响说明">ⓘ</button></div><div class="layui-card-body">
+<form id="admin-password-form" class="layui-form" data-admin-form="password"><input type="text" name="username" value="{$username|htmlspecialchars}" autocomplete="username" hidden>
+<div class="layui-form-item"><label for="current-password" class="admin-label">当前密码</label><input id="current-password" name="current_password" type="password" class="layui-input" autocomplete="current-password" maxlength="72" required lay-affix="eye"></div>
+<div class="layui-form-item"><label for="new-password" class="admin-label">新密码</label><input id="new-password" name="new_password" type="password" class="layui-input" autocomplete="new-password" minlength="12" maxlength="72" required lay-affix="eye"><p class="admin-hint">至少 12 个字符，最多 72 字节</p></div>
+<div class="layui-form-item"><label for="password-confirmation" class="admin-label">确认新密码</label><input id="password-confirmation" name="password_confirmation" type="password" class="layui-input" autocomplete="new-password" minlength="12" maxlength="72" required lay-affix="eye"></div>
+<div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div><button class="layui-btn" type="submit">修改密码</button></form></div></section>
+<section class="layui-card"><div class="layui-card-header">安全操作</div><div class="layui-card-body"><div class="admin-task-row"><span>撤销所有登录会话</span><button type="button" class="admin-link danger" id="account-logout">退出所有登录</button></div><div class="admin-task-row"><span>登录与操作记录</span><a href="/admin/audit">查看操作日志</a></div></div></section></div>
+{/block}
+{block name="scripts"}{/block}

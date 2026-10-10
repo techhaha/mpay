@@ -1,0 +1,14 @@
+/* 保留居中安装步骤，共用明亮主色、灰白底色和有语义的状态色。 */
+.install-card{max-width:780px;margin:16px auto;padding:36px 42px;border-radius:6px}
+.install-card .auth-brand{margin-bottom:28px}.install-card .auth-brand h1{color:var(--mpay-primary-dark);font-size:28px;font-weight:550;margin:18px 0 4px}
+.install-card h2{font-size:18px;font-weight:600;margin:20px 0 12px}.install-card fieldset{border:0;padding:0;min-width:0}
+.install-steps{display:flex;list-style:none;justify-content:space-between;gap:12px;padding:0 0 24px;border-bottom:1px solid var(--mpay-border);margin:0 0 18px;color:var(--mpay-muted);font-size:13px}
+.install-steps li{display:flex;align-items:center;gap:8px}.install-steps span{display:grid;place-items:center;width:25px;height:25px;background:var(--mpay-neutral-soft);border-radius:50%}
+.install-steps [aria-current],.install-steps .is-complete{color:var(--mpay-primary-dark)}.install-steps [aria-current] span,.install-steps .is-complete span{background:var(--mpay-primary);color:var(--mpay-on-primary)}
+.install-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.install-grid label{font-size:14px;line-height:2;color:var(--mpay-text)}.install-grid input{margin-top:4px}.install-grid small{font-size:12px;color:var(--mpay-muted)}.install-wide{grid-column:1 / -1}
+.install-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:26px}.install-actions .layui-btn{margin:0;min-width:110px}
+.install-feedback{line-height:1.8;color:var(--mpay-primary-dark);background:var(--mpay-primary-soft);padding:12px 16px;border-left:3px solid var(--mpay-primary);margin:18px 0;overflow-wrap:anywhere}
+.install-feedback.is-error{color:var(--mpay-danger-text);background:var(--mpay-danger-soft);border-color:var(--mpay-danger)}.install-ok{color:var(--mpay-success-text)}.install-failed{color:var(--mpay-danger-text)}
+.install-complete{text-align:center;padding:30px 0}.install-complete>.layui-icon{font-size:66px;color:var(--mpay-primary)}.install-complete p{color:var(--mpay-muted);line-height:1.8;margin:16px 0 28px}
+.install-page [hidden]{display:none!important}.install-page .layui-table th{background:var(--mpay-surface-muted)}.install-page .layui-table td{font-size:13px}
+@media(max-width:640px){.install-card{margin:0;padding:26px 18px}.install-grid{grid-template-columns:1fr}.install-wide{grid-column:auto}.install-steps{gap:6px}.install-steps li{flex-direction:column;gap:6px;font-size:12px}.install-actions{justify-content:stretch}.install-actions .layui-btn{flex:1}}

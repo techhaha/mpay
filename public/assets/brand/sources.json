@@ -1,0 +1,103 @@
+{
+  "source": "用户提供的原 V1 与 MPAY V2 前端素材；每项记录来源与变体处理",
+  "assets": [
+    {
+      "file": "mpay-logo.png",
+      "original": "static/img/logo1.png",
+      "sha256": "664773e10af0a0ff306b41405e128e8ba2e43f0b77dedff5bd9010f4cf54ff0d"
+    },
+    {
+      "file": "mpay-login.png",
+      "original": "static/img/logo3.png",
+      "sha256": "963590edde26dacaf7eda997dac37a5ff0c836b019ce6972c3d089e4e5b60737"
+    },
+    {
+      "file": "wechat-pay.jpg",
+      "original": "static/img/weixin.jpg",
+      "sha256": "d7b1f71103f5a204d1cf7a583bd4f157f061a54462cfe820172c95228756f679"
+    },
+    {
+      "file": "alipay.jpg",
+      "original": "static/img/alipay.jpg",
+      "sha256": "1739f7ba0c2b6c8e8c281d955a76ced0dc9a298e20833f5f239ec09322241f02"
+    },
+    {
+      "file": "wechat-pay.ico",
+      "original": "static/img/wxpay.ico",
+      "sha256": "f5682b5a52eec5d4bb7635f5ee37359f4e979aede35bfa43418392d271d9e4ea"
+    },
+    {
+      "file": "alipay.ico",
+      "original": "static/img/alipay.ico",
+      "sha256": "b662de58b15b34d1bf4d2a8bc546f7062a3faaa22acd2ecbbbad70f1e7f37a39"
+    },
+    {
+      "file": "background.svg",
+      "original": "admin/images/background.svg",
+      "sha256": "c6eaaac6093493f10aa9389379b74e38e49369f3168024e48d3f730ebc7b3e94"
+    },
+    {
+      "file": "mpay-logo.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/public/assets/brand/mpay-logo.svg",
+      "transformation": "原样复制",
+      "sha256": "e32c89da9060360a33e0c99d2ec18a50c0e0600b0f23279ac4d9ca6b4a1df139"
+    },
+    {
+      "file": "mpay-mark.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/public/assets/brand/mpay-mark.svg",
+      "transformation": "原样复制",
+      "sha256": "7bfe336f70eda7b13405fd025a08366a28779e7ecbcfee0ca1f4a0a6ce6f0552"
+    },
+    {
+      "file": "mpay-logo-light.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/public/assets/brand/mpay-logo.svg",
+      "transformation": "深色侧栏版本：仅将 PAY 填色由 #545454 调整为 #EAF7F3",
+      "sha256": "266320dee60a7b4390a79d5a930c278cb9dc7eb72336d201d3975c1ca0978ee3"
+    },
+    {
+      "file": "alipay-logo.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/src/assets/svgs/alipay.svg",
+      "transformation": "原样复制",
+      "sha256": "eb2745bd51972c11aa496ef86648a3ee1533b0ff85c8e47d8dc818b19c1b7c3a"
+    },
+    {
+      "file": "wechat-pay-logo.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/src/assets/svgs/wxpay.svg",
+      "transformation": "原样复制",
+      "sha256": "019efddc5823480f64a65bee1b81ac2ed85bb2298ad8b54049887a4ec9572e29"
+    },
+    {
+      "file": "alipay-icon.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/src/assets/svgs/alipay.svg",
+      "transformation": "提取原图蓝色标志路径，视框 0 0 1024 1024，路径与品牌色不变",
+      "sha256": "232aa251d96ad4dae4f365717612670ec1a00530f2bff718d561eebd2d176ae1"
+    },
+    {
+      "file": "wechat-pay-icon.svg",
+      "source_project": "MPAY V2",
+      "original": "admin/src/assets/svgs/wxpay.svg",
+      "transformation": "提取原图绿色标志路径，视框 100 0 1120 1024，路径与品牌色不变",
+      "sha256": "9666c521250f485f6bb803323900009e28e340837d05284486936138676cfb2d"
+    },
+    {
+      "file": "cloudpay-icon.svg",
+      "source_project": "MPAY V1",
+      "original": "本项目绘制",
+      "transformation": "红色云形闪电识别图形；完整版本附云闪付文字，非平台官方商标图稿",
+      "sha256": "c7721ac9ec9df96737eab94a24deff5ab98ce852fc9dc25e59b240cff7ee40bd"
+    },
+    {
+      "file": "cloudpay-logo.svg",
+      "source_project": "MPAY V1",
+      "original": "本项目绘制",
+      "transformation": "红色云形闪电识别图形；完整版本附云闪付文字，非平台官方商标图稿",
+      "sha256": "a97d0a2370d58639ae1f8cf4acead8974e7f28abb2111ea85fe0aa4f695f9cfa"
+    }
+  ]
+}

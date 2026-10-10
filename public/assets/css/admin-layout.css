@@ -1,0 +1,93 @@
+/* 后台框架共用尺寸：侧栏、顶栏与正文同步，配色由 theme.css 管理。 */
+.admin-page{--admin-sidebar-width:222px;--admin-header-height:64px}
+.admin-page .mpay-shell{max-width:none;margin:var(--admin-header-height) 0 0 var(--admin-sidebar-width);padding:24px 28px 40px;min-width:0}
+.admin-header{position:fixed;inset:0 0 auto var(--admin-sidebar-width);z-index:1000;height:var(--admin-header-height);padding:0 22px;display:flex;align-items:center;gap:16px;background:var(--mpay-surface);border-bottom:1px solid var(--mpay-border);font-size:13px;font-weight:400}
+.admin-icon-button{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--mpay-muted);cursor:pointer;flex-shrink:0}
+.admin-icon-button .layui-icon{font-size:19px}
+.admin-icon-button:hover,.admin-icon-button:focus-visible{background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
+.admin-breadcrumb{display:flex;align-items:center;gap:12px;min-width:0;white-space:nowrap}
+.admin-breadcrumb a{color:var(--mpay-muted)}
+.admin-breadcrumb a:hover{color:var(--mpay-primary-dark)}
+.admin-breadcrumb>[aria-hidden]{color:var(--mpay-disabled)}
+.admin-breadcrumb [aria-current]{color:var(--mpay-heading);overflow:hidden;text-overflow:ellipsis}
+.admin-header-actions{display:flex;align-items:center;gap:16px;margin-left:auto;flex-shrink:0}
+.admin-account-menu{display:flex;align-items:center;gap:9px;border:0;border-radius:6px;background:none;padding:5px 8px;color:var(--mpay-text);cursor:pointer;font-size:13px;max-width:220px}
+.admin-account-menu:hover{background:var(--mpay-primary-soft)}
+#admin-username{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.admin-account-menu>.layui-icon{font-size:11px;color:var(--mpay-muted)}
+.admin-avatar{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:32px;height:32px;border-radius:50%;background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);font-size:14px;font-weight:600}
+.admin-sidebar{position:fixed;inset:0 auto 0 0;z-index:1002;width:var(--admin-sidebar-width);display:flex;flex-direction:column;background:var(--mpay-sidebar);color:var(--mpay-sidebar-text);border-right:1px solid var(--mpay-sidebar);box-sizing:border-box}
+.admin-brand-row{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;height:var(--admin-header-height);padding:0 23px;border-bottom:1px solid var(--mpay-sidebar-line)}
+.admin-brand{display:flex;align-items:center;justify-content:flex-start;min-height:44px}
+.admin-brand img{display:block;object-fit:contain;max-width:100%;height:auto}
+.admin-brand .admin-brand-mark{display:none}
+.admin-nav.layui-nav{line-height:22px;width:auto;background:transparent;border-radius:0;display:flex;flex-direction:column;flex:1;min-height:0;gap:4px;padding:10px 12px 16px;overflow:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--mpay-sidebar-line) transparent}
+.admin-nav-label{padding:14px 14px 6px;font-size:11px;color:var(--mpay-sidebar-muted);letter-spacing:1px}
+.admin-nav-label:first-child{padding-top:4px}
+.admin-nav.layui-nav .layui-nav-item>a{position:relative;display:flex;align-items:center;flex-shrink:0;gap:12px;box-sizing:border-box;height:auto;min-height:42px;padding:10px 14px;border-radius:5px;color:var(--mpay-sidebar-text);font-size:14px;white-space:nowrap}
+.admin-nav.layui-nav .layui-nav-item>a .layui-icon{flex-shrink:0;font-size:18px;color:var(--mpay-sidebar-text)}
+.admin-nav.layui-nav .layui-nav-item>a:hover{background:var(--mpay-sidebar-hover);color:var(--mpay-on-action)}
+.admin-nav.layui-nav .layui-nav-item.layui-this>a{background:var(--mpay-action);color:var(--mpay-on-action);font-weight:500}
+.admin-nav.layui-nav .layui-nav-item.layui-this>a .layui-icon{color:var(--mpay-on-action)}
+.admin-nav.layui-nav .layui-nav-item.layui-this>a::before{position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:2px;content:'';background:var(--mpay-primary)}
+.admin-nav-footer{display:flex;align-items:center;gap:9px;flex-shrink:0;padding:16px 20px;border-top:1px solid var(--mpay-sidebar-line);color:var(--mpay-sidebar-muted);font-size:10px;white-space:nowrap}
+.admin-version{padding:2px 5px;border:1px solid var(--mpay-sidebar-line);border-radius:4px;font-size:10px;color:var(--mpay-sidebar-muted)}
+.admin-skip-link{position:fixed;top:-60px;left:12px;z-index:2000;padding:12px 16px;border-radius:5px;background:var(--mpay-surface);color:var(--mpay-primary-dark)}
+.admin-skip-link:focus{top:8px}
+.admin-intro{padding:20px 22px;margin-bottom:20px;background:var(--mpay-surface);border:1px solid var(--mpay-border);border-radius:7px;min-height:80px}
+.admin-intro h1{font-size:22px;line-height:1.4}
+
+/* 收起只影响导航展示；链接保留可访问名称，并用 Layui 提示补全图标含义。 */
+@media(min-width:961px){
+    .admin-sidebar-collapsed{--admin-sidebar-width:72px}
+    .admin-sidebar-collapsed .admin-brand-row{padding:0;justify-content:center}
+    .admin-sidebar-collapsed .admin-brand-full{display:none}
+    .admin-sidebar-collapsed .admin-brand-mark{display:block}
+    .admin-sidebar-collapsed .admin-nav.layui-nav{padding:12px 10px;gap:5px}
+    .admin-sidebar-collapsed .admin-nav.layui-nav .layui-nav-item>a{justify-content:center;padding:10px 0}
+    .admin-sidebar-collapsed .admin-nav.layui-nav .layui-nav-item>a>span{display:none}
+    .admin-sidebar-collapsed .admin-nav-label{height:14px;margin:0 10px 5px;padding:0;border-bottom:1px solid var(--mpay-sidebar-line);font-size:0}
+    .admin-sidebar-collapsed .admin-nav-label:first-child{display:none}
+    .admin-sidebar-collapsed .admin-nav-footer{justify-content:center;padding:16px 0}
+    .admin-sidebar-collapsed .admin-brand-caption{display:none}
+}
+
+/* 小屏复用 Layui 左抽屉；仅定制品牌容器，不覆盖组件动画或自建遮罩。 */
+@media(max-width:960px){
+    .admin-page{--admin-sidebar-width:0px}
+    .admin-page .mpay-shell{padding:20px 18px 32px}
+    .admin-header{padding:0 14px;gap:12px}
+    .admin-header-actions{gap:10px}
+    .admin-sidebar{display:none}
+    .mpay-nav-layer .admin-sidebar{position:static;display:flex;width:100%;height:100%}
+}
+@media(max-width:620px){
+    .admin-page{--admin-header-height:58px}
+    .admin-page .mpay-shell{padding:16px 12px 28px}
+    .admin-header{padding:0 10px;gap:8px}
+    .admin-header-actions{gap:3px}
+    .admin-breadcrumb{gap:8px;font-size:12px}
+    #admin-username{display:none}
+    .admin-account-menu{gap:5px;padding:4px}
+    .admin-intro{padding:15px;min-height:72px;gap:12px;align-items:center}
+    .admin-intro h1{font-size:20px}
+    .admin-intro>.admin-actions{max-width:none;gap:6px}
+    .admin-intro .layui-btn{padding:0 10px}
+}
+
+/* 导航条目的间距由主题定义，选中状态与事件使用 element 官方结构。 */
+.admin-nav .layui-nav-item{flex-shrink:0;line-height:22px}
+.admin-nav .layui-nav-item>a{line-height:22px}
+.admin-nav.layui-nav .layui-nav-item.layui-this>a,.admin-nav.layui-nav .layui-nav-item.layui-this>a:hover{background:var(--mpay-action)}
+.mpay-nav-layer{background:var(--mpay-sidebar);border-radius:0}
+.mpay-nav-layer .layui-layer-content{height:100%}
+.mpay-nav-layer .layui-layer-setwin{right:12px;top:22px}
+.mpay-nav-layer .layui-layer-close2{position:static}
+
+.admin-nav .layui-nav-item.layui-this{background:transparent}
+.admin-nav .layui-nav-item.layui-this::after{display:none}
+.admin-nav-label{flex-shrink:0}
+
+/* 深色导航只调整状态配色；尺寸、结构与 element/layer 行为保持不变。 */
+.admin-nav.layui-nav .layui-nav-item>a:hover .layui-icon{color:var(--mpay-on-action)}
+.admin-sidebar :focus-visible{outline-color:var(--mpay-primary-border)}

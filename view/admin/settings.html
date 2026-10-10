@@ -1,0 +1,16 @@
+{extend name="layouts/admin" /}
+{block name="content"}
+<section class="admin-intro"><h1>系统设置</h1><div class="admin-actions"><button id="settings-refresh" type="button" class="layui-btn layui-btn-primary">重新读取</button></div></section><div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+<div class="admin-settings-grid"><section class="layui-card"><div class="layui-card-header">订单设置</div><div class="layui-card-body">
+<form data-settings-group="payment_defaults" class="layui-form admin-setting-form" novalidate><fieldset disabled>
+<div class="admin-form-grid">
+<div class="admin-field"><label>新业务单有效期 <button type="button" class="admin-help-button" data-help="只影响之后创建的业务单，不修改已有订单。" aria-label="业务单有效期说明">ⓘ</button></label><div class="admin-unit"><input name="order_valid_seconds" type="number" min="1" max="86400" step="1" class="layui-input" required><span>秒</span></div></div>
+</div><div class="admin-save-row"><span class="admin-muted" data-version></span><button type="submit" class="layui-btn">保存默认值</button></div></fieldset></form>
+</div></section>
+<section class="layui-card"><div class="layui-card-header">技术日志</div><div class="layui-card-body">
+<form data-settings-group="maintenance" class="layui-form admin-setting-form" novalidate><fieldset disabled><div class="admin-form-grid">
+<div class="admin-field"><label>日志保留天数 <button type="button" class="admin-help-button" data-help="维护任务定期清理过期技术日志。订单、到账、商户通知和操作日志不受影响。" aria-label="日志保留说明">ⓘ</button></label><div class="admin-unit"><input name="technical_log_days" type="number" min="7" max="365" step="1" class="layui-input" required><span>天</span></div></div>
+</div><div class="admin-save-row"><span class="admin-muted" data-version></span><button type="submit" class="layui-btn">保存保留期</button></div></fieldset></form>
+</div></section></div><details class="layui-card admin-details"><summary class="layui-card-header">站点信息</summary><div class="layui-card-body"><span id="settings-origin"></span><button class="admin-help-button" type="button" data-help="支持多个访问域名。迁移后按新地址访问，无需保存固定站点网址。" aria-label="访问域名说明">ⓘ</button></div></details>
+{/block}
+{block name="scripts"}<script src="/assets/js/admin-settings.js?v=20261009channel-config"></script>{/block}

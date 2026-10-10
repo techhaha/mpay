@@ -1,0 +1,13 @@
+{
+  "package": "qrcode-generator",
+  "version": "2.0.4",
+  "source": "https://registry.npmjs.org/qrcode-generator/-/qrcode-generator-2.0.4.tgz",
+  "sha512": "mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g==",
+  "files_sha256": {
+    "qrcode.js": "79ec86f82856005b1c887905cfccfcfbec3821ca61c7fd5a952faa5f778f791c",
+    "qrcode_UTF8.js": "e522d64003b332e29271fdce4993ed3ae2934c8947f41654bd324ddcfa2de301",
+    "README.md": "e2e665eb157725a8543c37951b064f58c564eb38f8507bf34309c39f58db6003",
+    "LICENSE": "3a850fa5f08101db6f40676c2786e10bd2cd5fff7b12ffdf1e0c434d4e49d90c"
+  },
+  "license_source": "https://raw.githubusercontent.com/kazuhikoarase/qrcode-generator/master/LICENSE"
+}

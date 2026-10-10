@@ -1,0 +1,4 @@
+# 迁移校验和包含 SQL 字节；跨 Windows/Linux 检出必须保持已登记字符串的换行一致。
+database/migrations/*.php text eol=lf
+# Linux 运维脚本必须保留 LF，防止 Windows 检出后的 CR 被 shell 当作命令或参数的一部分。
+deploy/**/*.sh text eol=lf

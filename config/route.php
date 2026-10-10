@@ -1,4 +1,5 @@
 <?php
+declare(strict_types=1);
 // +----------------------------------------------------------------------
 // | 路由设置
 // +----------------------------------------------------------------------
@@ -8,22 +9,22 @@ return [
     'pathinfo_depr'         => '/',
     // 是否开启路由延迟解析
     'url_lazy_route'        => false,
-    // 是否强制使用路由
-    'url_route_must'        => false,
-    // 是否区分大小写
-    'url_case_sensitive'    => false,
+    // 强制显式路由，未知路径不能回退为自动控制器/方法调用。
+    'url_route_must'        => true,
+    // 按声明区分路径大小写，避免同一入口存在未经声明的别名。
+    'url_case_sensitive'    => true,
     // 自动扫描子目录分组
     'route_auto_group'      => false,
     // 合并路由规则
     'route_rule_merge'      => false,
-    // 路由是否完全匹配
-    'route_complete_match'  => false,
+    // 完整匹配路径，禁止 /adminapi/foundation/extra 命中较短的已知路由。
+    'route_complete_match'  => true,
     // 去除斜杠
     'remove_slash'          => false,
     // 默认的路由变量规则
     'default_route_pattern' => '[\w\.]+',
-    // URL伪静态后缀
-    'url_html_suffix'       => 'html',
+    // false 才保留完整路径；空字符串在 ThinkPHP 中会剥离任意后缀，导致 .php 协议入口失配。
+    'url_html_suffix'       => false,
     // 访问控制器层名称
     'controller_layer'      => 'controller',
     // 空控制器名

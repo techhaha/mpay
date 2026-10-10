@@ -1,0 +1,222 @@
+<?php
+declare(strict_types=1);
+
+namespace app\service\payment\config;
+
+use app\service\system\audit\ConfigurationAuditService;
+use app\service\system\audit\ConfigurationActionContext;
+use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\common\base\BaseService;
+use app\common\constant\ApiResponseConstant as Code;
+use app\common\util\Clock;
+use app\exception\BusinessException;
+use app\repository\payment\config\PaymentCatalogRepository;
+use app\repository\payment\config\PaymentChannelRepository;
+use app\repository\payment\config\PaymentPluginConfRepository;
+use app\repository\payment\config\PaymentPluginConfScopeRepository;
+use app\repository\payment\receipt\ReceiptScopeRepository;
+
+/**
+ * 通道表单的完整用例：配置关联、插件参数、通道快照在一个服务事务中保存。
+ * 复用现有校验和审计，不让浏览器按三次独立写入拼出可能不完整的通道。
+ */
+final class PaymentChannelEditorService extends BaseService
+{
+    public function __construct(
+        private readonly ConfigurationAuditService $audit,
+        private readonly PaymentPluginFactoryService $plugins,
+        private readonly PaymentPluginConfService $configurationService,
+        private readonly PaymentChannelService $channelService,
+        private readonly PaymentPluginConfRepository $configurations,
+        private readonly PaymentPluginConfScopeRepository $bindings,
+        private readonly PaymentChannelRepository $channels,
+        private readonly ReceiptScopeRepository $scopes,
+        private readonly PaymentCatalogRepository $catalog,
+        private readonly \app\service\payment\routing\DefaultRoutingService $defaults,
+        private readonly PaymentChannelRevisionService $revisions,
+        private readonly Clock $clock,
+        private readonly PaymentCatalogService $management,
+        private readonly \app\repository\payment\runtime\ReceiptRuntimeStateRepository $runtime,
+    ) {}
+
+    /**
+     * @param array<string,mixed> $input 已通过 editor-create 场景，settings 含平台秘密。
+     * @return array{id:string,revision_id:string,configuration_id:string,configuration_version:int,enabled:bool}
+     */
+    public function create(#[\SensitiveParameter] array $input, ConfigurationActionContext $actor): array
+    {
+        $definition = $this->plugins->definition($input['plugin_code']);
+        if (!in_array($input['pay_type'], $definition->payTypes, true)) {
+            throw new BusinessException('所选插件不支持该支付方式', Code::VALIDATION_FAILED);
+        }
+        return $this->transaction(function () use ($input, $definition, $actor): array {
+            $this->audit->authorize($actor);
+            $this->defaults->lockTypes([$input['pay_type']]);
+            $type = $this->catalog->lockType($input['pay_type']);
+            if ($type === null || (int) $type['enabled'] !== 1) { throw new BusinessException('支付方式已停用或不存在', Code::CONFLICT); }
+            [$configurationId, $version, $scopeKey] = $this->createConfiguration($input, $actor);
+            // 先写通道专属配置，随后核对插件，与选路的配置→插件方向一致。
+            $this->management->assertNew($definition->code);
+            $channel = $this->channelService->writeInTransaction(null, null, $configurationId, $version,
+                $this->rules($input['channel'], $scopeKey, $input['pay_type'], $input['participates_default_route'] ?? null), $actor);
+            if ($input['enabled'] ?? false) {
+                $this->configurationService->setEnabledInTransaction($configurationId, $version, true, $actor);
+                $this->channelService->setEnabledInTransaction($channel['id'], $channel['revision_id'], $version, true, $actor);
+                $channel['enabled'] = true;
+            }
+            return $channel + ['configuration_id' => $configurationId, 'configuration_version' => $version];
+        });
+    }
+
+    /**
+     * 编辑通道通用属性及支付接入；切换插件时新参数与通道在同一事务内建立。
+     * 切换插件/支付方式前保护待付款订单和组类型；旧单快照不改写。
+     */
+    public function save(array $input, ConfigurationActionContext $actor): array
+    {
+        $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
+        $definition = $this->plugins->definition($input['plugin_code']);
+        if (!in_array($input['pay_type'], $definition->payTypes, true)) {
+            throw new BusinessException('所选插件不支持该支付方式', Code::VALIDATION_FAILED);
+        }
+        return $this->transaction(function () use ($input, $observed, $definition, $actor): array {
+            $this->audit->authorize($actor);
+            $this->defaults->lockTypes(array_unique([...$observed['pay_types'], $input['pay_type']]));
+            $configuration = $this->configurations->lock($observed['api_config_id']);
+            $channel = $this->channels->lock($input['id']);
+            $this->assertCurrent($configuration, $channel, $input);
+            $typeChanged = $channel['pay_types'] !== [$input['pay_type']];
+            $pluginChanged = $channel['plugin_code'] !== $definition->code;
+            $bindingChanged = $typeChanged || $pluginChanged;
+            if ($bindingChanged) {
+                if ($this->channels->hasPendingPayments($channel['id'])) {
+                    throw new BusinessException('通道仍有待付款订单，处理完成后可切换支付方式或插件', Code::CONFLICT);
+                }
+                if ($typeChanged && $this->defaults->customGroupsUsingChannel($channel['id']) !== []) {
+                    throw new BusinessException('请先从原支付方式的轮询组移除此通道，再修改支付方式', Code::CONFLICT);
+                }
+                $this->management->assertNew($definition->code);
+                $type = $this->catalog->lockType($input['pay_type']);
+                if ($type === null || (int) $type['enabled'] !== 1) { throw new BusinessException('支付方式已停用或不存在', Code::CONFLICT); }
+            }
+            if ($pluginChanged) {
+                [$configurationId, $version, $scopeKey] = $this->createConfiguration($input, $actor);
+            } else {
+                if ($input['settings'] !== []) { throw new BusinessException('请使用“配置”修改当前插件参数', Code::VALIDATION_FAILED); }
+                $configurationId = $configuration['id']; $version = (int) $configuration['config_version'];
+                $scopeKey = $this->scopeForType($configurationId, $version, $input['pay_type']);
+            }
+            if ($bindingChanged) { $this->channels->changeConfiguration($channel['id'], $configurationId, $definition->code); }
+            $saved = $this->channelService->writeInTransaction($channel['id'], $input['expected_revision'],
+                $configurationId, $version, $this->rules($input['channel'], $scopeKey, $input['pay_type'], $input['participates_default_route'] ?? null), $actor);
+            return $saved + ['configuration_id' => $configurationId, 'configuration_version' => $version];
+        });
+    }
+
+    /** 通道创建自己的参数记录；客户端不能提交已有配置 ID。 */
+    private function createConfiguration(array $input, ConfigurationActionContext $actor): array
+    {
+        $created = $this->configurationService->createInTransaction($input['plugin_code'], $input['channel']['name'], $input['settings'], $actor);
+        return [$created['id'], $created['config_version'], $this->scopeForType($created['id'], $created['config_version'], $input['pay_type'])];
+    }
+
+    /** 配置版本只能在其已登记的支付方式内选择匹配范围。 */
+    private function scopeForType(string $id, int $version, string $type): string
+    {
+        $keys = [];
+        foreach ($this->bindings->keys($id, $version) as $key) {
+            $scope = $this->scopes->find($key);
+            if ($scope !== null && $this->catalog->typeCode($scope['pay_type_id']) === $type) { $keys[] = $key; }
+        }
+        if (count($keys) !== 1) { throw new BusinessException('插件配置缺少唯一的支付方式关联', Code::CONFLICT); }
+        return $keys[0];
+    }
+
+    /**
+     * 插件参数独立保存；仅当前通道生成新快照并停用，已有订单继续引用原快照。
+     * 不通过额外调用“编辑通道”来完成配置更新，版本检查及快照刷新在同一事务中结束。
+     * @param array<string,mixed> $input plugin-save 场景，配置正文不得记录到日志。
+     */
+    public function configure(#[\SensitiveParameter] array $input, ConfigurationActionContext $actor): array
+    {
+        $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
+        return $this->transaction(function () use ($input, $observed, $actor): array {
+            $this->audit->authorize($actor);
+            $this->defaults->lockTypes($observed['pay_types']);
+            $configuration = $this->configurations->lock($observed['api_config_id']);
+            $this->channels->lockForConfiguration($configuration['id']);
+            $channel = $this->channels->lock($input['id']);
+            $this->assertCurrent($configuration, $channel, $input);
+            $saved = $this->configurationService->saveInTransaction($configuration['id'], $input['expected_configuration_version'],
+                $configuration['name'], $input['settings'], $actor, $input['retain_secrets']);
+            if ($saved['config_version'] !== $input['expected_configuration_version']) {
+                $updated = $this->configurations->lock($configuration['id']);
+                $this->revisions->freezeLocked($updated, $this->channels->lock($channel['id']));
+            }
+            return $saved;
+        });
+    }
+
+    /**
+     * 启用时同时完成账号采集授权；停用只停止该通道新单，历史到账采集继续保留。
+     *
+     * @param array{id:string,expected_revision:string,expected_configuration_version:int,enabled:bool} $input 经验证的开关及原版本。
+     * @throws BusinessException 配置版本冲突、已删除、插件参数不完整或接入关联不一致。
+     */
+    public function setEnabled(array $input, ConfigurationActionContext $actor): void
+    {
+        $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
+        $this->transaction(function () use ($input, $observed, $actor): void {
+            $this->audit->authorize($actor);
+            $this->defaults->lockTypes($observed['pay_types']);
+            $configuration = $this->configurations->lock($observed['api_config_id']);
+            $this->channels->lockForConfiguration($configuration['id']);
+            $this->assertCurrent($configuration, $this->channels->lock($input['id']), $input);
+            if ($input['enabled']) {
+                $this->management->assertNew($configuration['plugin_code']);
+                $this->configurationService->setEnabledInTransaction($configuration['id'], $input['expected_configuration_version'], true, $actor);
+            }
+            $this->channelService->setEnabledInTransaction($input['id'], $input['expected_revision'], $input['expected_configuration_version'], $input['enabled'], $actor);
+            if ($configuration['query_key'] !== null) { $this->runtime->wake($configuration['query_key'], $this->clock->now()->format('Y-m-d H:i:s')); }
+        });
+    }
+
+    /**
+     * 删除只标记当前配置不可选，保留实体及快照；管理员锁串行化组成员引用变更。
+     *
+     * @param array{id:string,expected_revision:string,expected_configuration_version:int} $input 经验证的通道和原版本。
+     * @throws BusinessException 版本冲突、已删除、仍有待付款订单或轮询组引用；拒绝时不写删除标记。
+     */
+    public function delete(array $input, ConfigurationActionContext $actor): void
+    {
+        $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
+        $this->transaction(function () use ($input, $observed, $actor): void {
+            $this->audit->authorize($actor);
+            $this->defaults->lockTypes($observed['pay_types']);
+            $configuration = $this->configurations->lock($observed['api_config_id']);
+            $channel = $this->channels->lock($input['id']); $this->assertCurrent($configuration, $channel, $input);
+            if ($this->channels->hasPendingPayments($channel['id'])) { throw new BusinessException('通道仍有待付款订单，请先处理订单', Code::CONFLICT); }
+            $references = $this->defaults->customGroupsUsingChannel($channel['id']);
+            if ($references !== []) { throw new BusinessException('请先在轮询组中移除该通道，再执行删除', Code::CONFLICT, ['groups' => array_column($references, 'name')]); }
+            $this->defaults->removeChannel($channel['id']);
+            $this->channels->markDeleted($channel['id'], $this->clock->now()->format('Y-m-d H:i:s'));
+            if ($configuration['query_key'] !== null) { $this->runtime->wake($configuration['query_key'], $this->clock->now()->format('Y-m-d H:i:s')); }
+            $this->audit->record($actor, 'channel.delete', 'payment_channel', $channel['id'], 'deleted', ['enabled' => false]);
+        });
+    }
+
+    private function assertCurrent(\app\model\payment\PaymentPluginConf $configuration, \app\model\payment\PaymentChannel $channel, array $input): void
+    {
+        if ($channel['deleted_at'] !== null) { throw new BusinessException('通道已删除', Code::NOT_FOUND); }
+        if ($channel['api_config_id'] !== $configuration['id'] || $channel['current_revision_id'] !== $input['expected_revision']
+            || (int) $configuration['config_version'] !== $input['expected_configuration_version']) { throw new BusinessException('通道配置已改变，请刷新后再操作', Code::CONFLICT); }
+    }
+
+    /** @param array<string,int|string|null> $values 已校验通道表单；金额为分。 */
+    private function rules(array $values, string $scope, string $type, ?bool $participates): PaymentChannelInput
+    {
+        try { return new PaymentChannelInput($values['name'], $scope, $type,
+            $values['minimum_amount'], $values['maximum_amount'], $values['daily_limit_amount'], $values['daily_limit_count'], $values['available_from'], $values['available_to'], $participates); }
+        catch (\InvalidArgumentException) { throw new BusinessException('请核对通道名称、限额和可用时段', Code::VALIDATION_FAILED); }
+    }
+}

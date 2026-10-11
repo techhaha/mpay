@@ -12,7 +12,6 @@ use app\repository\payment\notify\NotifyTaskRepository;
 use app\service\payment\config\PaymentAppCredentialService;
 use app\service\payment\epay\EpayV1MessageService;
 use DateTimeImmutable;
-use DateTimeZone;
 use LogicException;
 
 /**
@@ -49,7 +48,7 @@ final class NotifyService
         $parameters = $this->messages->signForTarget($biz['notify_url'],
             $this->messages->successParameters($biz, $pay, $biz['pid']),
             $this->credentials->secretForVersion($biz['app_id'], $biz['credential_version_id']));
-        $notifyNo = $this->numbers->insert('N', new DateTimeImmutable($now, new DateTimeZone('Asia/Shanghai')), fn (string $notifyNo) => $this->tasks->create([
+        $notifyNo = $this->numbers->insert('N', new DateTimeImmutable($now), fn (string $notifyNo) => $this->tasks->create([
             'created_at' => $now, 'notify_no' => $notifyNo, 'event_type' => NotifyConstant::EVENT_PAY_SUCCESS, 'ref_no' => $pay['pay_no'],
             'biz_no' => $biz['biz_no'], 'pay_no' => $pay['pay_no'], 'notify_url' => $biz['notify_url'],
             'notify_data' => json_encode($parameters, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),

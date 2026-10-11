@@ -3,23 +3,23 @@ declare(strict_types=1);
 
 namespace app\service\payment\epay;
 
+use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\common\util\HttpTargetPolicy;
 use app\common\util\SiteUrl;
-use app\common\base\BaseService;
 use app\exception\BusinessException;
 use app\exception\PaymentDefinitiveException;
-use app\model\payment\PaymentApp;
 use app\model\payment\BizOrder;
+use app\model\payment\PaymentApp;
 use app\model\payment\PayOrder;
 use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\config\PaymentAppCredentialService;
-use app\service\payment\plugin\PayOrderChannelDispatchService;
 use app\service\payment\order\PayOrderService;
+use app\service\payment\plugin\PayOrderChannelDispatchService;
 
 /**
  * 易支付 V1 的认证及协议适配，不与后台 code=200 JSON 混用，不接受浏览器回跳作为到账确认。
@@ -130,7 +130,7 @@ final class EpayV1ProtocolService extends BaseService
                 }
                 return ['code' => 1, 'msg' => '查询成功', 'data' => $items];
             }
-            $today = $this->clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'))->setTime(0, 0);
+            $today = $this->clock->now()->setTime(0, 0);
             return ['code' => 1, 'msg' => '本系统不托管资金，余额固定为 0.00', 'pid' => $app['pid'],
                 'active' => (int) $app['status'], 'money' => '0.00',
                 'orders' => $this->bizOrders->countForApp($app['id']),

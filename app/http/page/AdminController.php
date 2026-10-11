@@ -43,7 +43,7 @@ final class AdminController extends BaseAdminController
     /** 仅提供页面和服务端日期默认值，订单事实由受保护同源 API 读取。 */
     public function orders(AdminSessionService $sessions, Clock $clock): Response
     {
-        $today = $clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $today = $clock->now();
         return view('admin/orders', ['title' => '交易订单 · MPAY', 'csrf_token' => $sessions->csrfToken(),
             'username' => $this->identity()['username'], 'start_date' => $today->modify('-6 days')->format('Y-m-d'),
             'end_date' => $today->format('Y-m-d')]);
@@ -52,7 +52,7 @@ final class AdminController extends BaseAdminController
     public function dashboard(AdminSessionService $sessions, Clock $clock): Response
     {
         return view('admin/dashboard', ['title' => '工作台 · MPAY', 'csrf_token' => $sessions->csrfToken(),
-            'username' => $this->identity()['username'], 'date' => $clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d')]);
+            'username' => $this->identity()['username'], 'date' => $clock->now()->format('Y-m-d')]);
     }
 
     public function receipts(AdminSessionService $sessions, Clock $clock): Response
@@ -120,7 +120,7 @@ final class AdminController extends BaseAdminController
     /** 四个只读列表共用布局；kind 只由上述固定路由方法给出，不作为任意模板路径或服务类名。 */
     private function records(string $kind, string $title, AdminSessionService $sessions, Clock $clock): Response
     {
-        $today = $clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $today = $clock->now();
         return view('admin/records', ['title' => $title . ' · MPAY', 'heading' => $title, 'kind' => $kind,
             'csrf_token' => $sessions->csrfToken(), 'username' => $this->identity()['username'],
             'start_date' => $today->modify('-6 days')->format('Y-m-d'), 'end_date' => $today->format('Y-m-d')]);

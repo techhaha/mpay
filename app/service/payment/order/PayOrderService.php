@@ -14,7 +14,6 @@ use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\service\system\config\SystemConfigService;
 use DateTimeImmutable;
-use DateTimeZone;
 use RuntimeException;
 use think\db\exception\PDOException;
 
@@ -50,11 +49,11 @@ final class PayOrderService extends BaseService
     /**
      * 组合下单用例的同事务入口；调用方拥有最外层事务，不能在此开启嵌套事务。
      * API 和后台快捷付款共用应用凭证、外部单号幂等、金额和订单写入规则。
+     * $now 是入口从 Clock 获取的创建时间；尝试分配会在取得锁后另读当前时间核对截止。
      */
     public function createLocked(CreateOrderInput $input, DateTimeImmutable $now): CreatedOrder
     {
         $this->requireTransaction();
-        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         $validSeconds = $this->settings->values('payment_defaults')['order_valid_seconds'];
         if (!is_int($validSeconds) || $validSeconds < 1 || $validSeconds > 86400) {
             throw new RuntimeException('业务单有效期配置无效');
@@ -102,9 +101,9 @@ final class PayOrderService extends BaseService
         }
         $payNo = $biz['active_pay_no'];
         if ($input->channelId !== null) {
-            $payNo = $this->attempts->prepareByChannel($biz, $input->channelId, $now)['pay_no'];
+            $payNo = $this->attempts->prepareByChannel($biz, $input->channelId)['pay_no'];
         } elseif ($input->requestedPayType !== null) {
-            $payNo = $this->attempts->prepare($biz, $input->requestedPayType, $now)['pay_no'];
+            $payNo = $this->attempts->prepare($biz, $input->requestedPayType)['pay_no'];
         }
         return new CreatedOrder($biz['biz_no'], $payNo, $accessToken, $reused);
     }
@@ -115,11 +114,11 @@ final class PayOrderService extends BaseService
      *
      * @throws BusinessException 凭证无效、应用停用、状态冲突或没有可分配的通道。
      */
-    public function selectPayType(string $bizNo, string $accessToken, string $payType, DateTimeImmutable $now): PayOrder
+    public function selectPayType(string $bizNo, string $accessToken, string $payType): PayOrder
     {
         $biz = $this->bizOrders->find($bizNo);
         $this->assertAccess($biz, $accessToken);
-        return $this->runCreation(function () use ($bizNo, $accessToken, $payType, $now, $biz): PayOrder {
+        return $this->runCreation(function () use ($bizNo, $accessToken, $payType, $biz): PayOrder {
             // 与直接指定方式的 create 采用同一锁前缀，避免两种入口互相反向等待。
             $app = $this->apps->lock($biz['app_id']);
             $locked = $this->bizOrders->lock($bizNo);
@@ -127,7 +126,7 @@ final class PayOrderService extends BaseService
             if ((int) $app['status'] !== 1) {
                 throw new BusinessException('应用已停用', ApiResponseConstant::FORBIDDEN);
             }
-            return $this->attempts->prepare($locked, $payType, $now);
+            return $this->attempts->prepare($locked, $payType);
         });
     }
 

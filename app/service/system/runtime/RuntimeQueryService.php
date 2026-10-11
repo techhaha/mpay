@@ -10,9 +10,10 @@ use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\exception\ReceiptCollectionException;
 use app\model\payment\PaymentPluginConf;
-use app\service\payment\collection\ReceiptCollectionCursor;
 use app\repository\system\RuntimeDiagnosticRepository;
+use app\service\payment\collection\ReceiptCollectionCursor;
 use Composer\InstalledVersions;
+use DateTimeImmutable;
 
 /** 运行维护的白名单读视图，组合进程心跳、持久采集记录与通知计数；不触发采集、清理、迁移或平台登录。 */
 final class RuntimeQueryService extends BaseService
@@ -35,7 +36,7 @@ final class RuntimeQueryService extends BaseService
     public function overview(): array
     {
         $workers = $this->workers->workers(); // 文件读取在数据库事务外，不持有交易/配置行锁。
-        $now = $this->clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+        $now = $this->clock->now()->format('Y-m-d H:i:s');
         $data = $this->transaction(function () use ($now): array {
             $raw = $this->records->collectionStates(); $states = [];
             foreach (self::STATUSES as $code => $label) { $states[] = ['code' => $code, 'label' => $label, 'count' => $raw[$code] ?? 0]; }
@@ -67,7 +68,7 @@ final class RuntimeQueryService extends BaseService
         }
         return $this->transaction(function () use ($filters, $page, $limit): array {
             $rows = $this->records->collectionPage($filters, array_keys(self::STATUSES), $page, $limit);
-            $observed = $this->clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+            $observed = $this->clock->now();
             $now = $observed->format('Y-m-d H:i:s');
             $items = [];
             foreach ($rows['items'] as $row) {
@@ -95,7 +96,7 @@ final class RuntimeQueryService extends BaseService
      *
      * @return array{cursor_status:string,cursor_lag_seconds:?int,cursor_completed_at:?string}
      */
-    private function coverage(PaymentPluginConf $row, bool $matches, \DateTimeImmutable $now): array
+    private function coverage(PaymentPluginConf $row, bool $matches, DateTimeImmutable $now): array
     {
         $empty = ['cursor_status' => 'unavailable', 'cursor_lag_seconds' => null, 'cursor_completed_at' => null];
         if ($row['cursor_json'] === null) { return $empty; }

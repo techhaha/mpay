@@ -5,6 +5,7 @@ namespace app\repository\system;
 
 use app\common\base\BaseRepository;
 use app\model\admin\AdminOperationLog;
+use DateTimeImmutable;
 
 /**
  * 管理操作的专用审计写入，不通过可轮转技术日志替代；与成功配置变更共用外层事务。
@@ -32,12 +33,12 @@ final class AdminOperationLogRepository extends BaseRepository
      * 调用认证服务须先锁同一管理员行；使用已有身份/时间索引读取有限失败样本，不由仓储决定封禁策略。
      * 登录失败身份未被认证，adminId 为 null；改密失败使用已认证身份。未知用户名不作为审计查询条件。
      */
-    public function rejectedAuthenticationCount(?string $adminId, string $action, ?string $clientIp, \DateTimeImmutable $since, int $limit): int
+    public function rejectedAuthenticationCount(?string $adminId, string $action, ?string $clientIp, DateTimeImmutable $since, int $limit): int
     {
         $this->requireTransaction();
         $query = $this->model->where('action', $action)
             ->where('result_code', 'rejected')
-            ->where('created_at', '>=', $since->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s'));
+            ->where('created_at', '>=', $since->format('Y-m-d H:i:s'));
         $query = $adminId === null ? $query->whereNull('admin_user_id') : $query->where('admin_user_id', $adminId);
         $query = $clientIp === null ? $query->whereNull('client_ip') : $query->where('client_ip', $clientIp);
         return count($query->limit($limit)->column('id'));

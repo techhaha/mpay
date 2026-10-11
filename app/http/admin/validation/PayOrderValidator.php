@@ -9,6 +9,7 @@ use app\common\util\Money;
 use app\exception\BusinessException;
 use app\http\admin\validation\PaginationValidator;
 use app\service\payment\order\ManualReceiptEvidence;
+use DateTimeImmutable;
 use think\Validate;
 
 /** 后台订单的原生字段/场景验证；金额只接收十进制元字符串，身份和操作权限不从正文获取。 */
@@ -123,9 +124,9 @@ final class PayOrderValidator extends Validate
     }
 
     /** 原生日历解析后再逐字回比，拒绝 2 月 31 日等被自动纠正的输入；不接受浏览器时区替换。 */
-    private function date(string $value, string $format): \DateTimeImmutable
+    private function date(string $value, string $format): DateTimeImmutable
     {
-        $date = \DateTimeImmutable::createFromFormat('!' . $format, $value, new \DateTimeZone('Asia/Shanghai'));
+        $date = DateTimeImmutable::createFromFormat('!' . $format, $value);
         if ($date === false || $date->format($format) !== $value) {
             throw new BusinessException('日期或时间无效，请按上海时区填写', Code::VALIDATION_FAILED);
         }

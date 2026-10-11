@@ -26,7 +26,6 @@ use app\service\payment\cashier\PaymentPresentation;
 use app\service\payment\notify\NotifyService;
 use app\service\payment\receipt\ReceiptEvent;
 use DateTimeImmutable;
-use DateTimeZone;
 use InvalidArgumentException;
 use RuntimeException;
 use UnexpectedValueException;
@@ -61,7 +60,6 @@ final class PayOrderLifecycleService extends BaseService
     public function confirmManual(string $payNo, AdminActionContext $actor, ManualReceiptEvidence $evidence, DateTimeImmutable $now, bool $notifyMerchant = true): PayOrder
     {
         $target = $this->payOrders->find($payNo) ?? throw new BusinessException('支付单不存在', ApiResponseConstant::NOT_FOUND);
-        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return $this->transaction(function () use ($target, $payNo, $actor, $evidence, $now, $notifyMerchant): PayOrder {
             $this->assertAdmin($actor);
             $biz = $this->bizOrders->lock($target['biz_no']);
@@ -119,7 +117,6 @@ final class PayOrderLifecycleService extends BaseService
     public function closeLocally(string $payNo, AdminActionContext $actor, DateTimeImmutable $now): PayOrder
     {
         $target = $this->payOrders->find($payNo) ?? throw new BusinessException('支付单不存在', ApiResponseConstant::NOT_FOUND);
-        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return $this->transaction(function () use ($target, $payNo, $actor, $now): PayOrder {
             $this->assertAdmin($actor);
             $biz = $this->bizOrders->lock($target['biz_no']);
@@ -162,21 +159,20 @@ final class PayOrderLifecycleService extends BaseService
      * @param int $leaseSeconds 执行认领期限，秒；不是付款有效期。
      * @return array{execute:bool,token:?string,pay:PayOrder} execute=false 时 token 为 null，不授予调用权。
      */
-    public function beginExecution(string $payNo, bool $replaySafe, int $leaseSeconds, DateTimeImmutable $now, string $requestId): array
+    public function beginExecution(string $payNo, bool $replaySafe, int $leaseSeconds, string $requestId): array
     {
         if ($leaseSeconds < 5 || $leaseSeconds > 300) {
             throw new InvalidArgumentException('支付执行认领期限越界');
         }
         $target = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
         // 到期处理拥有独立事务；先完成它，再认领，避免嵌套事务和给已到期订单展示付款材料。
-        $this->expire($target['biz_no'], $now);
-        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
-        return $this->transaction(function () use ($target, $payNo, $replaySafe, $leaseSeconds, $now, $requestId): array {
+        $this->expire($target['biz_no']);
+        return $this->transaction(function () use ($target, $payNo, $replaySafe, $leaseSeconds, $requestId): array {
             $biz = $this->bizOrders->lock($target['biz_no']);
             $pay = $this->payOrders->lock($payNo);
             $this->assertOrderLink($biz, $pay);
             // 前置到期扫描与本事务之间可能再次等锁；调用权必须按取锁后的时间判断。
-            $now = max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai'));
+            $now = $this->clock->now();
             if ($this->expireWaiting($biz, $now)) {
                 return ['execute' => false, 'token' => null, 'pay' => $this->payOrders->find($payNo)
                     ?? throw new RuntimeException('到期支付单不可读取')];
@@ -234,7 +230,6 @@ final class PayOrderLifecycleService extends BaseService
         string $token,
         string $outcome,
         ?PaymentPresentation $presentation,
-        DateTimeImmutable $now,
         string $requestId,
         ?string $channelOrderNo = null,
     ): PayOrder {
@@ -244,14 +239,13 @@ final class PayOrderLifecycleService extends BaseService
             throw new InvalidArgumentException('支付执行回写合同不一致');
         }
         $target = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
-        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         // 调用期间可能跨过付款截止点，回写前先结束到期待付，避免再发布过期二维码材料。
-        $this->expire($target['biz_no'], $now);
-        return $this->transaction(function () use ($target, $payNo, $token, $outcome, $presentation, $now, $requestId, $channelOrderNo): PayOrder {
+        $this->expire($target['biz_no']);
+        return $this->transaction(function () use ($target, $payNo, $token, $outcome, $presentation, $requestId, $channelOrderNo): PayOrder {
             $biz = $this->bizOrders->lock($target['biz_no']);
             $pay = $this->payOrders->lock($payNo);
             $this->assertOrderLink($biz, $pay);
-            $now = max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai'));
+            $now = $this->clock->now();
             if ($this->expireWaiting($biz, $now)) {
                 $pay = $this->payOrders->find($payNo) ?? throw new RuntimeException('到期支付单不可读取');
             }
@@ -298,6 +292,7 @@ final class PayOrderLifecycleService extends BaseService
     /**
      * 插件已逐条定位订单；按 Biz → Pay → Scope → Flow 锁序复核后才写最终流水。
      * 流水、订单成功和通知责任同事务提交。无匹配或证据冲突不保存流水，也没有后台补匹配队列。
+     * receivedAt 是 Clock 记录的接收时间，保留原值；状态更新时间在取得锁后另行读取。
      * @return array{flow_id:?string,pay_no:?string,matched:bool,reason:string}
      */
     public function confirmReceipt(ReceiptEvent $event, DateTimeImmutable $receivedAt, string $requestId): array
@@ -305,7 +300,7 @@ final class PayOrderLifecycleService extends BaseService
         $ignore = static fn (string $reason): array => ['flow_id'=>null,'pay_no'=>null,'matched'=>false,'reason'=>$reason];
         if ($event->locatedPayNo === null) { return $ignore('no_candidate'); }
         $target = $this->payOrders->find($event->locatedPayNo) ?? throw new RuntimeException('插件所选支付单不存在');
-        $received = $receivedAt->setTimezone(new DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+        $received = $receivedAt->format('Y-m-d H:i:s');
         // 来源认证由入口和插件完成；最终确认仍必须具有合理时间及事务内的金额、归属证据。
         if ($event->paidAt === null || $event->paymentTime() > $received) { return $ignore('insufficient_receipt_evidence'); }
         return $this->transactionRetry(function () use ($event, $received, $receivedAt, $requestId, $target, $ignore): array {
@@ -404,12 +399,11 @@ final class PayOrderLifecycleService extends BaseService
      *
      * @return bool 本次是否实际推进了 TIMEOUT。
      */
-    public function expire(string $bizNo, DateTimeImmutable $now): bool
+    public function expire(string $bizNo): bool
     {
-        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
-        return $this->transaction(function () use ($bizNo, $now): bool {
+        return $this->transaction(function () use ($bizNo): bool {
             $biz = $this->bizOrders->lock($bizNo);
-            return $this->expireWaiting($biz, max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai')));
+            return $this->expireWaiting($biz, $this->clock->now());
         });
     }
 

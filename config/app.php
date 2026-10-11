@@ -10,7 +10,7 @@ return [
     'with_route'       => true,
     // 默认应用
     'default_app'      => 'index',
-    // 默认时区
+    // Web、CLI 和 Clock 共用的默认时区；内部业务时间及数据库 DATETIME 统一使用此时区。
     'default_timezone' => 'Asia/Shanghai',
 
     // 应用映射（自动多应用模式有效）

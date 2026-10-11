@@ -3,20 +3,21 @@ declare(strict_types=1);
 
 namespace app\service\payment\order;
 
+use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\NotifyConstant;
 use app\common\constant\TradeConstant;
-use app\common\base\BaseService;
 use app\exception\BusinessException;
 use app\model\payment\PayOrder;
-use app\repository\system\AdminUserRepository;
-use app\repository\payment\trade\BizOrderRepository;
-use app\repository\payment\trade\PayOrderRepository;
-use app\repository\payment\trade\PayOrderOperationLogRepository;
 use app\repository\payment\notify\NotifyTaskRepository;
+use app\repository\payment\trade\BizOrderRepository;
+use app\repository\payment\trade\PayOrderOperationLogRepository;
+use app\repository\payment\trade\PayOrderRepository;
 use app\repository\system\AdminOperationLogRepository;
-use app\service\system\access\AdminAuthService;
+use app\repository\system\AdminUserRepository;
 use app\service\payment\notify\NotificationPolicy;
+use app\service\system\access\AdminAuthService;
+use DateTimeImmutable;
 
 /** 后台人工动作门面，执行身份/改密版本核验及确认收款前的密码复核，不依赖页面按钮权限。 */
 final class PayOrderAdminActionService extends BaseService
@@ -43,7 +44,7 @@ final class PayOrderAdminActionService extends BaseService
         AdminActionContext $actor,
         ManualReceiptEvidence $evidence,
         #[\SensitiveParameter] string $currentPassword,
-        \DateTimeImmutable $now,
+        DateTimeImmutable $now,
         bool $notifyMerchant = true,
     ): PayOrder {
         $this->authentication->verifyPassword($actor->adminId, $actor->sessionVersion, $actor->requestId, $currentPassword);
@@ -51,7 +52,7 @@ final class PayOrderAdminActionService extends BaseService
     }
 
     /** 本地关闭要求有效身份和非空原因；不能向用户宣称平台二维码已撤销。 */
-    public function close(string $payNo, AdminActionContext $actor, \DateTimeImmutable $now): PayOrder
+    public function close(string $payNo, AdminActionContext $actor, DateTimeImmutable $now): PayOrder
     {
         $admin = $this->admins->find($actor->adminId);
         if ($admin === null || (int) $admin['status'] !== 1 || (int) $admin['session_version'] !== $actor->sessionVersion) {
@@ -64,7 +65,7 @@ final class PayOrderAdminActionService extends BaseService
      * 业务单尚无尝试也可停止等待；存在支付单时复用完整生命周期，不能为关闭创建一个虚构支付尝试。
      * 从读取到加锁期间若生成了尝试，返回冲突让页面刷新；不在已开启事务里嵌套调用生命周期事务。
      */
-    public function closeBusiness(string $bizNo, AdminActionContext $actor, \DateTimeImmutable $now): void
+    public function closeBusiness(string $bizNo, AdminActionContext $actor, DateTimeImmutable $now): void
     {
         $observed = $this->bizOrders->find($bizNo) ?? throw new BusinessException('业务订单不存在', ApiResponseConstant::NOT_FOUND);
         if ($observed['active_pay_no'] !== null) {
@@ -82,7 +83,7 @@ final class PayOrderAdminActionService extends BaseService
                 throw new BusinessException('订单状态已经变化，请刷新后核对', ApiResponseConstant::CONFLICT);
             }
             if ($before !== TradeConstant::ORDER_STATUS_CLOSED) {
-                $time = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+                $time = $now->format('Y-m-d H:i:s');
                 $this->bizOrders->saveLifecycle($bizNo, $before, ['status' => TradeConstant::ORDER_STATUS_CLOSED, 'closed_at' => $time], $time);
             }
             $this->adminOperations->record(['admin_user_id' => $actor->adminId, 'request_id' => $actor->requestId,
@@ -99,7 +100,7 @@ final class PayOrderAdminActionService extends BaseService
      *
      * @return array{notify_no:string,attempt_no:int,scheduled:bool} scheduled 不代表业务网站已经收到通知。
      */
-    public function retryNotification(string $payNo, int $expectedAttempts, AdminActionContext $actor, \DateTimeImmutable $now): array
+    public function retryNotification(string $payNo, int $expectedAttempts, AdminActionContext $actor, DateTimeImmutable $now): array
     {
         $target = $this->payOrders->find($payNo) ?? throw new BusinessException('支付单不存在', ApiResponseConstant::NOT_FOUND);
         return $this->transaction(function () use ($target, $payNo, $expectedAttempts, $actor, $now): array {
@@ -134,11 +135,11 @@ final class PayOrderAdminActionService extends BaseService
                 if ($state === NotifyConstant::STATUS_HELD && ($used !== 0 || $task['first_ack_at'] !== null || $task['released_at'] !== null)) {
                     throw new \RuntimeException('暂缓通知存在不一致的发送记录');
                 }
-                $start = new \DateTimeImmutable($task['released_at'] ?? $task['created_at'], new \DateTimeZone('Asia/Shanghai'));
+                $start = new DateTimeImmutable($task['released_at'] ?? $task['created_at']);
                 // 首次解除暂缓开启正常自动重试；已结束的补发只授权一次。提前原计划不重置预算。
                 $single = in_array($state, [NotifyConstant::STATUS_SUCCESS, NotifyConstant::STATUS_EXHAUSTED], true)
                     || ($state === NotifyConstant::STATUS_PENDING && !$this->notificationPolicy->canAttempt($start, $used, $now));
-                $this->tasks->scheduleDelivery($task, $now->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s'),
+                $this->tasks->scheduleDelivery($task, $now->format('Y-m-d H:i:s'),
                     $single, $state === NotifyConstant::STATUS_HELD);
             }
             $this->operations->record($payNo, $actor->adminId, $actor->requestId, $actor->reason,

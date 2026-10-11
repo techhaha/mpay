@@ -3,20 +3,21 @@ declare(strict_types=1);
 
 namespace app\service\payment\plugin;
 
-use app\service\payment\order\PayOrderLifecycleService;
-use app\service\payment\receipt\PayOrderCallbackService;
-use app\service\payment\receipt\ChannelNotifyContext;
 use app\common\constant\TradeConstant;
-use app\service\payment\cashier\PaymentPresentation;
-use app\service\payment\receipt\ReceiptScopeSet;
 use app\common\util\Clock;
 use app\common\validation\PluginConfigValidator;
 use app\exception\PaymentDefinitiveException;
 use app\exception\PaymentUncertainException;
 use app\model\payment\PayOrder;
-use app\service\file\FileAssetService;
 use app\repository\payment\trade\PayOrderRepository;
+use app\service\file\FileAssetService;
+use app\service\payment\cashier\PaymentPresentation;
 use app\service\payment\config\PaymentChannelRevisionService;
+use app\service\payment\order\PayOrderLifecycleService;
+use app\service\payment\receipt\ChannelNotifyContext;
+use app\service\payment\receipt\PayOrderCallbackService;
+use app\service\payment\receipt\ReceiptScopeSet;
+use DateTimeImmutable;
 use think\Config;
 
 /**
@@ -45,15 +46,15 @@ final class PayOrderChannelDispatchService
      *
      * @return PayOrder 持久状态，仅供内部映射；调用者不能直接序列化完整模型。
      */
-    public function dispatch(string $payNo, \DateTimeImmutable $now, string $requestId): PayOrder
+    public function dispatch(string $payNo, DateTimeImmutable $now, string $requestId): PayOrder
     {
         $pay = $this->payOrders->find($payNo) ?? throw new \RuntimeException('支付单不存在');
         if (!in_array((int) $pay['status'], [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)) {
             return $pay;
         }
-        $time = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+        $time = $now->format('Y-m-d H:i:s');
         if ($pay['expire_at'] <= $time) {
-            $this->lifecycle->expire($pay['biz_no'], $now);
+            $this->lifecycle->expire($pay['biz_no']);
             return $this->payOrders->find($payNo) ?? throw new \RuntimeException('到期后的支付单不可读取');
         }
         $execution = $pay['ext_json']['payment_context']['execution'] ?? null;
@@ -80,7 +81,7 @@ final class PayOrderChannelDispatchService
             throw new \RuntimeException('执行认领期限必须为整数秒');
         }
         // 插件明确声明重放边界；有外部副作用的插件默认不得因租约到期再次发起交易。
-        $claim = $this->lifecycle->beginExecution($payNo, $plugin->canRetryPay(), $lease, $now, $requestId);
+        $claim = $this->lifecycle->beginExecution($payNo, $plugin->canRetryPay(), $lease, $requestId);
         if (!$claim['execute']) {
             return $claim['pay'];
         }
@@ -109,16 +110,16 @@ final class PayOrderChannelDispatchService
                 $presentation = new PaymentPresentation($params['qrcode_content'] ?? null, $params['qrcode_image_url'] ?? null);
             }
         } catch (PaymentDefinitiveException) {
-            return $this->lifecycle->finishExecution($payNo, $token, 'rejected', null, $this->clock->now(), $requestId);
+            return $this->lifecycle->finishExecution($payNo, $token, 'rejected', null, $requestId);
         } catch (PaymentUncertainException) {
-            return $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $this->clock->now(), $requestId);
+            return $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $requestId);
         } catch (\Throwable $exception) {
-            $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $this->clock->now(), $requestId);
+            $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $requestId);
             throw $exception;
         }
         $finishedAt = $this->clock->now();
         if ($result['status'] === 'pending') {
-            return $this->lifecycle->finishExecution($payNo, $token, 'presented', $presentation, $finishedAt, $requestId, $result['chan_order_no']);
+            return $this->lifecycle->finishExecution($payNo, $token, 'presented', $presentation, $requestId, $result['chan_order_no']);
         }
         $callback = new ChannelNotifyContext($pay['channel_id'], $context->channel['api_config_id'], $context->accountKey,
             $context->configVersion, $pay['plugin_code'], $version,
@@ -150,7 +151,7 @@ final class PayOrderChannelDispatchService
             bizNo: $pay['biz_no'],
             payType: $payment['pay_type'],
             payAmount: $pay->originalAmount(),
-            expiresAt: new \DateTimeImmutable($pay['expire_at'], new \DateTimeZone('Asia/Shanghai')),
+            expiresAt: new DateTimeImmutable($pay['expire_at']),
             scopeKey: $pay['receipt_scope_key'],
             accountKey: $receipt['account_key'],
             configVersion: $receipt['config_version'],

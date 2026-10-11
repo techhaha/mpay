@@ -4,8 +4,6 @@ declare(strict_types=1);
 namespace app\service\payment\routing;
 
 
-use app\service\system\audit\ConfigurationAuditService;
-use app\service\system\audit\ConfigurationActionContext;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
@@ -14,6 +12,8 @@ use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPollGroupRepository;
+use app\service\system\audit\ConfigurationActionContext;
+use app\service\system\audit\ConfigurationAuditService;
 
 /** 组、成员与应用绑定的管理用例；保持版本竞争检查，预览复用选路且不推进游标。 */
 final class PaymentPollGroupService extends BaseService
@@ -112,7 +112,7 @@ final class PaymentPollGroupService extends BaseService
         return $this->transaction(function () use ($appId, $payType, $amount): array {
             $app = $this->apps->lock($appId);
             if ((int) $app['status'] !== 1) { throw new BusinessException('应用已停用', ApiResponseConstant::CONFLICT); }
-            $result = $this->routes->selectFor($appId, $amount, $payType, $this->clock->now(), false);
+            $result = $this->routes->selectFor($appId, $amount, $payType, false);
             return ['poll_group_id' => $result['poll_group_id'], 'route_mode' => $result['route_mode'],
                 'channel_id' => $result['channel']['id'], 'channel_name' => $result['channel']['name'], 'cursor_advanced' => false];
         });

@@ -24,7 +24,6 @@ use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
 use DateTimeImmutable;
-use DateTimeZone;
 use RuntimeException;
 use think\Request;
 use think\Response;
@@ -191,7 +190,7 @@ final class PayOrderCallbackService extends BaseService
             || ($result['chan_trade_no'] ?? null) !== $record['trade_no']) {
             throw new BusinessException('插件通知与订单金额或归属不一致', ApiResponseConstant::FORBIDDEN);
         }
-        $paidAt = $record['paid_at'] === null ? null : new DateTimeImmutable($record['paid_at'], new DateTimeZone('Asia/Shanghai'));
+        $paidAt = $record['paid_at'] === null ? null : new DateTimeImmutable($record['paid_at']);
         $event = new ReceiptEvent($pay['receipt_scope_key'], $context->accountKey,
             $context->configurationVersion, $record['pay_type'], $record['event_key'], $record['amount'],
             $paidAt, $record['trade_no'], $record['remark'], $record['payload_digest'],

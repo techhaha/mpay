@@ -28,7 +28,6 @@ use app\repository\system\AdminUserRepository;
 use app\service\payment\notify\NotifyQueryService;
 use app\service\payment\receipt\ReceiptFlowQueryService;
 use DateTimeImmutable;
-use DateTimeZone;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
@@ -159,8 +158,8 @@ final class PayOrderQueryService extends BaseService
      */
     public function export(array $filters, AdminActionContext $actor): mixed
     {
-        $from = new DateTimeImmutable($filters['from'], new DateTimeZone('Asia/Shanghai'));
-        $until = new DateTimeImmutable($filters['until'], new DateTimeZone('Asia/Shanghai'));
+        $from = new DateTimeImmutable($filters['from']);
+        $until = new DateTimeImmutable($filters['until']);
         if ($until <= $from || $until->getTimestamp() - $from->getTimestamp() > 31 * 86400) {
             throw new BusinessException('一次导出最多 31 天，请缩小筛选范围', Code::VALIDATION_FAILED);
         }

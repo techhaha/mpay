@@ -21,8 +21,6 @@ use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\routing\PaymentRouteService;
-use DateTimeImmutable;
-use DateTimeZone;
 use RuntimeException;
 use think\Config;
 
@@ -52,12 +50,11 @@ final class PayOrderAttemptService
      * 已有支付单时先锁 PayOrder，不重新评估通道策略或分配金额，终态也不创建第二次尝试。
      *
      * @param BizOrder $biz 调用方已在同一连接上锁定的业务单；再次当前读防止模型过期。
-     * @param DateTimeImmutable $now 本次用例的统一时间，内部转换为 Asia/Shanghai。
      * @return PayOrder 内部模型，公开响应必须另行取白名单字段。
      * @throws BusinessException 方式冲突、订单不可继续或没有可用的收款方案。
      * @throws RuntimeException 快照损坏或内部关联失效；不能退回活动配置掩盖故障。
      */
-    public function prepare(BizOrder $biz, string $payType, DateTimeImmutable $now): PayOrder
+    public function prepare(BizOrder $biz, string $payType): PayOrder
     {
         if (!PaymentTypeCode::valid($payType)) {
             throw new BusinessException('不支持该支付方式', ApiResponseConstant::VALIDATION_FAILED);
@@ -78,8 +75,8 @@ final class PayOrderAttemptService
             }
             return $pay;
         }
-        // 等锁/事务重试可能耗时，分配不能使用比当前服务器时间更早的有效窗口判断。
-        $now = max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai'));
+        // 等锁/事务重试可能耗时，取得锁后重新读取时间判断付款窗口。
+        $now = $this->clock->now();
         if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_CREATED
             || (int) $biz['attempt_count'] !== 0 || $biz['expire_at'] <= $now->format('Y-m-d H:i:s')) {
             throw new BusinessException('订单已不能建立支付尝试', ApiResponseConstant::CONFLICT);
@@ -88,8 +85,8 @@ final class PayOrderAttemptService
         if ($type === null || (int) $type['enabled'] !== 1) {
             throw new BusinessException('该支付方式暂不可用', ApiResponseConstant::SERVICE_UNAVAILABLE);
         }
-        $selection = $this->routes->selectFor($biz['app_id'], (int) $biz['order_amount'], $payType, $now);
-        return $this->persist($biz, $type['id'], $payType, $selection, $now);
+        $selection = $this->routes->selectFor($biz['app_id'], (int) $biz['order_amount'], $payType);
+        return $this->persist($biz, $type['id'], $payType, $selection);
     }
 
     /**
@@ -99,7 +96,7 @@ final class PayOrderAttemptService
      *
      * @throws BusinessException 原单通道不一致、订单不能继续或通道配置发生变化。
      */
-    public function prepareByChannel(BizOrder $biz, string $channelId, DateTimeImmutable $now): PayOrder
+    public function prepareByChannel(BizOrder $biz, string $channelId): PayOrder
     {
         $biz = $this->bizOrders->lock($biz['biz_no']);
         if ($biz['active_pay_no'] !== null) {
@@ -137,7 +134,7 @@ final class PayOrderAttemptService
             'plugin_version' => $snapshot['plugin_version'],
             'poll_group_id' => null,
             'route_mode' => RouteConstant::DIRECT
-        ], $now);
+        ]);
     }
 
     /**
@@ -152,13 +149,14 @@ final class PayOrderAttemptService
      *     route_mode:int
      * } $selection 已锁定并冻结的通道选择结果，直接指定时轮询组为空。
      */
-    private function persist(BizOrder $biz, string $typeId, string $payType, array $selection, DateTimeImmutable $now): PayOrder
+    private function persist(BizOrder $biz, string $typeId, string $payType, array $selection): PayOrder
     {
         $context = $biz['ext_json'] ?? [];
         $channel = $selection['channel'];
         // 新支付行尚不存在，先拿范围排他锁，避免插入外键产生共享锁后升级死锁。
         $scope = $this->scopes->lock($channel['receipt_scope_key']);
-        $now = max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai'));
+        // 范围锁可能再次等待；编号、创建时间及付款截止判断使用同一次新读数。
+        $now = $this->clock->now();
         if ($biz['expire_at'] <= $now->format('Y-m-d H:i:s')) {
             throw new BusinessException('订单付款窗口已结束', ApiResponseConstant::CONFLICT);
         }

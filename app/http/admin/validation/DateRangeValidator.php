@@ -6,6 +6,7 @@ namespace app\http\admin\validation;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
 use app\exception\BusinessException;
+use DateTimeImmutable;
 use think\Validate;
 
 /** 后台列表共用上海时区的自然日范围；默认值只用于未提供日期，不把非法输入纠正为另一日。 */
@@ -33,14 +34,14 @@ final class DateRangeValidator extends Validate
         }
         $values = array_intersect_key($input, $this->rule);
         foreach ($values as $key => $value) { if ($value === '') { unset($values[$key]); } }
-        $today = $this->clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'))->setTime(0, 0);
+        $today = $this->clock->now()->setTime(0, 0);
         $values += ['start_date' => $today->modify('-' . ($defaultDays - 1) . ' days')->format('Y-m-d'), 'end_date' => $today->format('Y-m-d')];
         if (!(clone $this)->failException(false)->check($values)) {
             throw new BusinessException('日期必须使用年-月-日格式', ApiResponseConstant::VALIDATION_FAILED);
         }
         $dates = [];
         foreach ($values as $key => $value) {
-            $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value, new \DateTimeZone('Asia/Shanghai'));
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
             if ($date === false || $date->format('Y-m-d') !== $value) {
                 throw new BusinessException('日期无效，不能自动调整到其他日期', ApiResponseConstant::VALIDATION_FAILED);
             }

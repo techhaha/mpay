@@ -3,9 +3,6 @@ declare(strict_types=1);
 
 namespace app\service\payment\routing;
 
-use app\service\payment\plugin\PaymentPluginFactoryService;
-use app\service\payment\config\PaymentChannelRevisionService;
-use app\service\payment\config\PaymentCatalogService;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Money;
 use app\exception\BusinessException;
@@ -13,6 +10,9 @@ use app\model\payment\PaymentChannel;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
+use app\service\payment\config\PaymentCatalogService;
+use app\service\payment\config\PaymentChannelRevisionService;
+use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\receipt\ReceiptScopeService;
 
 /**
@@ -42,7 +42,7 @@ final class PaymentRouteService
      * @param bool $advance 仅新支付尝试为 true；预览为 false，仍在短事务内取一致的配置。
      * @return array{channel:PaymentChannel,account_key:string,config_version:int,plugin_version:string,poll_group_id:string,route_mode:int}
      */
-    public function selectFor(string $appId, int $amount, string $payType, \DateTimeImmutable $now, bool $advance = true): array
+    public function selectFor(string $appId, int $amount, string $payType, bool $advance = true): array
     {
         $type = $this->catalog->lockType($payType);
         if ($type === null || (int) $type['enabled'] !== 1) { throw new BusinessException('支付方式不可用', ApiResponseConstant::SERVICE_UNAVAILABLE); }
@@ -85,7 +85,8 @@ final class PaymentRouteService
                 || !$this->revisions->rulesMatch($channel, $snapshot['channel'])
                 || $configurationRevision['config_json'] !== $configuration['config_json']) { continue; }
             $this->assertRules($channel);
-            $evaluatedAt = max($now, $this->clock->now())->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+            // 通道锁取得后再按当前自然日和可用时段判断，避免跨午夜仍沿用请求时间。
+            $evaluatedAt = $this->clock->now();
             if (!$this->withinHours($channel, $evaluatedAt->format('H:i'))) { continue; }
             if ((int) $channel['daily_limit_amount'] > 0 || (int) $channel['daily_limit_count'] > 0) {
                 $day = $evaluatedAt->setTime(0, 0);
@@ -108,7 +109,7 @@ final class PaymentRouteService
             case \app\common\constant\RouteConstant::ORDER:
                 $selected = (int) $binding['cursor'] % count($eligible);
                 // 游标只在新尝试的事务中修改；预览读取同一个下次位置，不消耗序号。
-                if ($advance) { $this->groups->advance($binding, ($selected + 1) % count($eligible), $now->format('Y-m-d H:i:s')); }
+                if ($advance) { $this->groups->advance($binding, ($selected + 1) % count($eligible), $this->clock->now()->format('Y-m-d H:i:s')); }
                 break;
             case \app\common\constant\RouteConstant::WEIGHTED:
                 $total = array_sum(array_map(static fn (array $row): int => (int) $row['member']['weight'], $eligible));

@@ -23,7 +23,6 @@ use app\service\payment\order\PayOrderService;
 use app\service\payment\plugin\PayOrderChannelDispatchService;
 use app\service\payment\routing\PaymentRouteService;
 use DateTimeImmutable;
-use DateTimeZone;
 use RuntimeException;
 use think\Config;
 
@@ -69,7 +68,7 @@ final class CashierService extends BaseService
         return $this->transaction(function () use ($bizNo, $accessToken, $now): array {
             [$biz, $pay] = $this->authorisedOrders($bizNo, $accessToken);
             $status = (int) $biz['status'];
-            $expires = new DateTimeImmutable($pay === null ? $biz['expire_at'] : $pay['expire_at'], new DateTimeZone('Asia/Shanghai'));
+            $expires = new DateTimeImmutable($pay === null ? $biz['expire_at'] : $pay['expire_at']);
             $expired = $expires <= $now;
             $waiting = in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true);
             $receipt = $pay === null ? [] : ($pay['ext_json']['personal_receipt'] ?? []);
@@ -100,7 +99,7 @@ final class CashierService extends BaseService
                 $canPrepare = ($execution['replay_safe'] ?? null) === true
                     && in_array($execution['phase'] ?? null, ['claimed', 'uncertain'], true)
                     && is_string($execution['lease_until'] ?? null)
-                    && $execution['lease_until'] <= $now->setTimezone(new DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+                    && $execution['lease_until'] <= $now->format('Y-m-d H:i:s');
             }
             $notification = null;
             if ($status === TradeConstant::ORDER_STATUS_SUCCESS && $biz['notify_url'] !== null) {
@@ -133,7 +132,7 @@ final class CashierService extends BaseService
                 'can_select' => $canSelect, 'can_pay' => $presentation !== null,
                 'can_prepare' => $canPrepare, 'processing' => $pay !== null && $waiting && !$expired && $presentation === null,
                 'needs_initial_prepare' => $canPrepare && $execution === null,
-                'payment_methods' => $canSelect ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount'], $now) : [], 'presentation' => $presentation,
+                'payment_methods' => $canSelect ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount']) : [], 'presentation' => $presentation,
                 'notification_status' => $notification,
                 // 只表示可发起受保护的回跳请求；签名地址由易支付适配器在再次核验成功后构造。
                 'return_allowed' => $status === TradeConstant::ORDER_STATUS_SUCCESS && $biz['return_url'] !== null,
@@ -151,7 +150,7 @@ final class CashierService extends BaseService
      */
     public function selectType(string $bizNo, string $accessToken, string $payType, string $requestId): array
     {
-        $pay = $this->orders->selectPayType($bizNo, $accessToken, $payType, $this->clock->now());
+        $pay = $this->orders->selectPayType($bizNo, $accessToken, $payType);
         $this->dispatch->dispatch($pay['pay_no'], $this->clock->now(), $requestId);
         return $this->view($bizNo, $accessToken, $this->clock->now());
     }
@@ -193,7 +192,7 @@ final class CashierService extends BaseService
      * 只隐藏明确无可用通道的 503，配置损坏等程序异常仍交统一处理器报告。
      * @return list<array{code:string,name:string}>
      */
-    private function paymentMethods(string $appId, int $amount, DateTimeImmutable $now): array
+    private function paymentMethods(string $appId, int $amount): array
     {
         $app = $this->apps->lock($appId);
         if ((int) $app['status'] !== 1) { return []; }
@@ -204,7 +203,7 @@ final class CashierService extends BaseService
         // 先锁齐各方式，再接触可能跨方式复用的插件配置，避免预览反向等待通道编辑。
         foreach ($types as $type) { $this->catalog->find($type['id'], true); }
         foreach ($types as $type) {
-            try { $this->routes->selectFor($appId, $amount, $type['code'], $now, false); }
+            try { $this->routes->selectFor($appId, $amount, $type['code'], false); }
             catch (BusinessException $exception) {
                 if ($exception->getCode() === ApiResponseConstant::SERVICE_UNAVAILABLE) { continue; }
                 throw $exception;

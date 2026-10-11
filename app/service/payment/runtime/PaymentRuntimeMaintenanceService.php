@@ -3,15 +3,15 @@ declare(strict_types=1);
 
 namespace app\service\payment\runtime;
 
+use app\common\base\BaseService;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
-use app\common\base\BaseService;
 use app\repository\payment\receipt\ReceiptMatchReservationRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
-use app\service\payment\plugin\PayOrderChannelDispatchService;
 use app\service\payment\order\PayOrderLifecycleService;
+use app\service\payment\plugin\PayOrderChannelDispatchService;
 
 /**
  * 有界数据库扫描恢复到期及原执行，并释放窗口到期的识别槽；不依赖浏览器访问。
@@ -51,7 +51,7 @@ final class PaymentRuntimeMaintenanceService extends BaseService
             if ($outOfTime()) {
                 return array_replace($result, ['budget_exhausted' => true]);
             }
-            $result['expired'] += (int) $this->lifecycle->expire($number, $this->clock->now());
+            $result['expired'] += (int) $this->lifecycle->expire($number);
         }
         foreach (($phase === null || $phase === 'execution' ? $this->payOrders->recoverableExecutionNumbers($this->clock->now()->format('Y-m-d H:i:s'), $limit) : []) as $number) {
             if ($outOfTime()) {
@@ -76,7 +76,7 @@ final class PaymentRuntimeMaintenanceService extends BaseService
     private function releaseExpiredForPay(string $payNo): bool
     {
         $observed = $this->payOrders->find($payNo) ?? throw new \RuntimeException('识别占用缺少所属支付单');
-        $this->lifecycle->expire($observed['biz_no'], $this->clock->now());
+        $this->lifecycle->expire($observed['biz_no']);
         return $this->transaction(function () use ($observed, $payNo): bool {
             $biz = $this->bizOrders->lock($observed['biz_no']);
             $pay = $this->payOrders->lock($payNo);

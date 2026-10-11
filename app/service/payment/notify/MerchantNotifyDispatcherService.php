@@ -3,20 +3,21 @@ declare(strict_types=1);
 
 namespace app\service\payment\notify;
 
-use app\common\constant\PaymentResultCode as Result;
+use app\common\base\BaseService;
 use app\common\constant\NotifyConstant;
+use app\common\constant\PaymentResultCode as Result;
 use app\common\util\Clock;
 use app\common\util\HttpClient;
 use app\common\util\HttpTargetPolicy;
 use app\common\util\Money;
 use app\common\util\SafeLogger;
-use app\common\base\BaseService;
-use app\exception\HttpRequestException;
 use app\exception\BusinessException;
+use app\exception\HttpRequestException;
 use app\model\payment\NotifyTask;
 use app\repository\payment\notify\NotifyAttemptRepository;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\service\payment\epay\EpayV1MessageService;
+use DateTimeImmutable;
 
 /**
  * 直接派发持久商户通知：短事务认领和追加意图，事务外 HTTP，再按原 token/租约回写结果。
@@ -94,7 +95,7 @@ final class MerchantNotifyDispatcherService extends BaseService
                     return null;
                 }
                 $state = (int) $task['status'];
-                $created = new \DateTimeImmutable($task['released_at'] ?? $task['created_at'], new \DateTimeZone('Asia/Shanghai'));
+                $created = new DateTimeImmutable($task['released_at'] ?? $task['created_at']);
                 $used = (int) $task['retry_count'];
                 // 先排除扫描后被别人正常认领的任务；不能因尚未结束的有效尝试而错误隔离。
                 if (($state === NotifyConstant::STATUS_SENDING && $task['lease_until'] !== null && $task['lease_until'] > $time)

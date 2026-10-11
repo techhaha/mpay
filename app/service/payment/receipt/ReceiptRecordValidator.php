@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\service\payment\receipt;
 
 use app\common\util\Money;
+use DateTimeImmutable;
 use think\Validate;
 
 /** SDK/插件返回的标准流水边界；服务在落库和通知调用前检查，不要求插件依赖内部证据类。 */
@@ -32,7 +33,7 @@ final class ReceiptRecordValidator extends Validate
             }
         }
         if ($record['paid_at'] !== null) {
-            $date = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $record['paid_at'], new \DateTimeZone('Asia/Shanghai'));
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $record['paid_at']);
             if (!$date || $date->format('Y-m-d H:i:s') !== $record['paid_at']) { throw new \UnexpectedValueException('插件流水时间格式无效'); }
         }
         $value = array_intersect_key($record, array_flip(['pay_type', 'event_key', 'amount', 'paid_at', 'trade_no', 'remark']));

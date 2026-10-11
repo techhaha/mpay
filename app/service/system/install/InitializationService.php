@@ -7,10 +7,10 @@ use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
 use app\exception\BusinessException;
-use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\config\PaymentAppKeyRepository;
-use app\repository\system\AdminUserRepository;
+use app\repository\payment\config\PaymentAppRepository;
 use app\repository\system\AdminOperationLogRepository;
+use app\repository\system\AdminUserRepository;
 use app\repository\system\InitializationRepository;
 use app\service\payment\config\PaymentAppCredentialService;
 use think\App;
@@ -80,7 +80,7 @@ final class InitializationService extends BaseService
                 $appId = $this->apps->create($number, $appName, []);
                 $credentialId = $credentials->rotateLocked($appId, null)['id'];
                 $this->app->make(\app\service\payment\routing\DefaultRoutingService::class)->applyToApp($appId);
-                $now = $this->clock->now()->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+                $now = $this->clock->now()->format('Y-m-d H:i:s');
                 $references = ['admin_id' => $adminId, 'app_id' => $appId, 'credential_id' => $credentialId, 'initialized_at' => $now];
                 $this->state->record($references);
                 $this->logs->record(['admin_user_id' => $adminId, 'request_id' => bin2hex(random_bytes(16)), 'action' => 'system.initialize',

@@ -15,16 +15,14 @@ Thumbs.db
 !/docs/README.md
 !/docs/wiki/
 /runtime
-# 测试代码、隔离夹具、诊断脚本及部署示例随源码提交；本机演示入口和私有材料保留在本地。
-/tests/browser-demo/
-/tests/tutorial-demo/
-/tests/*.local.json
+# 根目录测试、诊断及验收工具仅在本地保留，不进入远程源码仓库。
+/tools/
+/tests/
 /deploy/**/*.conf
 /deploy/**/*.service
 __pycache__/
 *.py[cod]
 /.env.*
-!/tests/.env.example
 /runtime/*
 !/runtime/.gitignore
 /public/storage/

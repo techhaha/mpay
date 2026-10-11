@@ -1,8 +1,0 @@
-{
-  "format": 1,
-  "description": "测试报告与可恢复源码包共用的显式清单；排除真实环境、密钥、vendor、runtime、Git 和上传文件。",
-  "directories": ["app", "config", "route", "database", "tests", "deploy", "view", "public/assets", "docs", "tools"],
-  "root_files": ["AGENTS.md", "README.md", "LICENSE", "LICENSE.txt", "composer.json", "composer.lock", "think", "public/index.php", "public/router.php", "public/.htaccess", "public/.user.ini", "public/favicon.ico", "public/robots.txt", ".example.env", ".gitattributes", ".gitignore"],
-  "suffixes": [".php", ".js", ".css", ".html", ".json", ".md", ".sql", ".py", ".sh", ".svg", ".png", ".gif", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2", ".ttf", ".eot", ".example", ".txt"],
-  "special_names": ["LICENSE", ".gitkeep"]
-}

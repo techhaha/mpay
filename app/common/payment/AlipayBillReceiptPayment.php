@@ -17,9 +17,14 @@ use app\repository\payment\receipt\ReceiptMatchReservationRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
+use DateTimeImmutable;
+use DateTimeZone;
+use LogicException;
+use RuntimeException;
+use SensitiveParameter;
+use think\facade\Db;
 use think\Request;
 use think\Response;
-use think\facade\Db;
 
 /** 支付宝账单插件：主类解释账务流水，SDK 负责官方请求及 RSA2，核心服务负责轮询与最终状态。 */
 final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
@@ -57,7 +62,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
     private array $channelConfig = [];
 
-    public function init(#[\SensitiveParameter] array $channelConfig): void
+    public function init(#[SensitiveParameter] array $channelConfig): void
     {
         $this->channelConfig = $channelConfig;
     }
@@ -108,13 +113,13 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
      */
     private function prepareReceipt(string $payNo): PayOrder
     {
-        $observed = $this->orders->find($payNo) ?? throw new \RuntimeException('收款支付单不存在');
+        $observed = $this->orders->find($payNo) ?? throw new RuntimeException('收款支付单不存在');
         return Db::transaction(function () use ($observed, $payNo): PayOrder {
             $biz = $this->businessOrders->lock($observed['biz_no']);
             $pay = $this->orders->lock($payNo);
             $this->scopes->lock($pay['receipt_scope_key']);
             if ($pay['channel_id'] !== $this->getConfig('channel_id') || $pay['biz_no'] !== $biz['biz_no']) {
-                throw new \LogicException('插件与支付单通道不一致');
+                throw new LogicException('插件与支付单通道不一致');
             }
             $ext = $pay['ext_json'] ?? [];
             if (isset($ext['personal_receipt']['original_amount'])) { return $pay; }
@@ -127,8 +132,9 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
             $expiresAt = min($pay['expire_at'], $this->clock->now()->modify('+' . $this->getConfig('receipt_valid_seconds', 300) . ' seconds')->format('Y-m-d H:i:s'));
             $original = (int) $biz['order_amount'];
             Money::assertRange($original);
-            if ($original < 1 || $original > (int) $this->getConfig('max_amount', Money::MAX_CENTS)) {
-                throw new BusinessException('金额超出通道限额', ApiResponseConstant::VALIDATION_FAILED);
+            // 通用运营限额由选路服务校验；指定通道测试跳过选路，插件仍核验自身金额边界。
+            if ($original < 1) {
+                throw new BusinessException('付款金额必须大于零', ApiResponseConstant::VALIDATION_FAILED);
             }
             $mode = $this->getConfig('receipt_match_mode', 'amount');
             $remark = null;
@@ -157,7 +163,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
             ]);
             $this->orders->saveReceiptContext($payNo, $amount, $ext, $expiresAt, $now);
             $this->businessOrders->shortenExpiry($biz['biz_no'], $expiresAt);
-            return $this->orders->find($payNo) ?? throw new \RuntimeException('收款准备结果不可读取');
+            return $this->orders->find($payNo) ?? throw new RuntimeException('收款准备结果不可读取');
         });
     }
 
@@ -208,7 +214,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     private function locateReceipt(array $record, ?string $scopeKey = null, array $excluded = []): PayOrder
     {
         $scope = $scopeKey ?? (string) $this->getConfig('receipt_scope_key');
-        if ($scope === '') { throw new \LogicException('服务未注入收款范围'); }
+        if ($scope === '') { throw new LogicException('服务未注入收款范围'); }
         if ($record['trade_no'] !== null) {
             $known = $this->orders->successfulForTrade($scope, $record['trade_no']);
             if ($known !== null) { return $this->assertCollectionOrder($known); }
@@ -270,7 +276,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
      * 使用 V2 的收入方向、alipay_order_no、trans_dt、trans_memo 解释方式。
      * trans_dt 在平台协议中是入账时间，本插件按 V2 用于匹配窗口；并不宣称它是独立支付接口的成交时间。
      */
-    public function collectPage(array $window, ?array $pageToken, #[\SensitiveParameter] ?array $session): array
+    public function collectPage(array $window, ?array $pageToken, #[SensitiveParameter] ?array $session): array
     {
         $page = $pageToken['page'] ?? 1;
         if (!is_int($page) || $page < 1) { throw new ReceiptCollectionException('pagination_incomplete'); }
@@ -281,7 +287,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
         foreach ($data->entries as $entry) {
             if ($entry['direction'] !== '收入' || $entry['amount_cents'] <= 0 || $entry['alipay_order_no'] === null) { continue; }
             Money::assertRange($entry['amount_cents']);
-            $paid = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $entry['booked_at'], new \DateTimeZone('Asia/Shanghai'));
+            $paid = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $entry['booked_at'], new DateTimeZone('Asia/Shanghai'));
             if (!$paid || $paid->format('Y-m-d H:i:s') !== $entry['booked_at']) { throw new ReceiptCollectionException('protocol_error'); }
             if ($paid->getTimestamp() < $window['from'] || $paid->getTimestamp() >= $window['to']) { continue; }
             $remark = preg_match('/(?:^|\D)([0-9]{4})(?:\D|$)/u', $entry['memo'] ?? '', $code) ? $code[1] : null;

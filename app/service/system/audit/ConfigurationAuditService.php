@@ -5,8 +5,9 @@ namespace app\service\system\audit;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
-use app\repository\system\AdminUserRepository;
 use app\repository\system\AdminOperationLogRepository;
+use app\repository\system\AdminUserRepository;
+use InvalidArgumentException;
 
 /** 收款/系统配置及其图片管理共用的操作者复核和有限审计合同；不拥有事务，不保存配置正文、图片正文、密钥或平台会话。 */
 final class ConfigurationAuditService
@@ -45,10 +46,10 @@ final class ConfigurationAuditService
             || !in_array($targetType, ['payment_type', 'payment_plugin', 'payment_plugin_conf', 'payment_channel', 'receipt_scope', 'file_asset', 'system_config', 'payment_app', 'payment_poll_group'], true)
             || !in_array($result, ['created', 'updated', 'unchanged', 'enabled', 'disabled', 'deleted', 'verified', 'viewed', 'computed'], true)
             || array_diff(array_keys($summary), ['plugin_code', 'plugin_version', 'old_version', 'new_version',
-                'enabled', 'use_default_route',
+                'enabled', 'use_default_route', 'biz_no', 'amount',
                 'mime_type', 'size', 'sha256', 'config_group',
                 'credential_version', 'parameter_count', 'signature_matches']) !== []) {
-            throw new \InvalidArgumentException('配置审计超出固定字段合同');
+            throw new InvalidArgumentException('配置审计超出固定字段合同');
         }
         $this->logs->record(['admin_user_id' => $actor->adminId, 'request_id' => $actor->requestId, 'action' => $action,
             'target_type' => $targetType, 'target_id' => $targetId, 'result_code' => $result, 'client_ip' => $actor->clientIp,

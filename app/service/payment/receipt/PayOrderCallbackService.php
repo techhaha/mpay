@@ -3,26 +3,33 @@ declare(strict_types=1);
 
 namespace app\service\payment\receipt;
 
-use app\common\constant\PaymentResultCode as Result;
-use app\service\payment\order\PayOrderLifecycleService;
-use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
+use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
+use app\common\constant\PaymentResultCode as Result;
 use app\common\constant\TradeConstant;
 use app\common\interface\ChannelNotifyInterface;
 use app\common\interface\ReceiptMatcherInterface;
-use app\service\payment\collection\ReceiptCollectionContext;
-use app\repository\payment\trade\PayOrderRepository;
-use think\Request;
 use app\common\util\Clock;
-use app\common\base\BaseService;
 use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
+use app\exception\ReceiptCollectionException;
 use app\exception\UnsupportedPaymentOperationException;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\trade\ChannelNotifyLogRepository;
+use app\repository\payment\trade\PayOrderRepository;
+use app\service\payment\collection\ReceiptCollectionContext;
+use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
+use DateTimeImmutable;
+use DateTimeZone;
+use RuntimeException;
+use think\Request;
+use think\Response;
+use Throwable;
+use UnexpectedValueException;
 
 /**
  * 消息/采集入口共用的回调编排：插件定位及解析 → 服务校验 → 生命周期核验 → 成功与最终流水原子提交。
@@ -75,7 +82,7 @@ final class PayOrderCallbackService extends BaseService
             if (!$accepted['matched']) { throw new BusinessException('通知未匹配到符合收款条件的订单', ApiResponseConstant::CONFLICT); }
             $flowIds[] = $accepted['flow_id'];
             $ack = $this->acknowledgement($plugin->notifySuccess(), true);
-        } catch (\Throwable $error) {
+        } catch (Throwable $error) {
             $this->recordChannel($channelId, $requestId, $pluginCode, $error instanceof BusinessException ? Result::CHANNEL_REJECTED : Result::CHANNEL_FAULT, $digest, $flowIds);
             if ($error instanceof BusinessException && isset($plugin) && $plugin instanceof ChannelNotifyInterface) {
                 // 业务拒绝按原插件协议回应；未知通道和程序故障仍交全局处理，不能伪装已接收。
@@ -88,9 +95,9 @@ final class PayOrderCallbackService extends BaseService
     }
 
     /** 插件可提供平台要求的 Response；字符串失败应答保留原业务 HTTP 状态。 */
-    private function acknowledgement(string|\think\Response $reply, bool $success, int $failureStatus = 400): array
+    private function acknowledgement(string|Response $reply, bool $success, int $failureStatus = 400): array
     {
-        $ack = $reply instanceof \think\Response
+        $ack = $reply instanceof Response
             ? ['status' => $reply->getCode(), 'content_type' => $reply->getHeader('Content-Type') ?: 'text/plain; charset=utf-8', 'body' => $reply->getContent()]
             : ['status' => $success ? 200 : $failureStatus, 'content_type' => 'text/plain; charset=utf-8', 'body' => $reply];
         if ($ack['status'] < 200 || $ack['status'] > ($success ? 299 : 599)
@@ -98,7 +105,7 @@ final class PayOrderCallbackService extends BaseService
             || strlen($ack['body']) > 4096 || !mb_check_encoding($ack['body'], 'UTF-8')
             || !in_array($ack['content_type'], ['text/plain; charset=utf-8', 'text/html; charset=utf-8', 'application/json; charset=utf-8', 'application/xml; charset=utf-8'], true)
             || (in_array($ack['status'], [204, 205], true) && $ack['body'] !== '')) {
-            throw new \UnexpectedValueException('插件 ACK 无效');
+            throw new UnexpectedValueException('插件 ACK 无效');
         }
         return $ack;
     }
@@ -111,17 +118,17 @@ final class PayOrderCallbackService extends BaseService
      */
     public function receiveCollected(ReceiptCollectionContext $collection, array $records, string $requestId): array
     {
-        if (!array_is_list($records) || count($records) > 50000) { throw new \UnexpectedValueException('采集批次超过有界列表合同'); }
+        if (!array_is_list($records) || count($records) > 50000) { throw new UnexpectedValueException('采集批次超过有界列表合同'); }
         $batch = []; $evidence = []; $identities = [];
         foreach ($records as $record) {
             $record = $this->records->validateRecord($record);
             $keys = $collection->scopes->keysForType($record['pay_type']);
             if ($keys === []) { continue; }
-            if (count($keys) !== 1) { throw new \app\exception\ReceiptCollectionException('scope_mismatch'); }
+            if (count($keys) !== 1) { throw new ReceiptCollectionException('scope_mismatch'); }
             $scopeKey = $keys[0];
             $identity = $scopeKey . ':' . $record['event_key'];
             if (isset($identities[$identity]) && $identities[$identity] !== $record['payload_digest']) {
-                throw new \app\exception\ReceiptCollectionException('protocol_error');
+                throw new ReceiptCollectionException('protocol_error');
             }
             $identities[$identity] = $record['payload_digest'];
             $evidence[$record['payload_digest']][$scopeKey] = true;
@@ -132,14 +139,14 @@ final class PayOrderCallbackService extends BaseService
             ['collection_configuration_ids'=>array_map('strval', array_keys($collection->configurationVersions))]);
         if (!$plugin instanceof ReceiptMatcherInterface) { throw new UnsupportedPaymentOperationException(); }
         $results = $plugin->matchReceipts($batch);
-        if (!array_is_list($results) || count($results) > count($batch)) { throw new \UnexpectedValueException('插件批量匹配结果无效'); }
+        if (!array_is_list($results) || count($results) > count($batch)) { throw new UnexpectedValueException('插件批量匹配结果无效'); }
         $selected = [];
         foreach ($results as &$result) {
             $result = $this->results->validateResult($result);
             $record = $this->records->validateRecord($result['receipt']);
             $pay = $this->orders->find($result['pay_no']);
             if ($pay === null || !isset($collection->configurationVersions[$pay->channelRevision['api_config_id']]) || !isset($evidence[$record['payload_digest']][$pay['receipt_scope_key']]) || isset($selected[$result['pay_no']])) {
-                throw new \UnexpectedValueException('插件返回了批次之外的证据或重复订单');
+                throw new UnexpectedValueException('插件返回了批次之外的证据或重复订单');
             }
             $selected[$result['pay_no']] = true;
         }
@@ -184,7 +191,7 @@ final class PayOrderCallbackService extends BaseService
             || ($result['chan_trade_no'] ?? null) !== $record['trade_no']) {
             throw new BusinessException('插件通知与订单金额或归属不一致', ApiResponseConstant::FORBIDDEN);
         }
-        $paidAt = $record['paid_at'] === null ? null : new \DateTimeImmutable($record['paid_at'], new \DateTimeZone('Asia/Shanghai'));
+        $paidAt = $record['paid_at'] === null ? null : new DateTimeImmutable($record['paid_at'], new DateTimeZone('Asia/Shanghai'));
         $event = new ReceiptEvent($pay['receipt_scope_key'], $context->accountKey,
             $context->configurationVersion, $record['pay_type'], $record['event_key'], $record['amount'],
             $paidAt, $record['trade_no'], $record['remark'], $record['payload_digest'],
@@ -194,7 +201,7 @@ final class PayOrderCallbackService extends BaseService
 
     /**
      * 配置 → 通道 → 插件 → 范围的短事务生成授权快照；停用新单通道不改已有收款来源事实。
-     * 配置停用拒绝新的自动接收；插件自行完成验签，取消版本/来源准入。
+     * 配置开关限制新业务单，不阻断已有测试/业务单的到账；当前配置归属、版本及插件验签仍须通过。
      */
     private function channelContext(string $channelId, string $configurationId): ChannelNotifyContext
     {
@@ -202,13 +209,13 @@ final class PayOrderCallbackService extends BaseService
             $configuration = $this->configurations->lock($configurationId);
             $channel = $this->channels->lock($channelId);
             if ($channel['api_config_id'] !== $configurationId
-                || $channel['plugin_code'] !== $configuration['plugin_code'] || (int) $configuration['enabled'] !== 1) {
+                || $channel['plugin_code'] !== $configuration['plugin_code']) {
                 throw new BusinessException('来源配置不可用', ApiResponseConstant::FORBIDDEN);
             }
             $revision = $this->configurations->revision($configurationId, (int) $configuration['config_version'], true)
-                ?? throw new \RuntimeException('来源配置版本缺失');
+                ?? throw new RuntimeException('来源配置版本缺失');
             $definition = $this->plugins->definition($configuration['plugin_code']);
-            if ($revision['config_json'] !== $configuration['config_json']) { throw new \RuntimeException('账号配置正文不一致'); }
+            if ($revision['config_json'] !== $configuration['config_json']) { throw new RuntimeException('账号配置正文不一致'); }
             $authorized = $this->scopeAccess->current($configuration, true);
             if (!isset($authorized[$channel['receipt_scope_key']])) {
                 throw new BusinessException('该来源没有当前收款范围授权', ApiResponseConstant::FORBIDDEN);

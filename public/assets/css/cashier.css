@@ -37,3 +37,4 @@
 
 .cashier-page[data-status="3"] .cashier-status{background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
 .cashier-page[data-status="4"] .cashier-status,.cashier-page[data-status="5"] .cashier-status{background:var(--mpay-neutral-soft);color:var(--mpay-muted)}
+.cashier-success{text-align:center}.cashier-success-icon{display:grid;place-items:center;width:64px;height:64px;margin:28px auto 18px;border-radius:50%;background:var(--mpay-success-soft);color:var(--mpay-primary);font-size:36px}.cashier-success .cashier-amounts{justify-content:center}.cashier-success-details{margin:24px 0;color:var(--mpay-muted)}.cashier-success-details summary{cursor:pointer}.cashier-success-details .cashier-order{margin-top:14px}

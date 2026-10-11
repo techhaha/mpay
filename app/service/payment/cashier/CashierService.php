@@ -3,21 +3,28 @@ declare(strict_types=1);
 
 namespace app\service\payment\cashier;
 
+use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\NotifyConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\common\util\Money;
-use app\common\base\BaseService;
+use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
 use app\model\payment\BizOrder;
 use app\model\payment\PayOrder;
+use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
-use app\service\payment\plugin\PayOrderChannelDispatchService;
+use app\service\payment\config\PaymentCatalogService;
 use app\service\payment\order\PayOrderService;
+use app\service\payment\plugin\PayOrderChannelDispatchService;
+use app\service\payment\routing\PaymentRouteService;
+use DateTimeImmutable;
+use DateTimeZone;
+use RuntimeException;
 use think\Config;
 
 /**
@@ -28,25 +35,26 @@ use think\Config;
  * @phpstan-type CashierView array{biz_no:string,pay_no:?string,subject:string,status:int,status_label:string,
  *     order_money:string,receipt_money:?string,received_money:?string,offset_money:?string,
  *     pay_type:?string,match_mode:?string,remark:?string,server_time:int,expires_at:int,expired:bool,
- *     can_select:bool,can_pay:bool,can_prepare:bool,processing:bool,
+ *     can_select:bool,can_pay:bool,can_prepare:bool,needs_initial_prepare:bool,processing:bool,
  *     payment_methods:list<array{code:string,name:string}>,
  *     presentation:CashierPresentation|null,
- *     notification_status:?string,return_allowed:bool,test_mode:bool}
+ *     notification_status:?string,return_allowed:bool,test_mode:bool,
+ *     payment_brands:array<string,mixed>}
  */
 final class CashierService extends BaseService
 {
     public function __construct(
         private readonly BizOrderRepository $bizOrders,
         private readonly PayOrderRepository $payOrders,
-        private readonly \app\service\payment\routing\PaymentRouteService $routes,
-        private readonly \app\repository\payment\config\PaymentAppRepository $apps,
+        private readonly PaymentRouteService $routes,
+        private readonly PaymentAppRepository $apps,
         private readonly PayOrderService $orders,
         private readonly PayOrderChannelDispatchService $dispatch,
         private readonly PaymentCatalogRepository $catalog,
         private readonly NotifyTaskRepository $notifications,
         private readonly Clock $clock,
         private readonly Config $config,
-        private readonly \app\service\payment\config\PaymentCatalogService $management,
+        private readonly PaymentCatalogService $management,
     ) {
     }
 
@@ -56,12 +64,12 @@ final class CashierService extends BaseService
      *
      * @return CashierView
      */
-    public function view(string $bizNo, string $accessToken, \DateTimeImmutable $now): array
+    public function view(string $bizNo, string $accessToken, DateTimeImmutable $now): array
     {
         return $this->transaction(function () use ($bizNo, $accessToken, $now): array {
             [$biz, $pay] = $this->authorisedOrders($bizNo, $accessToken);
             $status = (int) $biz['status'];
-            $expires = new \DateTimeImmutable($pay === null ? $biz['expire_at'] : $pay['expire_at'], new \DateTimeZone('Asia/Shanghai'));
+            $expires = new DateTimeImmutable($pay === null ? $biz['expire_at'] : $pay['expire_at'], new DateTimeZone('Asia/Shanghai'));
             $expired = $expires <= $now;
             $waiting = in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true);
             $receipt = $pay === null ? [] : ($pay['ext_json']['personal_receipt'] ?? []);
@@ -70,10 +78,10 @@ final class CashierService extends BaseService
             $mode = $receipt['match_mode'] ?? null;
             $remark = $receipt['remark'] ?? null;
             // 建单提交与插件准备之间、以及平台结果未知时可以尚无识别材料；仍应展示处理中。
-            if ($pay !== null && (!\app\common\validation\PaymentTypeCode::valid($type)
+            if ($pay !== null && (!PaymentTypeCode::valid($type)
                 || ($mode !== null && !in_array($mode, ['amount', 'remark'], true))
                 || ($mode === 'remark' && (!is_string($remark) || $remark === '')))) {
-                throw new \RuntimeException('收银台支付识别快照缺失');
+                throw new RuntimeException('收银台支付识别快照缺失');
             }
             $execution = $payment['execution'] ?? null;
             $presentation = null;
@@ -81,7 +89,7 @@ final class CashierService extends BaseService
             if ($waiting && !$expired && is_array($material)) {
                 if (!in_array($mode, ['amount', 'remark'], true) || $pay === null || $status !== TradeConstant::ORDER_STATUS_PAYING || $pay['request_at'] === null
                     || !is_array($execution) || ($execution['phase'] ?? null) !== 'presented') {
-                    throw new \RuntimeException('付款材料缺少已执行的准备上下文');
+                    throw new RuntimeException('付款材料缺少已执行的准备上下文');
                 }
                 // 再经标准公开合同读取，不把 ext_json 的任意额外键交给模板或浏览器。
                 $presentation = (new PaymentPresentation($material['qrcode_content'] ?? null, $material['qrcode_image_url'] ?? null))
@@ -92,16 +100,16 @@ final class CashierService extends BaseService
                 $canPrepare = ($execution['replay_safe'] ?? null) === true
                     && in_array($execution['phase'] ?? null, ['claimed', 'uncertain'], true)
                     && is_string($execution['lease_until'] ?? null)
-                    && $execution['lease_until'] <= $now->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+                    && $execution['lease_until'] <= $now->setTimezone(new DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
             }
             $notification = null;
-            if ($status === TradeConstant::ORDER_STATUS_SUCCESS) {
+            if ($status === TradeConstant::ORDER_STATUS_SUCCESS && $biz['notify_url'] !== null) {
                 if ($pay === null) {
-                    throw new \RuntimeException('成功业务单缺少支付单');
+                    throw new RuntimeException('成功业务单缺少支付单');
                 }
                 $task = $this->notifications->findByEvent(NotifyConstant::EVENT_PAY_SUCCESS, $pay['pay_no']);
                 if ($task === null || $task['biz_no'] !== $bizNo) {
-                    throw new \RuntimeException('成功订单缺少原通知责任');
+                    throw new RuntimeException('成功订单缺少原通知责任');
                 }
                 $notification = $task['first_ack_at'] !== null ? 'success' : match ((int) $task['status']) {
                     NotifyConstant::STATUS_PENDING => 'pending',
@@ -109,7 +117,7 @@ final class CashierService extends BaseService
                     NotifyConstant::STATUS_SUCCESS => 'success',
                     NotifyConstant::STATUS_EXHAUSTED => 'exhausted',
                     NotifyConstant::STATUS_HELD => 'held',
-                    default => throw new \RuntimeException('未知通知状态'),
+                    default => throw new RuntimeException('未知通知状态'),
                 };
             }
             $canSelect = $pay === null && $status === TradeConstant::ORDER_STATUS_CREATED && !$expired;
@@ -124,6 +132,7 @@ final class CashierService extends BaseService
                 'server_time' => $now->getTimestamp(), 'expires_at' => $expires->getTimestamp(), 'expired' => $expired,
                 'can_select' => $canSelect, 'can_pay' => $presentation !== null,
                 'can_prepare' => $canPrepare, 'processing' => $pay !== null && $waiting && !$expired && $presentation === null,
+                'needs_initial_prepare' => $canPrepare && $execution === null,
                 'payment_methods' => $canSelect ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount'], $now) : [], 'presentation' => $presentation,
                 'notification_status' => $notification,
                 // 只表示可发起受保护的回跳请求；签名地址由易支付适配器在再次核验成功后构造。
@@ -174,7 +183,7 @@ final class CashierService extends BaseService
         $pay = $biz['active_pay_no'] === null ? null : $this->payOrders->find($biz['active_pay_no']);
         if ($biz['active_pay_no'] !== null && ($pay === null || $pay['biz_no'] !== $bizNo
             || (int) $pay['status'] !== (int) $biz['status'] || $pay->originalAmount() !== (int) $biz['order_amount'])) {
-            throw new \RuntimeException('收银台业务与支付状态不一致');
+            throw new RuntimeException('收银台业务与支付状态不一致');
         }
         return [$biz, $pay];
     }
@@ -184,7 +193,7 @@ final class CashierService extends BaseService
      * 只隐藏明确无可用通道的 503，配置损坏等程序异常仍交统一处理器报告。
      * @return list<array{code:string,name:string}>
      */
-    private function paymentMethods(string $appId, int $amount, \DateTimeImmutable $now): array
+    private function paymentMethods(string $appId, int $amount, DateTimeImmutable $now): array
     {
         $app = $this->apps->lock($appId);
         if ((int) $app['status'] !== 1) { return []; }

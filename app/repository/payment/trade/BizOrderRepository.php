@@ -4,9 +4,13 @@ declare(strict_types=1);
 namespace app\repository\payment\trade;
 
 use app\common\base\BaseRepository;
-use app\common\constant\TradeConstant;
 use app\common\constant\NotifyConstant;
+use app\common\constant\TradeConstant;
 use app\model\payment\BizOrder;
+use InvalidArgumentException;
+use RuntimeException;
+use think\db\exception\PDOException;
+use think\db\Query;
 
 /**
  * 保存业务需求与外部订单身份，提供业务单行锁及首次支付尝试关联；不判断收款成功。
@@ -31,10 +35,11 @@ final class BizOrderRepository extends BaseRepository
      * 由创建服务核验字段、凭证版本和幂等参数后，在业务事务内插入。
      * order_amount 单位为分；订单号保持大小写和原始字节语义。
      *
-     * @param array{biz_no:string, trace_no:string, app_id:string, pid:string, merchant_order_no:string,
-     *     subject:string, order_amount:int, credential_version_id:string, access_token_hash:string,
-     *     expire_at:string, notify_url:string, client_ip?:string|null, return_url?:string|null, ext_json?:string} $data
-     * @throws \think\db\exception\PDOException 唯一身份竞争交由创建服务分类，不在此吞掉冲突。
+     * @param array{biz_no:string,trace_no:string,app_id:string,pid:string,merchant_order_no:string,
+     *     subject:string,order_amount:int,credential_version_id:string,access_token_hash:string,
+     *     expire_at:string,notify_url:?string,
+     *     client_ip?:string|null,return_url?:string|null,ext_json?:string,created_at?:string} $data
+     * @throws PDOException 唯一身份竞争交由创建服务分类，不在此吞掉冲突。
      */
     public function create(array $data): string
     {
@@ -115,7 +120,7 @@ final class BizOrderRepository extends BaseRepository
     }
 
     /** @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
-    private function adminQuery(array $filters): \think\db\Query
+    private function adminQuery(array $filters): Query
     {
         $query = $this->model->where('created_at', '>=', $filters['from'])->where('created_at', '<', $filters['until']);
         foreach (['app_id' => 'app_id', 'pid' => 'pid', 'status' => 'status', 'biz_no' => 'biz_no', 'pay_no' => 'active_pay_no', 'merchant_order_no' => 'merchant_order_no'] as $key => $column) {
@@ -123,13 +128,13 @@ final class BizOrderRepository extends BaseRepository
         }
         if (($filters['poll_group_id'] ?? null) !== null || ($filters['channel_id'] ?? null) !== null || ($filters['pay_type'] ?? null) !== null) {
             // ORM 子查询限定支付尝试，不 JOIN 放大业务单列表或导出计数。
-            $query->whereIn('biz_no', static function (\think\db\Query $payments) use ($filters): void {
+            $query->whereIn('biz_no', static function (Query $payments) use ($filters): void {
                 $payments->table('ma_pay_order')->field('biz_no');
                 foreach (['poll_group_id', 'channel_id'] as $field) {
                     if (($filters[$field] ?? null) !== null) { $payments->where($field, $filters[$field]); }
                 }
                 if (($filters['pay_type'] ?? null) !== null) {
-                    $payments->whereIn('pay_type_id', static function (\think\db\Query $types) use ($filters): void {
+                    $payments->whereIn('pay_type_id', static function (Query $types) use ($filters): void {
                         $types->table('ma_payment_type')->field('id')->where('code', $filters['pay_type']);
                     });
                 }
@@ -137,7 +142,7 @@ final class BizOrderRepository extends BaseRepository
         }
         if (($filters['notification_status'] ?? null) !== null) {
             // 按通知责任筛选，发送尝试是一对多，不能 JOIN 尝试表放大订单和导出计数。
-            $condition = static function (\think\db\Query $tasks) use ($filters): void {
+            $condition = static function (Query $tasks) use ($filters): void {
                 $tasks->table('ma_notify_task')->field('biz_no')->where('event_type', NotifyConstant::EVENT_PAY_SUCCESS);
                 if ($filters['notification_status'] === 'acknowledged') { $tasks->whereNotNull('first_ack_at'); }
                 elseif ($filters['notification_status'] !== 'none') { $tasks->where('status', (int) $filters['notification_status']); }
@@ -162,32 +167,32 @@ final class BizOrderRepository extends BaseRepository
     /**
      * 交易锁顺序的起点；锁定后才可继续取对应 PayOrder 和收款范围锁。
      *
-     * @throws \RuntimeException 指定业务单不存在。
+     * @throws RuntimeException 指定业务单不存在。
      */
     public function lock(string $bizNo): BizOrder
     {
         $this->requireTransaction();
-        return $this->model->where('biz_no', $bizNo)->lock(true)->find() ?? throw new \RuntimeException('业务单不存在');
+        return $this->model->where('biz_no', $bizNo)->lock(true)->find() ?? throw new RuntimeException('业务单不存在');
     }
 
     /**
      * 在同一创建事务中关联首次支付尝试；调用方须先锁业务单并完成支付单插入。
      * 重复调用属于状态冲突，不能拿另一个支付号覆盖原关联。
      *
-     * @throws \RuntimeException 支付单不属于该业务单，或业务单已经关联过支付尝试。
+     * @throws RuntimeException 支付单不属于该业务单，或业务单已经关联过支付尝试。
      */
     public function attachAttempt(string $bizNo, string $payNo): void
     {
         $this->requireTransaction();
         $biz = $this->model->where('biz_no', $bizNo)->find();
         if ($biz === null || $biz->payOrder()->where('pay_no', $payNo)->find() === null) {
-            throw new \RuntimeException('支付单与业务单不一致');
+            throw new RuntimeException('支付单与业务单不一致');
         }
         // 条件更新与影响行数复核共同拒绝重复关联，不只依靠上面的关联存在性查询。
         $affected = $this->model->where('biz_no', $bizNo)->where('attempt_count', 0)
             ->update(['active_pay_no' => $payNo, 'attempt_count' => 1, 'updated_at' => date('Y-m-d H:i:s')]);
         if ($affected !== 1) {
-            throw new \RuntimeException('业务单已存在支付尝试或支付身份不一致');
+            throw new RuntimeException('业务单已存在支付尝试或支付身份不一致');
         }
     }
 
@@ -201,12 +206,12 @@ final class BizOrderRepository extends BaseRepository
         $this->requireTransaction();
         if (!isset($changes['status']) || array_diff(array_keys($changes),
             ['status', 'paid_amount', 'paid_at', 'closed_at', 'failed_at', 'timeout_at']) !== []) {
-            throw new \InvalidArgumentException('业务生命周期写入字段无效');
+            throw new InvalidArgumentException('业务生命周期写入字段无效');
         }
         $changed = $this->model->where('biz_no', $bizNo)->where('status', $expectedStatus)
             ->update($changes + ['updated_at' => $now]);
         if ($changed !== 1) {
-            throw new \RuntimeException('业务生命周期写入未改变预期记录');
+            throw new RuntimeException('业务生命周期写入未改变预期记录');
         }
     }
 }

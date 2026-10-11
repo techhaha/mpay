@@ -19,9 +19,17 @@ use app\repository\payment\receipt\ReceiptMatchReservationRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
+use DateTimeImmutable;
+use DateTimeZone;
+use DOMNode;
+use DOMXPath;
+use JsonException;
+use LogicException;
+use RuntimeException;
+use SensitiveParameter;
+use think\facade\Db;
 use think\Request;
 use think\Response;
-use think\facade\Db;
 
 /** 微信手机及 wxtool PC 监听的独立主类；平台模板、消息身份及金额解释集中在本类。 */
 final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatcherInterface
@@ -60,7 +68,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
     private array $channelConfig = [];
 
-    public function init(#[\SensitiveParameter] array $channelConfig): void
+    public function init(#[SensitiveParameter] array $channelConfig): void
     {
         $this->channelConfig = $channelConfig;
     }
@@ -101,13 +109,13 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
      */
     private function prepareReceipt(string $payNo): PayOrder
     {
-        $observed = $this->orders->find($payNo) ?? throw new \RuntimeException('收款支付单不存在');
+        $observed = $this->orders->find($payNo) ?? throw new RuntimeException('收款支付单不存在');
         return Db::transaction(function () use ($observed, $payNo): PayOrder {
             $biz = $this->businessOrders->lock($observed['biz_no']);
             $pay = $this->orders->lock($payNo);
             $this->scopes->lock($pay['receipt_scope_key']);
             if ($pay['channel_id'] !== $this->getConfig('channel_id') || $pay['biz_no'] !== $biz['biz_no']) {
-                throw new \LogicException('插件与支付单通道不一致');
+                throw new LogicException('插件与支付单通道不一致');
             }
             $ext = $pay['ext_json'] ?? [];
             if (isset($ext['personal_receipt']['original_amount'])) { return $pay; }
@@ -120,8 +128,9 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             $expiresAt = min($pay['expire_at'], $this->clock->now()->modify('+' . $this->getConfig('receipt_valid_seconds', 300) . ' seconds')->format('Y-m-d H:i:s'));
             $original = (int) $biz['order_amount'];
             Money::assertRange($original);
-            if ($original < 1 || $original > (int) $this->getConfig('max_amount', Money::MAX_CENTS)) {
-                throw new BusinessException('金额超出通道限额', ApiResponseConstant::VALIDATION_FAILED);
+            // 通用运营限额由选路服务校验；指定通道测试跳过选路，插件仍核验自身金额边界。
+            if ($original < 1) {
+                throw new BusinessException('付款金额必须大于零', ApiResponseConstant::VALIDATION_FAILED);
             }
             $mode = $this->getConfig('receipt_match_mode', 'amount');
             $remark = null;
@@ -150,7 +159,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             ]);
             $this->orders->saveReceiptContext($payNo, $amount, $ext, $expiresAt, $now);
             $this->businessOrders->shortenExpiry($biz['biz_no'], $expiresAt);
-            return $this->orders->find($payNo) ?? throw new \RuntimeException('收款准备结果不可读取');
+            return $this->orders->find($payNo) ?? throw new RuntimeException('收款准备结果不可读取');
         });
     }
 
@@ -200,7 +209,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
     private function locateReceipt(array $record, ?string $scopeKey = null, array $excluded = []): PayOrder
     {
         $scope = $scopeKey ?? (string) $this->getConfig('receipt_scope_key');
-        if ($scope === '') { throw new \LogicException('服务未注入收款范围'); }
+        if ($scope === '') { throw new LogicException('服务未注入收款范围'); }
         if ($record['trade_no'] !== null) {
             $known = $this->orders->successfulForTrade($scope, $record['trade_no']);
             if ($known !== null) { return $known; }
@@ -246,7 +255,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             strtolower((string) $request->server('HTTPS', '')) === 'on' || (string) $request->server('SERVER_PORT') === '443',
             $this->getConfig('sms_forwarder_time_tolerance'));
         try { $content = json_decode($message->content, true, 32, JSON_THROW_ON_ERROR); }
-        catch (\JsonException) { throw new ReceiptMessageException('invalid_message'); }
+        catch (JsonException) { throw new ReceiptMessageException('invalid_message'); }
         if (!is_array($content)) { throw new ReceiptMessageException('invalid_message'); }
         // 同一认证入口接收手机与 PC；认证后按明确的发送方/消息格式解析，不使用外部 source 开关。
         if (in_array($message->from, [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT], true)) { return $this->pcReceipt($message->from, $content); }
@@ -278,8 +287,8 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             || $message['createTime'] < 1 || $message['createTime'] > $this->clock->now()->getTimestamp() + 300
             || !is_string($message['content'] ?? null)) { throw new ReceiptMessageException('invalid_message'); }
         $root = $this->xml->parse($message['content']);
-        $xpath = new \DOMXPath($root->ownerDocument);
-        $read = static function (string $path, ?\DOMNode $node = null) use ($xpath): string {
+        $xpath = new DOMXPath($root->ownerDocument);
+        $read = static function (string $path, ?DOMNode $node = null) use ($xpath): string {
             $found = $xpath->query($path, $node);
             if ($found === false || $found->length !== 1) { throw new ReceiptMessageException('invalid_message'); }
             return trim($found->item(0)->textContent);
@@ -298,7 +307,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
         $timestamp = $message['createTime'];
         if ($account === self::PAY_ACCOUNT) {
             $pattern = '/^二维码赞赏到账(\d+(?:\.\d{1,2})?)元(?:$|[（(])/u';
-            $date = \DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $fields['到账时间'] ?? '', new \DateTimeZone('Asia/Shanghai'));
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $fields['到账时间'] ?? '', new DateTimeZone('Asia/Shanghai'));
             if (!$date || $date->format('Y-m-d H:i:s') !== $fields['到账时间']) { throw new ReceiptMessageException('invalid_message'); }
             $timestamp = $date->getTimestamp();
         } elseif (str_starts_with($title, '[店员消息]')) {
@@ -331,7 +340,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
     /** @return array<string,mixed> 监听编号保留到标准渠道引用中，与 V2 回调去重口径一致。 */
     private function record(string $reference, int $amount, int $timestamp, ?string $remark): array
     {
-        $date = (new \DateTimeImmutable('@' . $timestamp))->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $date = (new DateTimeImmutable('@' . $timestamp))->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return ['pay_type' => 'wxpay', 'event_key' => $reference, 'trade_no' => $reference, 'amount' => $amount,
             'paid_at' => $date->format('Y-m-d H:i:s'), 'remark' => $remark];
     }

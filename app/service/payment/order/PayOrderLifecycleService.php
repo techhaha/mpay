@@ -3,14 +3,12 @@ declare(strict_types=1);
 
 namespace app\service\payment\order;
 
-use app\common\constant\PaymentResultCode as Result;
-use app\service\payment\notify\NotifyService;
-use app\common\constant\NotifyConstant;
-use app\common\constant\ApiResponseConstant;
-use app\common\constant\TradeConstant;
-use app\service\payment\cashier\PaymentPresentation;
-use app\common\util\Clock;
 use app\common\base\BaseService;
+use app\common\constant\ApiResponseConstant;
+use app\common\constant\NotifyConstant;
+use app\common\constant\PaymentResultCode as Result;
+use app\common\constant\TradeConstant;
+use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\BizOrder;
 use app\model\payment\PayOrder;
@@ -21,10 +19,17 @@ use app\repository\payment\receipt\ReceiptMatchReservationRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayCallbackLogRepository;
-use app\repository\payment\trade\PayOrderRepository;
 use app\repository\payment\trade\PayOrderOperationLogRepository;
+use app\repository\payment\trade\PayOrderRepository;
 use app\repository\system\AdminUserRepository;
+use app\service\payment\cashier\PaymentPresentation;
+use app\service\payment\notify\NotifyService;
 use app\service\payment\receipt\ReceiptEvent;
+use DateTimeImmutable;
+use DateTimeZone;
+use InvalidArgumentException;
+use RuntimeException;
+use UnexpectedValueException;
 
 /**
  * 交易状态推进的统一事务入口；可信确认、业务同步、流水消费和通知责任一起提交。
@@ -53,10 +58,10 @@ final class PayOrderLifecycleService extends BaseService
      *
      * @throws BusinessException 旧会话、证据冲突、金额不足或时间不合理，不能覆盖原成功事实。
      */
-    public function confirmManual(string $payNo, AdminActionContext $actor, ManualReceiptEvidence $evidence, \DateTimeImmutable $now, bool $notifyMerchant = true): PayOrder
+    public function confirmManual(string $payNo, AdminActionContext $actor, ManualReceiptEvidence $evidence, DateTimeImmutable $now, bool $notifyMerchant = true): PayOrder
     {
         $target = $this->payOrders->find($payNo) ?? throw new BusinessException('支付单不存在', ApiResponseConstant::NOT_FOUND);
-        $now = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return $this->transaction(function () use ($target, $payNo, $actor, $evidence, $now, $notifyMerchant): PayOrder {
             $this->assertAdmin($actor);
             $biz = $this->bizOrders->lock($target['biz_no']);
@@ -90,7 +95,7 @@ final class PayOrderLifecycleService extends BaseService
             }
             if (!in_array($before, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING,
                 TradeConstant::ORDER_STATUS_FAILED, TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT], true)) {
-                throw new \RuntimeException('未知支付状态');
+                throw new RuntimeException('未知支付状态');
             }
             $changes = ['status' => TradeConstant::ORDER_STATUS_SUCCESS, 'confirmation_source' => TradeConstant::CONFIRMATION_MANUAL,
                 'paid_at' => $proof['paid_at'], 'channel_trade_no' => $evidence->platformTradeNo]
@@ -101,8 +106,8 @@ final class PayOrderLifecycleService extends BaseService
                 'status' => TradeConstant::ORDER_STATUS_SUCCESS, 'paid_amount' => (int) $biz['order_amount'], 'paid_at' => $proof['paid_at'],
             ], $time);
             $this->releaseReceipt($pay, $now);
-            $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ?? throw new \RuntimeException('确认业务单不可读取');
-            $confirmedPay = $this->payOrders->find($payNo) ?? throw new \RuntimeException('确认支付单不可读取');
+            $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ?? throw new RuntimeException('确认业务单不可读取');
+            $confirmedPay = $this->payOrders->find($payNo) ?? throw new RuntimeException('确认支付单不可读取');
             $this->notifications->createPaySuccess($confirmedBiz, $confirmedPay, $time, $notifyMerchant);
             $this->operations->record($payNo, $actor->adminId, $actor->requestId, $actor->reason,
                 'manual_receipt_confirmed', $before, TradeConstant::ORDER_STATUS_SUCCESS, $proof);
@@ -111,10 +116,10 @@ final class PayOrderLifecycleService extends BaseService
     }
 
     /** 本地关闭和原因审计一起提交；成功不能关闭，原二维码不因本地状态失去收款能力。 */
-    public function closeLocally(string $payNo, AdminActionContext $actor, \DateTimeImmutable $now): PayOrder
+    public function closeLocally(string $payNo, AdminActionContext $actor, DateTimeImmutable $now): PayOrder
     {
         $target = $this->payOrders->find($payNo) ?? throw new BusinessException('支付单不存在', ApiResponseConstant::NOT_FOUND);
-        $now = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return $this->transaction(function () use ($target, $payNo, $actor, $now): PayOrder {
             $this->assertAdmin($actor);
             $biz = $this->bizOrders->lock($target['biz_no']);
@@ -136,7 +141,7 @@ final class PayOrderLifecycleService extends BaseService
             $this->releaseReceipt($pay, $now);
             $this->operations->record($payNo, $actor->adminId, $actor->requestId, $actor->reason,
                 'local_close', $before, TradeConstant::ORDER_STATUS_CLOSED, ['close_semantics' => 'local_only']);
-            return $this->payOrders->find($payNo) ?? throw new \RuntimeException('关闭后的支付单不可读取');
+            return $this->payOrders->find($payNo) ?? throw new RuntimeException('关闭后的支付单不可读取');
         });
     }
 
@@ -157,24 +162,24 @@ final class PayOrderLifecycleService extends BaseService
      * @param int $leaseSeconds 执行认领期限，秒；不是付款有效期。
      * @return array{execute:bool,token:?string,pay:PayOrder} execute=false 时 token 为 null，不授予调用权。
      */
-    public function beginExecution(string $payNo, bool $replaySafe, int $leaseSeconds, \DateTimeImmutable $now, string $requestId): array
+    public function beginExecution(string $payNo, bool $replaySafe, int $leaseSeconds, DateTimeImmutable $now, string $requestId): array
     {
         if ($leaseSeconds < 5 || $leaseSeconds > 300) {
-            throw new \InvalidArgumentException('支付执行认领期限越界');
+            throw new InvalidArgumentException('支付执行认领期限越界');
         }
-        $target = $this->payOrders->find($payNo) ?? throw new \RuntimeException('支付单不存在');
+        $target = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
         // 到期处理拥有独立事务；先完成它，再认领，避免嵌套事务和给已到期订单展示付款材料。
         $this->expire($target['biz_no'], $now);
-        $now = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return $this->transaction(function () use ($target, $payNo, $replaySafe, $leaseSeconds, $now, $requestId): array {
             $biz = $this->bizOrders->lock($target['biz_no']);
             $pay = $this->payOrders->lock($payNo);
             $this->assertOrderLink($biz, $pay);
             // 前置到期扫描与本事务之间可能再次等锁；调用权必须按取锁后的时间判断。
-            $now = max($now, $this->clock->now())->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+            $now = max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai'));
             if ($this->expireWaiting($biz, $now)) {
                 return ['execute' => false, 'token' => null, 'pay' => $this->payOrders->find($payNo)
-                    ?? throw new \RuntimeException('到期支付单不可读取')];
+                    ?? throw new RuntimeException('到期支付单不可读取')];
             }
             $before = (int) $pay['status'];
             if (!in_array($before, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)) {
@@ -186,16 +191,16 @@ final class PayOrderLifecycleService extends BaseService
             if ($execution !== null) {
                 if (!is_array($execution) || !is_string($execution['lease_until'] ?? null)
                     || ($execution['replay_safe'] ?? null) !== $replaySafe) {
-                    throw new \RuntimeException('原支付执行恢复合同损坏或已改变');
+                    throw new RuntimeException('原支付执行恢复合同损坏或已改变');
                 }
                 if (($execution['phase'] ?? null) === 'presented' || !$replaySafe || $execution['lease_until'] > $time) {
                     return ['execute' => false, 'token' => null, 'pay' => $pay];
                 }
                 if (!in_array($execution['phase'] ?? null, ['claimed', 'uncertain'], true)) {
-                    throw new \RuntimeException('未知支付执行阶段');
+                    throw new RuntimeException('未知支付执行阶段');
                 }
             } elseif ($pay['request_at'] !== null || $before !== TradeConstant::ORDER_STATUS_CREATED) {
-                throw new \RuntimeException('已有支付执行缺少原认领上下文');
+                throw new RuntimeException('已有支付执行缺少原认领上下文');
             }
             $token = bin2hex(random_bytes(16));
             $extension['payment_context']['execution'] = [
@@ -212,7 +217,7 @@ final class PayOrderLifecycleService extends BaseService
             }
             $this->logs->recordExecution($payNo, $requestId, $token, Result::EXECUTION_CLAIMED, $before);
             return ['execute' => true, 'token' => $token,
-                'pay' => $this->payOrders->find($payNo) ?? throw new \RuntimeException('认领后的支付单不可读取')];
+                'pay' => $this->payOrders->find($payNo) ?? throw new RuntimeException('认领后的支付单不可读取')];
         });
     }
 
@@ -229,26 +234,26 @@ final class PayOrderLifecycleService extends BaseService
         string $token,
         string $outcome,
         ?PaymentPresentation $presentation,
-        \DateTimeImmutable $now,
+        DateTimeImmutable $now,
         string $requestId,
         ?string $channelOrderNo = null,
     ): PayOrder {
         if (!in_array($outcome, ['presented', 'uncertain', 'rejected'], true)
             || ($outcome === 'presented') !== ($presentation !== null)
             || ($channelOrderNo !== null && ($channelOrderNo === '' || strlen($channelOrderNo) > 128))) {
-            throw new \InvalidArgumentException('支付执行回写合同不一致');
+            throw new InvalidArgumentException('支付执行回写合同不一致');
         }
-        $target = $this->payOrders->find($payNo) ?? throw new \RuntimeException('支付单不存在');
-        $now = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $target = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
+        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         // 调用期间可能跨过付款截止点，回写前先结束到期待付，避免再发布过期二维码材料。
         $this->expire($target['biz_no'], $now);
         return $this->transaction(function () use ($target, $payNo, $token, $outcome, $presentation, $now, $requestId, $channelOrderNo): PayOrder {
             $biz = $this->bizOrders->lock($target['biz_no']);
             $pay = $this->payOrders->lock($payNo);
             $this->assertOrderLink($biz, $pay);
-            $now = max($now, $this->clock->now())->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+            $now = max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai'));
             if ($this->expireWaiting($biz, $now)) {
-                $pay = $this->payOrders->find($payNo) ?? throw new \RuntimeException('到期支付单不可读取');
+                $pay = $this->payOrders->find($payNo) ?? throw new RuntimeException('到期支付单不可读取');
             }
             $before = (int) $pay['status'];
             $extension = $pay['ext_json'] ?? [];
@@ -273,7 +278,7 @@ final class PayOrderLifecycleService extends BaseService
             $changes = ['ext_json' => json_encode($extension, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)];
             if ($channelOrderNo !== null) {
                 if ($pay['channel_order_no'] !== null && $pay['channel_order_no'] !== $channelOrderNo) {
-                    throw new \UnexpectedValueException('插件重放返回了不同的平台订单');
+                    throw new UnexpectedValueException('插件重放返回了不同的平台订单');
                 }
                 $changes['channel_order_no'] = $channelOrderNo;
             }
@@ -286,7 +291,7 @@ final class PayOrderLifecycleService extends BaseService
             }
             $this->payOrders->saveLifecycle($payNo, $before, $changes, $time);
             $this->logs->recordExecution($payNo, $requestId, $token, match ($outcome) { 'presented' => Result::EXECUTION_PRESENTED, 'uncertain' => Result::EXECUTION_UNCERTAIN, 'rejected' => Result::EXECUTION_REJECTED }, $before);
-            return $this->payOrders->find($payNo) ?? throw new \RuntimeException('执行回写后的支付单不可读取');
+            return $this->payOrders->find($payNo) ?? throw new RuntimeException('执行回写后的支付单不可读取');
         });
     }
 
@@ -295,12 +300,12 @@ final class PayOrderLifecycleService extends BaseService
      * 流水、订单成功和通知责任同事务提交。无匹配或证据冲突不保存流水，也没有后台补匹配队列。
      * @return array{flow_id:?string,pay_no:?string,matched:bool,reason:string}
      */
-    public function confirmReceipt(ReceiptEvent $event, \DateTimeImmutable $receivedAt, string $requestId): array
+    public function confirmReceipt(ReceiptEvent $event, DateTimeImmutable $receivedAt, string $requestId): array
     {
         $ignore = static fn (string $reason): array => ['flow_id'=>null,'pay_no'=>null,'matched'=>false,'reason'=>$reason];
         if ($event->locatedPayNo === null) { return $ignore('no_candidate'); }
-        $target = $this->payOrders->find($event->locatedPayNo) ?? throw new \RuntimeException('插件所选支付单不存在');
-        $received = $receivedAt->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+        $target = $this->payOrders->find($event->locatedPayNo) ?? throw new RuntimeException('插件所选支付单不存在');
+        $received = $receivedAt->setTimezone(new DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
         // 来源认证由入口和插件完成；最终确认仍必须具有合理时间及事务内的金额、归属证据。
         if ($event->paidAt === null || $event->paymentTime() > $received) { return $ignore('insufficient_receipt_evidence'); }
         return $this->transactionRetry(function () use ($event, $received, $receivedAt, $requestId, $target, $ignore): array {
@@ -324,7 +329,7 @@ final class PayOrderLifecycleService extends BaseService
                 }
                 if ($existing['pay_no'] !== $payNo) { return $ignore('platform_trade_already_consumed'); }
                 if ((int) $pay['status'] !== TradeConstant::ORDER_STATUS_SUCCESS || $pay['receipt_flow_id'] !== $existing['id']) {
-                    throw new \RuntimeException('流水与成功订单关联不一致');
+                    throw new RuntimeException('流水与成功订单关联不一致');
                 }
                 $this->assertNotification($biz, $pay);
                 return $this->recordReceipt($existing, $requestId, Result::CONFIRMATION_REPLAYED);
@@ -341,14 +346,14 @@ final class PayOrderLifecycleService extends BaseService
                 if ($pay['receipt_flow_id'] !== null) {
                     $primary = $this->flows->lock($pay['receipt_flow_id']);
                     if ($primary['pay_no'] !== $payNo || $primary['receipt_scope_key'] !== $event->scopeKey) {
-                        throw new \RuntimeException('原主流水关联不一致');
+                        throw new RuntimeException('原主流水关联不一致');
                     }
                     if ((int) $primary['amount'] !== $event->amount || $primary['paid_at'] !== $event->paymentTime()) {
                         return $ignore('event_content_conflict');
                     }
                     return $this->recordReceipt($primary, $requestId, Result::CONFIRMATION_REPLAYED);
                 }
-                if ($pay['confirmation_source'] !== TradeConstant::CONFIRMATION_MANUAL) { throw new \RuntimeException('自动成功缺少主流水'); }
+                if ($pay['confirmation_source'] !== TradeConstant::CONFIRMATION_MANUAL) { throw new RuntimeException('自动成功缺少主流水'); }
                 $reason = Result::MANUAL_EVIDENCE_SUPPLEMENTED;
             } else {
                 $reservation = $this->reservations->findForPay($payNo);
@@ -385,8 +390,8 @@ final class PayOrderLifecycleService extends BaseService
                 $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'], ['status'=>TradeConstant::ORDER_STATUS_SUCCESS,
                     'paid_amount'=>(int) $biz['order_amount'],'paid_at'=>$event->paymentTime()], $time);
                 $this->releaseReceipt($pay, $receivedAt);
-                $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ?? throw new \RuntimeException('成功业务单不可读取');
-                $confirmedPay = $this->payOrders->find($payNo) ?? throw new \RuntimeException('成功支付单不可读取');
+                $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ?? throw new RuntimeException('成功业务单不可读取');
+                $confirmedPay = $this->payOrders->find($payNo) ?? throw new RuntimeException('成功支付单不可读取');
                 $this->notifications->createPaySuccess($confirmedBiz, $confirmedPay, $time);
             }
             return $this->recordReceipt($this->flows->lock($flowId), $requestId, $reason, $before);
@@ -399,12 +404,12 @@ final class PayOrderLifecycleService extends BaseService
      *
      * @return bool 本次是否实际推进了 TIMEOUT。
      */
-    public function expire(string $bizNo, \DateTimeImmutable $now): bool
+    public function expire(string $bizNo, DateTimeImmutable $now): bool
     {
-        $now = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return $this->transaction(function () use ($bizNo, $now): bool {
             $biz = $this->bizOrders->lock($bizNo);
-            return $this->expireWaiting($biz, max($now, $this->clock->now())->setTimezone(new \DateTimeZone('Asia/Shanghai')));
+            return $this->expireWaiting($biz, max($now, $this->clock->now())->setTimezone(new DateTimeZone('Asia/Shanghai')));
         });
     }
 
@@ -412,7 +417,7 @@ final class PayOrderLifecycleService extends BaseService
      * 调用方已在本事务锁定 BizOrder；认领/回写和定时扫描共用到期转换，不在事务中嵌套 expire。
      * 已持有 PayOrder 时可重入当前读，随后仍按 Scope → Reservation 方向取锁。
      */
-    private function expireWaiting(BizOrder $biz, \DateTimeImmutable $now): bool
+    private function expireWaiting(BizOrder $biz, DateTimeImmutable $now): bool
     {
         $time = $now->format('Y-m-d H:i:s');
         if (!in_array((int) $biz['status'], [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)
@@ -465,7 +470,7 @@ final class PayOrderLifecycleService extends BaseService
         if ($pay['biz_no'] !== $biz['biz_no'] || $biz['active_pay_no'] !== $pay['pay_no']
             || (int) $biz['attempt_count'] !== 1 || (int) $biz['order_amount'] !== $pay->originalAmount()
             || (int) $biz['status'] !== (int) $pay['status']) {
-            throw new \RuntimeException('业务单与唯一支付尝试不一致');
+            throw new RuntimeException('业务单与唯一支付尝试不一致');
         }
     }
 
@@ -473,14 +478,18 @@ final class PayOrderLifecycleService extends BaseService
     private function assertNotification(BizOrder $biz, PayOrder $pay): void
     {
         $task = $this->tasks->lockByEvent(NotifyConstant::EVENT_PAY_SUCCESS, $pay['pay_no']);
+        if ($biz['notify_url'] === null) {
+            if ($task !== null) { throw new RuntimeException('未提供通知地址的订单不应存在通知任务'); }
+            return;
+        }
         if ($task === null || $task['biz_no'] !== $biz['biz_no'] || $task['pay_no'] !== $pay['pay_no']
             || $task['credential_version_id'] !== $biz['credential_version_id']) {
-            throw new \RuntimeException('已成功订单的原通知责任缺失或不一致');
+            throw new RuntimeException('已成功订单的原通知责任缺失或不一致');
         }
     }
 
     /** V2 收款识别在终态释放；历史记录继续支撑重复流水核对，不再延长金额保护期。 */
-    private function releaseReceipt(PayOrder $pay, \DateTimeImmutable $now): void
+    private function releaseReceipt(PayOrder $pay, DateTimeImmutable $now): void
     {
         $this->reservations->releaseForPay($pay['pay_no'], $now->format('Y-m-d H:i:s'));
     }

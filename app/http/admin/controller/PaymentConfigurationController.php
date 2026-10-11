@@ -5,15 +5,19 @@ namespace app\http\admin\controller;
 
 use app\common\base\BaseAdminController;
 use app\common\constant\ApiResponseConstant;
+use app\common\util\Clock;
 use app\common\util\SiteUrl;
 use app\exception\BusinessException;
 use app\http\admin\validation\ConfigurationQueryValidator;
 use app\http\admin\validation\ImageUploadValidator;
+use app\http\admin\validation\PaymentChannelTestValidator;
 use app\service\file\FileAssetService;
-use app\service\system\audit\ConfigurationActionContext;
 use app\service\payment\config\PaymentChannelEditorService;
+use app\service\payment\config\PaymentChannelTestService;
 use app\service\payment\config\PaymentConfigurationQueryService;
 use app\service\payment\config\PaymentConfigurationValidator;
+use app\service\system\audit\ConfigurationActionContext;
+use think\exception\FileException;
 use think\Response;
 
 /**
@@ -22,13 +26,35 @@ use think\Response;
  */
 final class PaymentConfigurationController extends BaseAdminController
 {
+    /** 只创建指定通道的真实测试单，付款准备仍由现有收银台 POST 入口执行；重投复用原地址。 */
+    public function testChannel(
+        PaymentChannelTestValidator $validator,
+        PaymentChannelTestService $service,
+        Clock $clock,
+        SiteUrl $site
+    ): Response {
+        $input = $validator->input($this->jsonBody());
+        $order = $service->create(
+            $input['app_id'],
+            $input['channel_id'],
+            $input['amount'],
+            $input['request_key'],
+            $this->actor(),
+            $clock->now()
+        );
+        return $this->success([
+            'biz_no' => $order->bizNo,
+            'pay_no' => $order->payNo,
+            'reused' => $order->reused,
+            'cashier_url' => $site->path('/cashier/pay', ['biz_no' => $order->bizNo, 'token' => $order->accessToken])
+        ], '测试订单已创建');
+    }
+
     public function plugins(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
     {
         $validator->emptyQuery($this->request->get());
         return $this->success(['items' => $query->plugins()]);
     }
-
-
 
     public function channels(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
     {
@@ -52,7 +78,7 @@ final class PaymentConfigurationController extends BaseAdminController
     public function uploadImage(ImageUploadValidator $validator, FileAssetService $files): Response
     {
         try { $uploads = $this->request->file() ?? []; }
-        catch (\think\exception\FileException) { throw new BusinessException('图片未完整接收，请检查上传大小和站点限制', ApiResponseConstant::VALIDATION_FAILED); }
+        catch (FileException) { throw new BusinessException('图片未完整接收，请检查上传大小和站点限制', ApiResponseConstant::VALIDATION_FAILED); }
         $data = $validator->upload($this->request->post(), $uploads);
         return $this->success($files->uploadImage($data['image'], $this->actor()), '图片已上传，请保存通道完成绑定');
     }

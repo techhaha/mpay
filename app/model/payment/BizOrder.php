@@ -4,9 +4,10 @@ declare(strict_types=1);
 namespace app\model\payment;
 
 use app\common\base\BaseModel;
+use think\model\relation\HasOne;
 
 /**
- * 业务网站提交的原始收款需求与幂等身份；app_id/merchant_order_no 唯一。
+ * 原始收款需求及应用归属；所有业务单按应用和外部订单号幂等。
  * order_amount 和 paid_amount 只表达业务金额，识别偏移不计入业务成功金额。
  *
  * @property string $biz_no
@@ -14,7 +15,7 @@ use app\common\base\BaseModel;
  * @property int $order_amount 业务应付金额，分。
  * @property int $paid_amount 已确认业务金额，分。
  * @property string|null $active_pay_no
- * @property string $credential_version_id 冻结的应用密钥版本 ID。
+ * @property string $credential_version_id 下单时冻结的应用密钥版本 ID。
  * @property string $access_token_hash 公开访问凭证的摘要，序列化时隐藏。
  */
 final class BizOrder extends BaseModel
@@ -56,8 +57,9 @@ final class BizOrder extends BaseModel
     }
 
     /** 首版唯一有效支付尝试，关联依据 biz_no，而非数据库自增 ID。 */
-    public function payOrder(): \think\model\relation\HasOne
+    public function payOrder(): HasOne
     {
         return $this->hasOne(PayOrder::class, 'biz_no', 'biz_no');
     }
+
 }

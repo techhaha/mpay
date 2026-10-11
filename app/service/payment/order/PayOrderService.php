@@ -3,14 +3,19 @@ declare(strict_types=1);
 
 namespace app\service\payment\order;
 
-use app\common\constant\ApiResponseConstant;
 use app\common\base\BaseService;
+use app\common\constant\ApiResponseConstant;
+use app\common\util\BusinessNumber;
+use app\common\util\HttpTargetPolicy;
 use app\exception\BusinessException;
 use app\model\payment\BizOrder;
 use app\model\payment\PayOrder;
 use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\service\system\config\SystemConfigService;
+use DateTimeImmutable;
+use DateTimeZone;
+use RuntimeException;
 use think\db\exception\PDOException;
 
 /**
@@ -24,8 +29,8 @@ final class PayOrderService extends BaseService
         private readonly BizOrderRepository $bizOrders,
         private readonly PayOrderAttemptService $attempts,
         private readonly SystemConfigService $settings,
-        private readonly \app\common\util\HttpTargetPolicy $targets,
-        private readonly \app\common\util\BusinessNumber $numbers,
+        private readonly HttpTargetPolicy $targets,
+        private readonly BusinessNumber $numbers,
     ) {
     }
 
@@ -35,63 +40,73 @@ final class PayOrderService extends BaseService
      * 未指定方式只保存 CREATED 业务单；已指定方式则与支付单、占用同事务提交。
      *
      * @throws BusinessException 应用停用、凭证已不再允许接入、同号参数冲突或没有可分配的通道。
-     * @throws \RuntimeException 部署配置或历史凭证数据损坏；不替换旧上下文继续执行。
+     * @throws RuntimeException 部署配置或历史凭证数据损坏；不替换旧上下文继续执行。
      */
-    public function create(CreateOrderInput $input, \DateTimeImmutable $now): CreatedOrder
+    public function create(CreateOrderInput $input, DateTimeImmutable $now): CreatedOrder
     {
-        $now = $now->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        return $this->runCreation(fn (): CreatedOrder => $this->createLocked($input, $now));
+    }
+
+    /**
+     * 组合下单用例的同事务入口；调用方拥有最外层事务，不能在此开启嵌套事务。
+     * API 和后台快捷付款共用应用凭证、外部单号幂等、金额和订单写入规则。
+     */
+    public function createLocked(CreateOrderInput $input, DateTimeImmutable $now): CreatedOrder
+    {
+        $this->requireTransaction();
+        $now = $now->setTimezone(new DateTimeZone('Asia/Shanghai'));
         $validSeconds = $this->settings->values('payment_defaults')['order_valid_seconds'];
         if (!is_int($validSeconds) || $validSeconds < 1 || $validSeconds > 86400) {
-            throw new \RuntimeException('业务单有效期配置无效');
+            throw new RuntimeException('业务单有效期配置无效');
         }
-        return $this->runCreation(function () use ($input, $now, $validSeconds): CreatedOrder {
-            // 同一应用的创建与凭证变更共用应用锁，防止验签后改 PID/KEY 仍以旧身份新建单。
-            $app = $this->apps->lock($input->appId);
-            if ((int) $app['status'] !== 1) {
-                throw new BusinessException('应用已停用', ApiResponseConstant::FORBIDDEN);
+        // 同一应用的创建与凭证变更共用应用锁，防止验签后改 PID/KEY 仍以旧身份新建单。
+        $app = $this->apps->lock($input->appId);
+        if ((int) $app['status'] !== 1) {
+            throw new BusinessException('应用已停用', ApiResponseConstant::FORBIDDEN);
+        }
+        if ($app['active_key_id'] !== $input->credentialVersionId || $app['pid'] !== $input->pid) {
+            throw new BusinessException('接入凭证已变更，请重新签名', ApiResponseConstant::UNAUTHENTICATED);
+        }
+        $biz = $this->bizOrders->lockByAppOrder($input->appId, $input->merchantOrderNo);
+        $reused = $biz !== null;
+        if ($biz === null) {
+            // 域名授权只决定新订单；已验签的同单重投仍使用冻结目标，下面继续核对完整业务指纹。
+            $targets = $this->targets->forHosts($app['allowed_hosts']);
+            if ($input->notifyUrl !== null) { $targets->validate($input->notifyUrl); }
+            if ($input->returnUrl !== null) { $targets->validate($input->returnUrl); }
+            $accessToken = bin2hex(random_bytes(32));
+            $bizNo = $this->numbers->insert('B', $now, fn (string $bizNo) => $this->bizOrders->create([
+                'created_at' => $now->format('Y-m-d H:i:s'), 'biz_no' => $bizNo, 'trace_no' => 'T' . bin2hex(random_bytes(16)),
+                'app_id' => $input->appId, 'pid' => $input->pid, 'merchant_order_no' => $input->merchantOrderNo,
+                'subject' => $input->subject, 'order_amount' => $input->amount,
+                'credential_version_id' => $input->credentialVersionId,
+                'access_token_hash' => hash('sha256', $accessToken), 'client_ip' => $input->clientIp,
+                'notify_url' => $input->notifyUrl, 'return_url' => $input->returnUrl,
+                'expire_at' => $now->modify('+' . $validSeconds . ' seconds')->format('Y-m-d H:i:s'),
+                'ext_json' => json_encode([
+                    'creation_fingerprint' => $input->fingerprint(), 'requested_pay_type' => $input->requestedPayType,
+                    // 自动识别只用于展示，不写入幂等指纹；客户端换环境重投仍复用原上下文。
+                    'device' => $input->device ?? $input->detectedDevice, 'param' => $input->param,
+                    // 摘要用于访问认证；保存的原凭证供已验签重投取回同一地址，不轮换使旧页面失效。
+                    'cashier_token' => $accessToken,
+                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            ]));
+            $biz = $this->bizOrders->lock($bizNo);
+        } else {
+            $context = $biz['ext_json'] ?? [];
+            if (!is_string($context['creation_fingerprint'] ?? null)
+                || !hash_equals($context['creation_fingerprint'], $input->fingerprint())) {
+                throw new BusinessException('该外部订单号的业务参数与原单不一致', ApiResponseConstant::CONFLICT);
             }
-            if ($app['active_key_id'] !== $input->credentialVersionId || $app['pid'] !== $input->pid) {
-                throw new BusinessException('接入凭证已变更，请重新签名', ApiResponseConstant::UNAUTHENTICATED);
-            }
-            $biz = $this->bizOrders->lockByAppOrder($input->appId, $input->merchantOrderNo);
-            $reused = $biz !== null;
-            if ($biz === null) {
-                // 域名授权只决定新订单；已验签的同单重投仍使用冻结目标，下面继续核对完整业务指纹。
-                $targets = $this->targets->forHosts($app['allowed_hosts']);
-                $targets->validate($input->notifyUrl);
-                if ($input->returnUrl !== null) { $targets->validate($input->returnUrl); }
-                $accessToken = bin2hex(random_bytes(32));
-                $bizNo = $this->numbers->insert('B', $now, fn (string $bizNo) => $this->bizOrders->create([
-                    'created_at' => $now->format('Y-m-d H:i:s'), 'biz_no' => $bizNo, 'trace_no' => 'T' . bin2hex(random_bytes(16)),
-                    'app_id' => $input->appId, 'pid' => $input->pid, 'merchant_order_no' => $input->merchantOrderNo,
-                    'subject' => $input->subject, 'order_amount' => $input->amount,
-                    'credential_version_id' => $input->credentialVersionId,
-                    'access_token_hash' => hash('sha256', $accessToken), 'client_ip' => $input->clientIp,
-                    'notify_url' => $input->notifyUrl, 'return_url' => $input->returnUrl,
-                    'expire_at' => $now->modify('+' . $validSeconds . ' seconds')->format('Y-m-d H:i:s'),
-                    'ext_json' => json_encode([
-                        'creation_fingerprint' => $input->fingerprint(), 'requested_pay_type' => $input->requestedPayType,
-                        // 自动识别只用于展示，不写入幂等指纹；客户端换环境重投仍复用原上下文。
-                        'device' => $input->device ?? $input->detectedDevice, 'param' => $input->param,
-                        // 摘要用于访问认证；保存的原凭证供已验签重投取回同一地址，不轮换使旧页面失效。
-                        'cashier_token' => $accessToken,
-                    ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-                ]));
-                $biz = $this->bizOrders->lock($bizNo);
-            } else {
-                $context = $biz['ext_json'] ?? [];
-                if (!is_string($context['creation_fingerprint'] ?? null)
-                    || !hash_equals($context['creation_fingerprint'], $input->fingerprint())) {
-                    throw new BusinessException('该外部订单号的业务参数与原单不一致', ApiResponseConstant::CONFLICT);
-                }
-                $accessToken = $this->recoverAccessToken($biz);
-            }
-            $payNo = $biz['active_pay_no'];
-            if ($input->requestedPayType !== null) {
-                $payNo = $this->attempts->prepare($biz, $input->requestedPayType, $now)['pay_no'];
-            }
-            return new CreatedOrder($biz['biz_no'], $payNo, $accessToken, $reused);
-        });
+            $accessToken = $this->recoverAccessToken($biz);
+        }
+        $payNo = $biz['active_pay_no'];
+        if ($input->channelId !== null) {
+            $payNo = $this->attempts->prepareByChannel($biz, $input->channelId, $now)['pay_no'];
+        } elseif ($input->requestedPayType !== null) {
+            $payNo = $this->attempts->prepare($biz, $input->requestedPayType, $now)['pay_no'];
+        }
+        return new CreatedOrder($biz['biz_no'], $payNo, $accessToken, $reused);
     }
 
     /**
@@ -100,7 +115,7 @@ final class PayOrderService extends BaseService
      *
      * @throws BusinessException 凭证无效、应用停用、状态冲突或没有可分配的通道。
      */
-    public function selectPayType(string $bizNo, string $accessToken, string $payType, \DateTimeImmutable $now): PayOrder
+    public function selectPayType(string $bizNo, string $accessToken, string $payType, DateTimeImmutable $now): PayOrder
     {
         $biz = $this->bizOrders->find($bizNo);
         $this->assertAccess($biz, $accessToken);
@@ -133,10 +148,10 @@ final class PayOrderService extends BaseService
     {
         $token = $biz['ext_json']['cashier_token'] ?? null;
         if (!is_string($token)) {
-            throw new \RuntimeException('订单访问凭证快照缺失');
+            throw new RuntimeException('订单访问凭证快照缺失');
         }
         if (!preg_match('/^[a-f0-9]{64}$/D', $token) || !hash_equals($biz['access_token_hash'], hash('sha256', $token))) {
-            throw new \RuntimeException('订单访问凭证快照损坏');
+            throw new RuntimeException('订单访问凭证快照损坏');
         }
         return $token;
     }

@@ -18,9 +18,15 @@ use app\repository\payment\receipt\ReceiptMatchReservationRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
+use DateTimeImmutable;
+use DateTimeZone;
+use JsonException;
+use LogicException;
+use RuntimeException;
+use SensitiveParameter;
+use think\facade\Db;
 use think\Request;
 use think\Response;
-use think\facade\Db;
 
 /** 支付宝手机监听：本类集中配置、通知模板及字段转换，标准订单处理复用服务调用链。 */
 final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatcherInterface
@@ -55,7 +61,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
     private array $channelConfig = [];
 
-    public function init(#[\SensitiveParameter] array $channelConfig): void
+    public function init(#[SensitiveParameter] array $channelConfig): void
     {
         $this->channelConfig = $channelConfig;
     }
@@ -96,13 +102,13 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
      */
     private function prepareReceipt(string $payNo): PayOrder
     {
-        $observed = $this->orders->find($payNo) ?? throw new \RuntimeException('收款支付单不存在');
+        $observed = $this->orders->find($payNo) ?? throw new RuntimeException('收款支付单不存在');
         return Db::transaction(function () use ($observed, $payNo): PayOrder {
             $biz = $this->businessOrders->lock($observed['biz_no']);
             $pay = $this->orders->lock($payNo);
             $this->scopes->lock($pay['receipt_scope_key']);
             if ($pay['channel_id'] !== $this->getConfig('channel_id') || $pay['biz_no'] !== $biz['biz_no']) {
-                throw new \LogicException('插件与支付单通道不一致');
+                throw new LogicException('插件与支付单通道不一致');
             }
             $ext = $pay['ext_json'] ?? [];
             if (isset($ext['personal_receipt']['original_amount'])) { return $pay; }
@@ -115,8 +121,9 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             $expiresAt = min($pay['expire_at'], $this->clock->now()->modify('+' . $this->getConfig('receipt_valid_seconds', 300) . ' seconds')->format('Y-m-d H:i:s'));
             $original = (int) $biz['order_amount'];
             Money::assertRange($original);
-            if ($original < 1 || $original > (int) $this->getConfig('max_amount', Money::MAX_CENTS)) {
-                throw new BusinessException('金额超出通道限额', ApiResponseConstant::VALIDATION_FAILED);
+            // 通用运营限额由选路服务校验；指定通道测试跳过选路，插件仍核验自身金额边界。
+            if ($original < 1) {
+                throw new BusinessException('付款金额必须大于零', ApiResponseConstant::VALIDATION_FAILED);
             }
             $mode = $this->getConfig('receipt_match_mode', 'amount');
             $remark = null;
@@ -145,7 +152,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             ]);
             $this->orders->saveReceiptContext($payNo, $amount, $ext, $expiresAt, $now);
             $this->businessOrders->shortenExpiry($biz['biz_no'], $expiresAt);
-            return $this->orders->find($payNo) ?? throw new \RuntimeException('收款准备结果不可读取');
+            return $this->orders->find($payNo) ?? throw new RuntimeException('收款准备结果不可读取');
         });
     }
 
@@ -195,7 +202,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
     private function locateReceipt(array $record, ?string $scopeKey = null, array $excluded = []): PayOrder
     {
         $scope = $scopeKey ?? (string) $this->getConfig('receipt_scope_key');
-        if ($scope === '') { throw new \LogicException('服务未注入收款范围'); }
+        if ($scope === '') { throw new LogicException('服务未注入收款范围'); }
         if ($record['trade_no'] !== null) {
             $known = $this->orders->successfulForTrade($scope, $record['trade_no']);
             if ($known !== null) { return $known; }
@@ -248,7 +255,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             $this->clock->now(), strtolower((string) $request->server('HTTPS', '')) === 'on' || (string) $request->server('SERVER_PORT') === '443',
             $this->getConfig('sms_forwarder_time_tolerance'));
         try { $content = json_decode($message->content, true, 16, JSON_THROW_ON_ERROR); }
-        catch (\JsonException) { throw new ReceiptMessageException('invalid_message'); }
+        catch (JsonException) { throw new ReceiptMessageException('invalid_message'); }
         if (!is_array($content) || !is_string($content['title'] ?? null) || !is_string($content['msg'] ?? null)) {
             throw new ReceiptMessageException('invalid_message');
         }
@@ -258,7 +265,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
         }
         $remark = preg_match('/(?:备注|留言|附言|付款备注|收款备注)[:：\s]*([0-9]{4})/u', $text, $code) ? $code[1] : null;
         $reference = 'SF' . substr(hash('sha256', $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
-        $time = (new \DateTimeImmutable('@' . intdiv($message->transportTimestampMilliseconds, 1000)))->setTimezone(new \DateTimeZone('Asia/Shanghai'));
+        $time = (new DateTimeImmutable('@' . intdiv($message->transportTimestampMilliseconds, 1000)))->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return ['pay_type' => 'alipay', 'event_key' => $reference, 'trade_no' => $reference,
             'amount' => Money::parse($amount[1]), 'paid_at' => $time->format('Y-m-d H:i:s'), 'remark' => $remark];
     }

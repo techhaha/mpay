@@ -1,0 +1,15 @@
+{extend name="layouts/base" /}
+{block name="body_class"}cashier-body{/block}
+{block name="styles"}<link rel="stylesheet" href="/assets/css/cashier.css?v=20261011orders">{/block}
+{block name="content"}
+<section class="cashier-page cashier-success">
+    <header class="cashier-header"><img class="mpay-logo" src="/assets/brand/mpay-logo.svg" alt="MPAY 码支付" width="120" height="30"></header>
+    <div class="cashier-success-icon" aria-hidden="true">✓</div>
+    <h1>{if $payment.test_mode}模拟支付完成{else /}支付成功{/if}</h1>
+    <p>{if $payment.test_mode}本结果为隔离演示，不代表实际收款。{else /}已确认收款，请勿重复付款。{/if}</p>
+    <div class="cashier-amounts"><div><span>已确认实收</span><strong>¥ {$payment.received_money|htmlspecialchars}</strong></div></div>
+    <p>{$payment.subject|htmlspecialchars}</p>
+    <details class="cashier-success-details"><summary>订单信息</summary><div class="cashier-order">{$payment.pay_no|htmlspecialchars}</div><p>订单金额 ¥ {$payment.order_money|htmlspecialchars}</p></details>
+    {if $payment.return_allowed}<div class="cashier-actions"><a class="layui-btn" href="{$return_path|htmlspecialchars}">返回商户</a></div>{/if}
+</section>
+{/block}

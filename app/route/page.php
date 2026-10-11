@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-use app\http\page\CashierController;
 use app\http\page\AdminController;
+use app\http\page\CashierController;
 use think\facade\Route;
 
 // 只有输出会话/CSRF 的页面初始化 Session；支付结果回跳仍由业务服务核验，页面不确认收款。
@@ -18,6 +18,7 @@ Route::group('admin', function (): void {
     Route::rule('poll-groups', [AdminController::class, 'pollGroups'], 'GET|HEAD')->name('admin.page.poll-groups')->middleware('admin.auth');
 })->middleware('session');
 Route::group('cashier', function (): void {
+    Route::rule('success', [CashierController::class, 'completed'], 'GET|HEAD')->name('cashier.success');
     Route::rule('pay', [CashierController::class, 'index'], 'GET|HEAD')->name('cashier.pay')->middleware('session');
     Route::rule('return', [CashierController::class, 'back'], 'GET|HEAD')->name('cashier.return');
 });

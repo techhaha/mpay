@@ -2,13 +2,14 @@
 declare(strict_types=1);
 
 use app\http\admin\controller\AdminAuthController;
-use app\http\admin\controller\PayOrderController;
 use app\http\admin\controller\OperationsController;
-use app\http\admin\controller\PaymentConfigurationController;
-use app\http\admin\controller\SystemSettingsController;
 use app\http\admin\controller\PaymentAppController;
+use app\http\admin\controller\PaymentCatalogController;
+use app\http\admin\controller\PaymentConfigurationController;
 use app\http\admin\controller\PaymentPollGroupController;
+use app\http\admin\controller\PayOrderController;
 use app\http\admin\controller\RuntimeController;
+use app\http\admin\controller\SystemSettingsController;
 use think\facade\Route;
 
 // Session 仅在后台组初始化；登录仍校验同源 JSON 和 CSRF，其余接口统一认证后再执行写保护。
@@ -21,9 +22,9 @@ Route::group('adminapi', function (): void {
         Route::rule('dashboard', [OperationsController::class, 'dashboard'], 'GET|HEAD')->name('admin.dashboard');
         Route::rule('audit', [OperationsController::class, 'audit'], 'GET|HEAD')->name('admin.audit');
         Route::group('catalog', function (): void {
-            Route::rule('', [\app\http\admin\controller\PaymentCatalogController::class, 'index'], 'GET|HEAD')->name('admin.catalog');
+            Route::rule('', [PaymentCatalogController::class, 'index'], 'GET|HEAD')->name('admin.catalog');
             foreach (['save', 'delete', 'refresh', 'enabled'] as $action) {
-                Route::post($action, [\app\http\admin\controller\PaymentCatalogController::class, $action])
+                Route::post($action, [PaymentCatalogController::class, $action])
                     ->name('admin.catalog.' . $action)->middleware('admin.configuration.write');
             }
         });
@@ -59,7 +60,7 @@ Route::group('adminapi', function (): void {
             Route::post('image-upload', [PaymentConfigurationController::class, 'uploadImage'])
                 ->name('admin.configuration.image-upload')->middleware('admin.image.write');
             Route::group('', function (): void {
-                foreach (['editor-create' => 'editorCreate', 'editor-save' => 'editorSave', 'plugin-save' => 'pluginSave', 'editor-enabled' => 'editorEnabled', 'channel-delete' => 'deleteChannel'] as $path => $action) {
+                foreach (['channel-test' => 'testChannel', 'editor-create' => 'editorCreate', 'editor-save' => 'editorSave', 'plugin-save' => 'pluginSave', 'editor-enabled' => 'editorEnabled', 'channel-delete' => 'deleteChannel'] as $path => $action) {
                     Route::post($path, [PaymentConfigurationController::class, $action])->name('admin.configuration.' . $path);
                 }
             })->middleware('admin.configuration.write');

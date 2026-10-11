@@ -3,11 +3,13 @@ declare(strict_types=1);
 
 namespace app\repository\ops;
 
+use app\common\constant\TradeConstant;
 use app\model\payment\BizOrder;
+use app\model\payment\NotifyTask;
 use app\model\payment\PayOrder;
 use app\model\payment\ReceiptFlow;
-use app\model\payment\NotifyTask;
-use app\common\constant\TradeConstant;
+use RuntimeException;
+use think\db\Query;
 
 /** 工作台聚合读取；按业务、支付、流水和通知各自身份计数，不联表重复累加金额，不负责统计解释。 */
 final class PaymentStatisticsRepository
@@ -43,28 +45,28 @@ final class PaymentStatisticsRepository
         $payments = $paymentQuery->fieldRaw("COUNT(*) AS records, COUNT($received) AS with_amount, COALESCE(SUM($original), 0) AS sum_business_cents,
                 COALESCE(SUM($received), 0) AS sum_received_cents, COALESCE(SUM($received - $original), 0) AS sum_difference_cents,
                 COALESCE(SUM($receipt - $original), 0) AS sum_offset_cents")->find();
-        if ($business === null || $payments === null) { throw new \RuntimeException('统计结果未返回完整聚合行'); }
+        if ($business === null || $payments === null) { throw new RuntimeException('统计结果未返回完整聚合行'); }
         $notificationQuery = $this->notifications->group('status');
         $this->limitToApp($notificationQuery, $appId);
         $flowQuery = $this->flows->where('paid_at', '>=', $from)->where('paid_at', '<', $until);
-        if ($appId !== null) {
-            $flowQuery->whereIn('pay_no', static function (\think\db\Query $payments) use ($appId): void {
-                $payments->table('ma_pay_order')->field('pay_no')->whereIn('biz_no', static function (\think\db\Query $orders) use ($appId): void {
-                    $orders->table('ma_biz_order')->field('biz_no')->where('app_id', $appId);
-                });
+        // 所有订单和实际到账使用同一统计口径，按需限定应用归属。
+        $flowQuery->whereIn('pay_no', static function (Query $payments) use ($appId): void {
+            $payments->table('ma_pay_order')->field('pay_no')->whereIn('biz_no', static function (Query $orders) use ($appId): void {
+                $orders->table('ma_biz_order')->field('biz_no');
+                if ($appId !== null) { $orders->where('app_id', $appId); }
             });
-        }
+        });
         return ['created' => array_map('intval', $created), 'business' => $business->getData(), 'payments' => $payments->getData(),
             'matched_receipts' => (int) $flowQuery->count(),
             'notifications' => array_map('intval', $notificationQuery->column('COUNT(*)', 'status'))];
     }
 
-    /** 支付与通知通过业务单归属筛选；已确认流水同样通过所属支付单限定应用。 */
-    private function limitToApp(\think\db\Query $query, ?string $appId): void
+    /** 支付与通知通过业务单归属筛选；不根据商品名称区分统计。 */
+    private function limitToApp(Query $query, ?string $appId): void
     {
-        if ($appId === null) { return; }
-        $query->whereIn('biz_no', static function (\think\db\Query $orders) use ($appId): void {
-            $orders->table('ma_biz_order')->where('app_id', $appId)->field('biz_no');
+        $query->whereIn('biz_no', static function (Query $orders) use ($appId): void {
+            $orders->table('ma_biz_order')->field('biz_no');
+            if ($appId !== null) { $orders->where('app_id', $appId); }
         });
     }
 }

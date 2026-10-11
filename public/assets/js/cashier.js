@@ -19,6 +19,7 @@ layui.use('layer', function () {
     let qrKey = '';
     let expiryRefreshRequested = false;
     let writeFailure = null;
+    let initialPrepareRequested = false;
 
     function error(message) {
         find('error').textContent = message;
@@ -78,6 +79,11 @@ layui.use('layer', function () {
         }
         error(writeFailure?.message || '');
         current = data;
+        if (data.status === 2) {
+            clearTimeout(timer);
+            location.replace('/cashier/success?' + query);
+            return;
+        }
         receivedAt = Date.now();
         expiryRefreshRequested = false;
         root.dataset.status = String(data.status);
@@ -147,6 +153,11 @@ layui.use('layer', function () {
             : data.expired || [3, 4, 5].includes(data.status) ? '请勿继续付款。若已付款，请联系商户并提供订单号核对。'
             : '付款后请等待支付结果，切勿重复付款。如需帮助，请联系商户并提供订单号。';
         tick(); schedule();
+        // 后台只创建原单，首次付款准备仍走同源写接口。未知结果不在本页自动重复发起。
+        if (data.needs_initial_prepare && !initialPrepareRequested) {
+            initialPrepareRequested = true;
+            setTimeout(() => write('/api/cashier/prepare', {}), 0);
+        }
     }
 
     /** 写请求前后各推进一次代次，避免较早的轮询响应覆盖已经返回的新执行状态。 */

@@ -5,9 +5,9 @@ namespace app\service\payment\order;
 
 use app\common\constant\NotifyConstant;
 use app\common\constant\TradeConstant;
+use app\model\payment\BizOrder;
 use app\model\payment\NotifyTask;
 use app\model\payment\PayOrder;
-use app\model\payment\BizOrder;
 
 /** 计算当前页面可以提供的动作；只作展示提示，真正执行仍由动作服务在锁内校验身份、证据和状态。 */
 final class PayOrderActionResolverService
@@ -19,8 +19,7 @@ final class PayOrderActionResolverService
         return [
             'confirm' => $pay !== null && in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING,
                 TradeConstant::ORDER_STATUS_FAILED, TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT], true),
-            'confirm_unavailable_reason' => $pay === null && (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS
-                ? '尚未发起支付，无法补确认' : null,
+            'confirm_unavailable_reason' => $pay === null && (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS ? '尚未发起支付，无法补确认' : null,
             'notification_action' => $task === null ? '发送商户通知' : match ((int) $task['status']) {
                 NotifyConstant::STATUS_HELD => '发送商户通知',
                 NotifyConstant::STATUS_PENDING => '立即发送',

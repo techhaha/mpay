@@ -19,10 +19,10 @@ MpayAdmin.ready(function () {
             &&(f.enabled.value===''||row.enabled===(f.enabled.value==='1'))&&(!query.has('configuration_id')||row.configuration_id===query.get('configuration_id')));
         UI.table({elem:'#configuration-channels',id:'configuration-channels',data:rows,cols:[[
             {field:'name',title:'通道名称',minWidth:180,templet:row=>E(row.name)},
-            {title:'支付方式',width:135,align:'center',templet:row=>row.pay_types.map(UI.payment).join(' ')},
+            {title:'支付方式',width:135,unresize:true,align:'center',templet:row=>row.pay_types.map(UI.payment).join(' ')},
             {title:'插件',minWidth:190,templet:row=>E(pluginName(row.plugin_code))},
             {title:'状态',width:110,align:'center',templet:row=>UI.badge(row.enabled?'已启用':'已停用',row.enabled?'green':'gray')},
-            {title:'操作',width:245,align:'center',fixed:'right',templet:()=>'<div class="admin-inline-actions"><button type="button" class="admin-link" lay-event="detail">查看</button><button type="button" class="admin-link" lay-event="edit">编辑</button><button type="button" class="admin-link" lay-event="configure">配置</button><button type="button" class="admin-link" lay-event="more">更多 '+UI.icon('down')+'</button></div>'}
+            {title:'操作',width:240,align:'center',fixed:'right',templet:()=>'<div class="admin-inline-actions"><button type="button" class="admin-link" lay-event="detail">查看</button><button type="button" class="admin-link" lay-event="edit">编辑</button><button type="button" class="admin-link" lay-event="configure">配置</button><button type="button" class="admin-link admin-channel-more" lay-event="more">更多 '+UI.icon('down')+'</button></div>'}
         ]],emptyText:channels.length?'没有符合条件的通道':'暂无收款通道'});
         document.querySelector('#configuration-channels + .layui-table-view').hidden=!channels.length;
         const empty=document.getElementById('configuration-empty');empty.replaceChildren();if(!channels.length)UI.empty(empty,'暂无收款通道',{label:'新增通道',run:create});
@@ -225,15 +225,56 @@ MpayAdmin.ready(function () {
     async function changeState(id,enabled,remove=false){
         let detail;try{detail=await get('channel',{id});}catch(error){UI.error(feedback,error);return;}
         const title=remove?'删除通道':enabled?'启用通道':'停用通道';
-        UI.form({title:title+' · '+detail.channel.name,width:620,submit:'确认'+title,
-            content:UI.notice(remove?'删除后不再用于新收款，已有订单和流水保留；请先移除轮询组引用。':enabled?'请核对插件参数。启用后允许本通道接收新订单。':'停止本通道接收新订单，已有订单仍可完成到账核对。',remove||enabled),
-            async onSubmit(form,handle){const data=versions(detail);if(!remove)data.enabled=enabled;
-                try{await post(remove?'channel-delete':'editor-enabled',data);handle.clean();handle.close();await load();UI.message(title+'完成');}
-                catch(error){if(error.data?.errors?.groups){handle.error(error);if(!handle.node.querySelector('.channel-groups-link')){const a=document.createElement('a');a.className='admin-link channel-groups-link';a.href='/admin/poll-groups?channel_id='+encodeURIComponent(id);a.textContent='查看引用的轮询组';handle.node.querySelector('.admin-dialog-footer').append(a);}}else throw error;}}});
+        const confirmed=await UI.confirm({title,content:'确定'+title.slice(0,2)+'“'+detail.channel.name+'”？',confirmText:title.slice(0,2),danger:remove,
+            description:remove?'删除后不再用于新收款，已有订单和流水保留。请先移除轮询组引用。':enabled?'启用后允许本通道接收新订单。':'停用后不再接收新订单，已有订单继续处理。',
+            onConfirm(){const data=versions(detail);if(!remove)data.enabled=enabled;return post(remove?'channel-delete':'editor-enabled',data);},
+            onError(error,target){if(error.data?.errors?.groups){const a=document.createElement('a');a.className='admin-link admin-confirm-link';a.href='/admin/poll-groups?channel_id='+encodeURIComponent(id);a.textContent='查看引用的轮询组';target.append(a);}}
+        });
+        if(confirmed){UI.message(title+'完成');await load();}
+    }
+    /** 每次打开表单创建一个幂等键；超时后保留原金额与键，重试只取回同一收银台。 */
+    async function testChannel(channel){
+        let applications;
+        try {
+            applications=(await MpayHttp.request('/adminapi/applications')).data.items.filter(app=>app.enabled)
+                .sort((a,b)=>a.created_at.localeCompare(b.created_at)||(BigInt(a.id)<BigInt(b.id)?-1:BigInt(a.id)>BigInt(b.id)?1:0));
+        } catch(error){UI.error(feedback,error);return;}
+        if(!applications.length){UI.message('请先启用一个应用');return;}
+        const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
+        const requestKey=Array.from(bytes,value=>value.toString(16).padStart(2,'0')).join('');
+        UI.form({title:'测试通道 · '+channel.name,width:460,submit:'发起支付',retrySafe:true,
+            // 复用公共表单网格的行间距；窄弹窗内每个字段独占一行，说明归属金额字段。
+            content:'<div class="admin-form-grid">'
+                +UI.field('应用',UI.select('app_id',applications.map(app=>({value:app.id,label:app.name+' · PID '+app.pid})),applications[0].id,'required'),{required:true,full:true})
+                +UI.field('测试金额',UI.unit('money','1.00','元','required inputmode="decimal" autocomplete="off"'),{required:true,full:true,hint:'本次为真实付款，支付后不会自动退款。'})
+                +'</div>',
+            async onSubmit(form,handle){
+                const money=form.elements.money.value,appId=form.elements.app_id.value;
+                if(UI.cents(money)<1)throw new Error('测试金额必须大于 0');
+                form.elements.money.readOnly=true;form.elements.app_id.disabled=true;UI.render(form);
+                // 在用户点击中打开页签，避免异步建单返回后被浏览器拦截；失败时关闭空白页。
+                const paymentWindow=window.open('about:blank','_blank');if(paymentWindow)paymentWindow.opener=null;
+                try{
+                    const result=(await post('channel-test',{app_id:appId,channel_id:channel.id,money,request_key:requestKey})).data;
+                    const target=new URL(result.cashier_url,location.origin);
+                    if(target.origin!==location.origin||target.pathname!=='/cashier/pay')throw new Error('收银台地址无效');
+                    handle.clean();handle.close();
+                    if(paymentWindow&&!paymentWindow.closed)paymentWindow.location.replace(target.href);else location.assign(target.href);
+                }catch(error){
+                    paymentWindow?.close();
+                    // 字段校验拒绝尚未建单，可修正金额；未知结果必须保留原参数重投同一请求。
+                    if(error.code===42200){form.elements.money.readOnly=false;form.elements.app_id.disabled=false;UI.render(form);}
+                    throw error;
+                }
+            }});
     }
     layui.table.on('tool(configuration-channels)',event=>{
         if(event.event==='detail')details(event.data.id);else if(event.event==='edit')edit(event.data.id);else if(event.event==='configure')configure(event.data.id);
-        else if(event.event==='more')layui.dropdown.render({elem:event.tr.find('[lay-event=more]')[0],show:true,data:[{id:'enabled',title:event.data.enabled?'停用通道':'启用通道'},{id:'delete',title:'删除通道'}],click:item=>changeState(event.data.id,!event.data.enabled,item.id==='delete')});
+        else if(event.event==='more')layui.dropdown.render({elem:event.tr.find('[lay-event=more]')[0],show:true,data:[
+            {id:'test',title:'测试',templet:'<span class="layui-font-blue">{{= d.title }}</span>'},
+            {id:'enabled',title:event.data.enabled?'停用':'启用',templet:'<span class="'+(event.data.enabled?'layui-font-orange':'layui-font-green')+'">{{= d.title }}</span>'},
+            {type:'-'},{id:'delete',title:'删除',templet:'<span class="layui-font-red">{{= d.title }}</span>'}
+        ],click:item=>{if(item.id==='test'){testChannel(event.data);return;}changeState(event.data.id,!event.data.enabled,item.id==='delete');}});
     });
     filters.addEventListener('submit',event=>{event.preventDefault();renderList();});UI.onReset(filters,()=>{query.delete('configuration_id');UI.render(filters);renderList();});
     document.getElementById('configuration-new').addEventListener('click',create);document.getElementById('configuration-refresh').addEventListener('click',load);

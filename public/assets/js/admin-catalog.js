@@ -12,13 +12,13 @@ MpayAdmin.ready(function () {
         const node=directoryDialog.node.querySelector('.payment-type-list');
         directoryDialog.node.querySelector('[data-type-count]').textContent=UI.catalog.types.length+' 种';
         node.innerHTML='<table class="payment-types-table"></table>';
-        UI.table({elem:node.querySelector('table'),data:UI.catalog.types,cols:[[
-            {title:'支付方式',minWidth:170,templet:type=>'<div class="admin-two-line">'+UI.payment(type.code)+'<small class="admin-row-sub">'+E(type.code)+'</small></div>'},
+        UI.table({elem:node.querySelector('table'),data:UI.catalog.types,className:'admin-table-two-line',cols:[[
+            {title:'支付方式',width:140,unresize:true,align:'center',templet:type=>'<div class="admin-two-line">'+UI.payment(type.code)+'<small class="admin-row-sub">'+E(type.code)+'</small></div>'},
             {field:'sort_order',title:'排序',width:80,align:'center'},
             {title:'状态',width:100,align:'center',templet:type=>enabledLabel(type.enabled)},
             {title:'支持插件',width:120,align:'center',templet:type=>UI.badge(supported(type.code).length?supported(type.code).length+' 个':'暂无插件',supported(type.code).length?'blue':'orange')},
             {title:'操作',width:130,align:'center',fixed:'right',templet:type=>'<div class="admin-inline-actions"><button class="admin-link" data-edit-type="'+E(type.id)+'">编辑</button><button class="admin-link danger" data-delete-type="'+E(type.id)+'" '+(type.referenced?'disabled title="已有引用，可通过编辑停用"':'')+'>删除</button></div>'}
-        ]],lineStyle:'height:60px;line-height:22px;'});
+        ]]});
     }
 
     async function reload() {
@@ -74,11 +74,16 @@ MpayAdmin.ready(function () {
         });
     }
 
-    function deleteType(type) {
+    async function deleteType(type) {
         if(!type)return;
-        UI.form({title:'删除支付方式 · '+type.name,width:480,
-            content:UI.notice('删除后将从支付方式目录移除。已有引用的支付方式只能停用。'),submit:'确认删除',
-            async onSubmit(form,handle){await post('delete',{id:type.id,revision:type.revision,});handle.clean();handle.close();await reload();UI.message('支付方式已删除');}});
+        if(await UI.confirm({title:'删除支付方式',content:'确定删除“'+type.name+'”？',confirmText:'删除',danger:true,
+            description:'删除后将从支付方式目录移除。已有引用的支付方式只能停用。',
+            onConfirm:()=>post('delete',{id:type.id,revision:type.revision})})){UI.message('支付方式已删除');await refreshAfterAction();}
+    }
+
+    // 写入已成功后，读取失败只提示刷新，不重新执行已完成的操作。
+    async function refreshAfterAction() {
+        try {await reload();} catch(error) {UI.error(directoryDialog&&!directoryDialog.closed?directoryDialog.node.querySelector('.admin-feedback'):'#admin-feedback',error);}
     }
 
     function drawPlugins() {
@@ -88,10 +93,10 @@ MpayAdmin.ready(function () {
         const items=all.filter(item=>(item.name.toLowerCase().includes(query)||item.code.includes(query))&&(status===''||String(Number(item.enabled))===status));
         document.getElementById('plugin-count').textContent=all.filter(item=>item.installed).length;
         document.getElementById('plugin-enabled-count').textContent=all.filter(item=>item.installed&&item.enabled).length;
-        UI.table({elem:'#plugin-table',id:'plugin-table',data:items,cols:[[
+        UI.table({elem:'#plugin-table',id:'plugin-table',data:items,className:'admin-table-two-line',cols:[[
             {title:'插件',minWidth:210,templet:row=>'<div class="admin-two-line"><strong class="admin-row-title">'+E(row.name)+'</strong><span class="admin-row-sub">'+E(row.code)+'</span></div>'},
             {title:'版本',width:100,align:'center',templet:row=>UI.badge(row.version,'blue')},
-            {title:'支付方式',minWidth:170,templet:row=>row.pay_types.map(UI.payment).join(' ')},
+            {title:'支付方式',minWidth:200,maxWidth:300,expandedMode:'tips',templet:row=>row.pay_types.map(UI.payment).join(' ')},
             {title:'配置项',width:90,align:'center',templet:row=>UI.badge(row.config_schema?.length||0,'blue')},
             {title:'状态',width:140,align:'center',templet:row=>!row.installed?UI.badge('未安装','red'):!row.synchronized?UI.badge('待刷新','orange'):enabledLabel(row.enabled)},
             {field:'channel_count',title:'关联通道',width:100,align:'center'},
@@ -109,7 +114,7 @@ MpayAdmin.ready(function () {
             try {const result=await post('refresh',{});UI.applyCatalog(result.data);drawPlugins();UI.message('已同步 '+result.data.plugins.filter(plugin=>plugin.installed).length+' 个插件到数据库');}
             catch(error){UI.error('#admin-feedback',error);}finally{button.disabled=false;}
         });
-        layui.table.on('tool(plugin-table)',event=>{
+        layui.table.on('tool(plugin-table)',async event=>{
             const row=event.data;
             if(event.event==='detail') {
                 const handle=UI.open({title:'插件详情',width:840,content:UI.facts({'插件名称':row.name,'编码':row.code,'版本':row.version,'支付方式':row.pay_types.map(code=>UI.paymentLabels[code]||code).join('、'),'关联通道':row.channel_count,'状态':!row.installed?'未安装':!row.synchronized?'待刷新':row.enabled?'已启用':'已停用','最近更新':row.updated_at||'尚未同步'})
@@ -129,9 +134,10 @@ MpayAdmin.ready(function () {
                     {title:'默认值',minWidth:180,templet:field=>E(defaultLabel(field))}
                 ]]});return;
             }
-            UI.form({title:(row.enabled?'停用':'启用')+'插件 · '+row.name,width:530,
-                content:UI.notice(row.enabled?'停止使用此插件创建新订单和启用新通道。已有订单仍可完成到账核对和商户通知。':'启用后可选择此插件配置通道，已有通道仍保留各自开关。'),
-                async onSubmit(form,handle){await post('enabled',{code:row.code,revision:row.revision,enabled:!row.enabled,});handle.clean();handle.close();await reload();UI.message(row.enabled?'插件已停止接收新订单':'插件已启用');}});
+            const action=row.enabled?'停用':'启用';
+            if(await UI.confirm({title:action+'插件',content:'确定'+action+'“'+row.name+'”？',confirmText:action,
+                description:row.enabled?'停用后不能创建新订单或启用新通道，已有订单继续核对到账并通知商户。':'启用后可用于配置通道，已有通道保留各自的启停状态。',
+                onConfirm:()=>post('enabled',{code:row.code,revision:row.revision,enabled:!row.enabled})})){UI.message('插件已'+action);await refreshAfterAction();}
         });
     }
 });

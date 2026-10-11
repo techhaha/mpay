@@ -9,7 +9,7 @@ MpayAdmin.ready(function () {
         const data=groups.filter(group=>group.name.toLowerCase().includes(search)&&(!f.pay_type.value||types[group.pay_type_id]===f.pay_type.value)&&(!f.route_mode.value||group.route_mode===Number(f.route_mode.value))&&(!locationValues.has('channel_id')||group.members.some(member=>String(member.channel_id)===locationValues.get('channel_id'))));
         UI.table({elem:'#groups-list',id:'groups-list',data,cols:[[
             {field:'name',title:'轮询组',minWidth:180,templet:row=>E(row.name)+(row.is_default?' '+UI.badge('默认','blue'):'')},
-            {title:'支付方式',width:140,align:'center',templet:row=>UI.payment(types[row.pay_type_id])},
+            {title:'支付方式',width:135,unresize:true,align:'center',templet:row=>UI.payment(types[row.pay_type_id])},
             {title:'策略',width:140,align:'center',templet:row=>UI.badge(modes[row.route_mode]||row.route_mode,'blue')},
             {title:'成员',width:90,align:'center',templet:row=>row.members.length+' 个'},
             {title:'状态',width:120,align:'center',templet:row=>UI.badge(row.enabled?'已启用':'已停用',row.enabled?'green':'gray')},
@@ -62,7 +62,7 @@ MpayAdmin.ready(function () {
                 form.elements.route_mode.addEventListener('change',strategy);
                 let previousType=form.elements.pay_type.value;
                 form.elements.pay_type.addEventListener('change',async()=>{
-                    if(body.children.length&&!await UI.confirm('切换支付方式会移除当前未保存的成员，是否继续？','切换支付方式')){form.elements.pay_type.value=previousType;UI.render(form);return;}
+                    if(body.children.length&&!await UI.confirm({title:'切换支付方式',content:'确定切换支付方式？',description:'当前未保存的通道成员将被移除。',confirmText:'切换'})){form.elements.pay_type.value=previousType;UI.render(form);return;}
                     previousType=form.elements.pay_type.value;body.replaceChildren();UI.feedback(form.querySelector('.group-hint'),!channels.some(channel=>channel.pay_types.includes(previousType))?'当前没有支持此支付方式的通道。':'');
                 });
             },

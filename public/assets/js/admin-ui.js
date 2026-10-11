@@ -76,8 +76,72 @@
         feedback(target, message + (detail ? '：' + detail : ''));
     }
     function message(text) { layui.layer.msg(escape(text), {time:2300}); }
-    function confirm(text, title = '确认操作') {
-        return new Promise(resolve => layui.layer.confirm(escape(text), {title:escape(title), icon:3, isOutAnim:false, scrollbar:false, skin:'mpay-admin-confirm', btn:['确认','取消'], cancel:() => resolve(false), success: layer => layer.attr('role','alertdialog')}, index => { layui.layer.close(index); resolve(true); }, () => resolve(false)));
+    /**
+     * 无输入操作使用官方 confirm/异步按钮；content、description 和按钮文案均按文本转义。
+     * onConfirm 只提交操作，刷新放在返回 true 之后，避免刷新失败导致重复写入。
+     * 冲突或结果不确定时保留错误并禁止重投，必须重新读取；取消、遮罩、Esc 均返回 false。
+     * @param {{title: string, content: string, description?: string, confirmText: string, danger?: boolean,
+     *   onConfirm?: () => Promise<unknown>, onError?: (error: Error, feedback: HTMLElement) => void}} options
+     * @returns {Promise<boolean>} 弹层关闭后返回是否已确认且提交成功。
+     */
+    function confirm(options) {
+        const opener = document.activeElement;
+        let busy = false, stale = false, accepted = false, layerNode, index;
+        return new Promise(resolve => {
+            function keyboard(event) {
+                if (event.defaultPrevented || !layerNode?.isConnected) return;
+                if (event.key === 'Escape') { event.preventDefault(); layui.layer.close(index); }
+                if (event.key === 'Tab') {
+                    const controls = Array.from(layerNode.querySelectorAll('a[href],[tabindex="0"]')).filter(node => node.getClientRects().length);
+                    const first = controls[0], last = controls.at(-1);
+                    if (first && (event.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+                        event.preventDefault(); (event.shiftKey ? last : first).focus();
+                    }
+                }
+            }
+            index = layui.layer.confirm('<div class="admin-confirm-question">' + escape(options.content) + '</div>'
+                + (options.description ? '<p class="admin-confirm-description">' + escape(options.description) + '</p>' : '')
+                + '<div class="admin-feedback" role="status" aria-live="polite"></div>', {
+                title:escape(options.title), area:Math.min(420, innerWidth - 24) + 'px',
+                skin:'mpay-admin-confirm' + (options.danger ? ' mpay-admin-confirm-danger' : ''),
+                btn:[escape(options.confirmText), '取消'], btnAsync:true,
+                shade:.22, shadeClose:true, scrollbar:false, resize:false, move:false, anim:0, isOutAnim:true,
+                beforeEnd:() => !busy,
+                success(layer) {
+                    layerNode = layer[0];
+                    layer.attr({role:'alertdialog', 'aria-modal':'true', 'aria-label':options.title});
+                    layer.find('.layui-layer-close').attr('aria-label','关闭');
+                    // 官方按钮为 a 元素，补齐键盘可操作性；关闭和异步状态仍由 layer 管理。
+                    layer.find('.layui-layer-btn a,.layui-layer-close').attr({role:'button', tabindex:'0'}).on('keydown', function(event) {
+                        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }
+                    });
+                    layer.find('.layui-layer-btn1')[0]?.focus();
+                    document.addEventListener('keydown',keyboard);
+                },
+                end() {
+                    document.removeEventListener('keydown',keyboard);
+                    if (opener?.isConnected) opener.focus();
+                    resolve(accepted);
+                }
+            }, async (index, layer, instance) => {
+                if (busy || stale || accepted) return false;
+                // loading 绑定本次按钮；等待期间点击取消也不会改变此处的加载目标。
+                const loading = instance.loading;
+                busy = true; layer.attr('aria-busy','true'); loading(true);
+                const target = layerNode.querySelector('.admin-feedback'); feedback(target,'');
+                try { await options.onConfirm?.(); accepted = true; return true; }
+                catch (exception) {
+                    stale = exception.code === 40900 || exception.code === 0 || exception.code >= 50000 || exception instanceof TypeError;
+                    error(target,exception);
+                    if (stale) {
+                        target.append('。请关闭弹窗，重新读取并核对结果后再操作。');
+                        layer.find('.layui-layer-btn0').attr('aria-disabled','true').addClass('layui-btn-disabled');
+                    }
+                    options.onError?.(exception,target);
+                    return false;
+                } finally { loading(false); busy = false; layer.removeAttr('aria-busy'); }
+            });
+        });
     }
     const valid = root => MpayForm.valid(root);
     /** 等原生 reset 完成再读筛选值；接管本表单重绘，避免 Layui 的延后重绘丢失可访问标签。 */
@@ -174,7 +238,7 @@
             closing = true;
             try {
                 closeDatePanels(node);
-                if (options.form && dirty && !await confirm('有尚未保存的修改，是否放弃？','关闭编辑')) return false;
+                if (options.form && dirty && !await confirm({title:'放弃修改',content:'有尚未保存的修改，确定放弃？',confirmText:'放弃修改'})) return false;
                 closeApproved = true;return true;
             } finally { closing = false; }
         }
@@ -224,8 +288,8 @@
                     handle.run(async () => {
                         try { await options.onSubmit(element,handle,event.submitter?.dataset.submitAction || 'primary'); }
                         catch(exception) {
-                            // 写入结果不明或版本冲突时保留输入，不能用同一陈旧表单再次提交。
-                            if(exception.code===40900 || exception.code===0 || exception.code>=50000 || exception instanceof TypeError){
+                            // 默认禁止重投陈旧表单；retrySafe 只允许已实现服务端幂等且冻结提交参数的用例使用。
+                            if(!options.retrySafe && (exception.code===40900 || exception.code===0 || exception.code>=50000 || exception instanceof TypeError)){
                                 stale=true;handle.node.querySelectorAll('[data-admin-submit]').forEach(button=>{button.disabled=true;button.dataset.keepDisabled='1';});
                                 handle.error(exception);handle.node.querySelector('.admin-feedback').append('。请关闭表单，重新读取并核对结果后再操作。');
                             }else throw exception;
@@ -268,7 +332,8 @@
                 }).finally(()=>original.complete?.());
             }
         }:{};
-        return layui.table.render({skin:'line',even:false,size:'lg',lineStyle:'height:54px;line-height:24px;',text:{none:options.emptyText || '暂无记录'},
+        // 单行是默认场景；lineStyle 会开启悬停滚动，不能为统一行高而全局开启。
+        return layui.table.render({skin:'line',even:false,size:'lg',lineStyle:null,cellExpandedMode:'tips',text:{none:options.emptyText || '暂无记录'},
             ...options,...remote,limit:tableLimits.get(node)||20,limits:pageSizes,
             // 使用官方实例样式统一分页位置，保留分页组件自身的尺寸与交互。
             css:(options.css || '') + '\n.layui-table-page{text-align:right;}',

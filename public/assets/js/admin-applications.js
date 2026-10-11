@@ -99,8 +99,10 @@ MpayAdmin.ready(function () {
             ],section==='routing'?1:section==='integration'?2:0),
             onOpen(handle) {
                 handle.node.querySelector('.app-route-mode')?.addEventListener('click',()=>handle.run(async()=>{
-                    if(!app.use_default_route&&!await UI.confirm('将此应用所有支付方式恢复为对应默认轮询组，是否继续？','恢复默认收款'))return;
-                    await post('routing',{id:app.id,revision:app.revision,use_default_route:!app.use_default_route});
+                    const save=()=>post('routing',{id:app.id,revision:app.revision,use_default_route:!app.use_default_route});
+                    if(!app.use_default_route){
+                        if(!await UI.confirm({title:'恢复默认收款',content:'确定将“'+app.name+'”恢复为默认收款？',description:'各支付方式将改为绑定对应的默认轮询组。',confirmText:'恢复默认',onConfirm:save}))return;
+                    }else await save();
                     handle.clean();handle.close();await load();const current=apps.find(row=>row.id===app.id);if(current)detail(current,'routing');
                 }));
                 handle.node.querySelector('.app-edit-current').addEventListener('click',async()=>{if(await handle.requestClose())edit(app);});

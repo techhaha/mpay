@@ -3,26 +3,44 @@ MpayAdmin.ready(function () {
     'use strict';
     const UI=MpayAdmin,E=UI.escape,filters=document.getElementById('order-filters');if(!filters)return;
     const feedback=document.getElementById('admin-feedback'),locationValues=new URLSearchParams(location.search);
-    let page=1,detailSequence=0,currentDialog=null,apps=[],channels=[],groups=[];
+    let page=1,detailSequence=0,currentDialog=null,orderTable=null,apps=[],channels=[],groups=[];
     const operationLabels={manual_receipt_confirmed:'人工确认到账',manual_confirmation_replayed:'重复确认已处理',local_close:'关闭订单',local_close_replayed:'重复关闭已处理',manual_notify_scheduled:'已安排商户通知',manual_notify_replayed:'重复补发请求已处理'};
     const col=(field,title,width=150)=>({field,title,minWidth:width,templet:row=>field==='result_code'&&row.result_label?E(row.result_label)+' '+UI.help(row.result_code||'无结果代码'):field==='action'&&operationLabels[row.action]?E(operationLabels[row.action])+' '+UI.help(row.action):E(row[field]??'—')});
     for(const name of ['app_id','pid','poll_group_id','channel_id','pay_type','status','notification_status','start_date','end_date'])if(locationValues.has(name))filters.elements[name].value=locationValues.get(name);
     for(const name of ['biz_no','pay_no','merchant_order_no'])if(locationValues.has(name)){filters.elements.number_kind.value=name;filters.elements.number.value=locationValues.get(name);break;}
-    if(['notification_status','pay_type','pid','poll_group_id','channel_id'].some(name=>locationValues.has(name)))filters.querySelector('details').open=true;
+    if(['notification_status','pid','poll_group_id','channel_id'].some(name=>locationValues.has(name)))filters.querySelector('details').open=true;
     UI.dateRange(filters);UI.render(filters);
     function parameters(){const params=new URLSearchParams();new FormData(filters).forEach((value,key)=>{if(value!==''&&!['number','number_kind'].includes(key))params.set(key,value);});if(filters.elements.number.value.trim())params.set(filters.elements.number_kind.value,filters.elements.number.value.trim());return params;}
-    function load(current=1){
-        UI.table({elem:'#order-table',id:'order-table',url:'/adminapi/orders/list',where:Object.fromEntries(parameters()),
-            page:{curr:current},feedback,done(result,curr){page=curr;},lineStyle:'height:60px;line-height:22px;',cols:[[
-                {title:'订单信息',minWidth:260,templet:row=>'<div class="admin-two-line"><span class="admin-row-title" title="'+E(row.subject)+'">'+E(row.subject)+'</span><span class="admin-row-sub" title="'+E(row.merchant_order_no||row.biz_no)+'">'+E(row.merchant_order_no||row.biz_no)+'</span></div>'},
-                {title:'应用',minWidth:150,templet:row=>{const name=apps.find(app=>app.id===row.app_id)?.name||('PID '+row.pid);return '<span title="'+E(name)+'">'+E(name)+'</span>';}},
-                {field:'order_amount',title:'订单金额（元）',width:145,align:'right',templet:row=>'<span class="admin-money">'+E(row.order_amount)+'</span>'},
-                {title:'支付状态',width:120,align:'center',templet:row=>UI.state(row.status_label)},
-                {title:'商户通知',minWidth:170,align:'center',templet:row=>UI.state(row.notification_status_label||'未发送')+(row.notification_first_ack_at&&row.notification_status!==2?'<span class="admin-row-sub">商户曾确认成功</span>':'')},col('created_at','创建时间',180),
-                {title:'操作',width:88,align:'center',fixed:'right',templet:()=>'<button type="button" class="admin-link" lay-event="detail">详情</button>'}
-            ]]});
+    const appName=row=>apps.find(app=>app.id===row.app_id)?.name||('PID '+row.pid);
+    const channelName=row=>row.channel_id?(channels.find(channel=>channel.id===row.channel_id)?.name||('通道 #'+row.channel_id)):'未分配';
+    const paymentName=row=>row.pay_type?(UI.paymentLabels[row.pay_type]||row.pay_type):row.pay_type_id?'未知方式':'未选择';
+    function notification(row){
+        const full=row.notification_status_label||'尚未生成通知';
+        const label=({0:'待发送 / 重试',1:'发送中',2:'通知成功',3:'停止重试',4:'暂不通知'})[row.notification_status]
+            ||(full==='未设置通知地址'?'无通知地址':full==='尚未生成通知'?'待生成':full);
+        const tone=row.notification_status===2?'green':[0,1,3].includes(row.notification_status)?'orange':full.includes('异常')?'red':'gray';
+        return '<div class="admin-two-line"><span title="'+E(full)+'">'+UI.badge(label,tone)+'</span>'
+            +(row.notification_first_ack_at&&row.notification_status!==2?'<span class="admin-row-sub">商户曾确认成功</span>':'')+'</div>';
     }
-    function translatedOrder(order){return {'业务单号':order.biz_no,'商户订单号':order.merchant_order_no,'支付单号':order.pay_no,'应用':apps.find(app=>app.id===order.app_id)?.name||order.pid,'轮询组':groups.find(group=>group.id===order.poll_group_id)?.name||order.poll_group_id,'收款通道':channels.find(channel=>channel.id===order.channel_id)?.name||order.channel_id,'收款依据':order.confirmation_source_label,'创建时间':order.created_at,'付款时间':order.paid_at,'有效截止时间':order.expires_at,'来源流水号':order.channel_trade_no};}
+    // 重查时沿用官方实例列配置，保留用户调整的列宽。
+    function load(current=1){
+        const columns=orderTable?layui.table.getOptions('order-table').cols:[[
+            // 文本列仅限制最小宽度，由 table 自动分配余宽；短语义列继续保持固定宽度。
+            {field:'biz_no',title:'订单编号',minWidth:228,templet:row=>'<div class="admin-two-line"><button type="button" class="admin-reference admin-order-number admin-order-link" lay-event="detail" title="查看订单详情">'+E(row.biz_no)+'</button><span class="admin-row-sub admin-order-number" title="商户订单号：'+E(row.merchant_order_no)+'">'+E(row.merchant_order_no)+'</span></div>'},
+            {field:'app_id',title:'应用 / 商品',minWidth:160,templet:row=>'<div class="admin-two-line"><span class="admin-row-title" title="'+E(appName(row))+'">'+E(appName(row))+'</span><span class="admin-row-sub" title="'+E(row.subject)+'">'+E(row.subject)+'</span></div>'},
+            {field:'pay_type',title:'支付方式',width:130,unresize:true,align:'center',templet:row=>row.pay_type?UI.payment(row.pay_type):'<span class="admin-muted">'+E(paymentName(row))+'</span>'},
+            {field:'channel_id',title:'收款通道',minWidth:155,templet:row=>'<span title="'+E(channelName(row))+'">'+E(channelName(row))+'</span>'},
+            {field:'order_amount',title:'金额（元）',width:130,align:'right',templet:row=>'<div class="admin-two-line"><span class="admin-money" title="订单金额">'+E(row.order_amount)+'</span><span class="admin-row-sub">实收 '+E(row.received_amount??'—')+'</span></div>'},
+            {field:'status',title:'支付状态',width:110,align:'center',templet:row=>UI.state(row.status_label)},
+            {field:'notification_status',title:'商户通知',width:148,align:'center',templet:notification},
+            {field:'created_at',title:'交易时间',width:212,templet:row=>'<div class="admin-two-line admin-order-time"><span title="创建时间">'+E(row.created_at)+'</span><span class="admin-row-sub" title="付款时间">'+E(row.paid_at??'—')+'</span></div>'},
+            {title:'操作',width:80,align:'center',fixed:'right',templet:()=>'<button type="button" class="admin-link" lay-event="detail">详情</button>'}
+        ]];
+        orderTable=UI.table({elem:'#order-table',id:'order-table',url:'/adminapi/orders/list',where:Object.fromEntries(parameters()),
+            className:'admin-table-two-line admin-orders-table',toolbar:false,defaultToolbar:[],
+            page:{curr:current},feedback,done(result,curr){page=curr;},cols:columns});
+    }
+    function translatedOrder(order){return {'业务单号':order.biz_no,'商户订单号':order.merchant_order_no,'支付单号':order.pay_no,'应用':appName(order),'支付方式':paymentName(order),'轮询组':groups.find(group=>group.id===order.poll_group_id)?.name||order.poll_group_id,'收款通道':channelName(order),'收款依据':order.confirmation_source_label,'创建时间':order.created_at,'付款时间':order.paid_at,'有效截止时间':order.expires_at,'来源流水号':order.channel_trade_no};}
     async function show(number,focusNotification=false){
         const sequence=++detailSequence;if(currentDialog&&!currentDialog.closed)currentDialog.close();
         const handle=UI.open({title:'订单详情',drawer:true,width:900,content:'<div class="order-detail-content"></div>'});currentDialog=handle;handle.feedback('正在读取订单详情…','loading');

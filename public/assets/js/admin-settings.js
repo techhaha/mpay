@@ -27,5 +27,5 @@ MpayAdmin.ready(function () {
             finally{saving.delete(group);controls();}
         });
     });
-    refresh.addEventListener('click',async()=>{if(dirty.size&&!await UI.confirm('重新读取会替换尚未保存的输入，是否继续？','重新读取设置'))return;load();});load();
+    refresh.addEventListener('click',async()=>{if(dirty.size&&!await UI.confirm({title:'重新读取设置',content:'确定重新读取设置？',description:'尚未保存的输入将被替换。',confirmText:'重新读取'}))return;load();});load();
 });

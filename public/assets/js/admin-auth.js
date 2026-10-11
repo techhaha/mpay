@@ -50,10 +50,12 @@ MpayForm.ready(function () {
 
     logout?.addEventListener('click', async () => {
         if (busy) return;
-        if (window.MpayAdmin && !await MpayAdmin.confirm('将退出当前及其他浏览器的后台登录会话。','退出所有登录')) return;
-        submitting(true); message('正在退出…');
+        submitting(true);
         try {
-            await MpayHttp.request('/adminapi/logout', {method: 'POST', data: {}});
+            const exit=()=>MpayHttp.request('/adminapi/logout', {method: 'POST', data: {}});
+            if(window.MpayAdmin){
+                if(!await MpayAdmin.confirm({title:'退出所有登录',content:'确定退出所有后台登录？',description:'当前及其他浏览器的登录会话都将退出。',confirmText:'退出登录',onConfirm:exit}))return;
+            }else await exit();
             location.replace('/admin/login');
         } catch (error) {
             // 不把未知网络结果当作退出成功；用户可以直接重新打开登录入口确认状态。

@@ -16,8 +16,8 @@ Thumbs.db
 !/docs/wiki/
 /runtime
 # 根目录测试、诊断及验收工具仅在本地保留，不进入远程源码仓库。
-/tools/
-/tests/
+/tools
+/tests
 /deploy/**/*.conf
 /deploy/**/*.service
 __pycache__/

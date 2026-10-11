@@ -4,7 +4,10 @@ declare(strict_types=1);
 namespace app\service\payment\config;
 
 use app\common\constant\ApiResponseConstant;
+use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
+use SensitiveParameter;
+use stdClass;
 use think\Validate;
 
 /**
@@ -20,9 +23,8 @@ final class PaymentConfigurationValidator extends Validate
         'expected_configuration_version' => ['jsonInteger', 'between' => [1, 4294967295]],
         'enabled' => ['jsonBoolean'], 'participates_default_route' => ['jsonBoolean'],
         'plugin_code' => ['string', 'regex' => '/^[a-z][a-z0-9_]{0,63}$/D'],
-        'retain_secrets' => ['array', 'secretFields'],
         'name' => ['string', 'nonBlank', 'max' => 128, 'plainName'],
-        'pay_type' => ['string', 'regex' => \app\common\validation\PaymentTypeCode::PATTERN],
+        'pay_type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
         'settings' => ['jsonObject'], 'channel' => ['jsonObject'], 
     ];
     protected $scene = [
@@ -30,11 +32,11 @@ final class PaymentConfigurationValidator extends Validate
         'channel-delete' => ['id', 'expected_revision', 'expected_configuration_version'],
         'editor-create' => ['enabled', 'participates_default_route', 'plugin_code', 'pay_type', 'settings', 'channel'],
         'editor-save' => ['participates_default_route', 'id', 'expected_revision', 'expected_configuration_version', 'plugin_code', 'pay_type', 'settings', 'channel'],
-        'plugin-save' => ['id', 'expected_revision', 'expected_configuration_version', 'settings', 'retain_secrets'],
+        'plugin-save' => ['id', 'expected_revision', 'expected_configuration_version', 'settings'],
     ];
 
     /**
-     * 缺失与 null 分开；保存插件时必须明确提供 retain_secrets，缺失与空列表不混用。
+     * 保存插件时提交完整 settings；缺失、空值与 null 的语义由插件字段规则决定。
      * settings 不在此猜平台规则，随后仍由 PluginConfigValidator 对明确版本的 schema 核验。
      *
      * @param array<string,mixed> $input 根 JSON 对象的字段，嵌套对象必须仍为 stdClass。
@@ -42,7 +44,7 @@ final class PaymentConfigurationValidator extends Validate
      *     settings/channel 转为关联数组，其余字段不做隐式转换。
      * @throws BusinessException 422 字段错误，固定说明不包含凭证值或未知字段名称。
      */
-    public function validate(string $operation, #[\SensitiveParameter] array $input): array
+    public function validate(string $operation, #[SensitiveParameter] array $input): array
     {
         if (!isset($this->scene[$operation])) { throw new BusinessException('未知配置操作，请查看命令帮助', ApiResponseConstant::VALIDATION_FAILED); }
         $fields = $this->scene[$operation];
@@ -73,7 +75,7 @@ final class PaymentConfigurationValidator extends Validate
      * @param array<string,array> $rules 代码中固定的内层规则，客户端不能定义校验器。
      * @return array<string,mixed> 仅将当前已核验对象转换为数组，不丢失更内层的对象/列表区别。
      */
-    private function nested(#[\SensitiveParameter] \stdClass $object, array $rules, string $prefix): array
+    private function nested(#[SensitiveParameter] stdClass $object, array $rules, string $prefix): array
     {
         $values = get_object_vars($object);
         $this->assertFields($values, array_keys($rules), [], $prefix);
@@ -109,7 +111,7 @@ final class PaymentConfigurationValidator extends Validate
     /** JSON 的数字和开关不能用原生 integer/boolean 的宽松转换替代。 */
     protected function jsonInteger(mixed $value): bool { return is_int($value); }
     protected function jsonBoolean(mixed $value): bool { return is_bool($value); }
-    protected function jsonObject(mixed $value): bool { return $value instanceof \stdClass; }
+    protected function jsonObject(mixed $value): bool { return $value instanceof stdClass; }
 
     /** 大整数 ID 保持十进制字符串，比较上限不经过浮点或有符号 int。 */
     protected function recordId(string $value): bool
@@ -126,13 +128,4 @@ final class PaymentConfigurationValidator extends Validate
     /** 名称是单行公开标签，在进入业务服务前拒绝控制字符。 */
     protected function plainName(string $value): bool { return !preg_match('/[\x00-\x1f\x7f]/', $value); }
 
-    /** 这里只校验字段名列表；字段确属秘密及原值存在性必须在配置服务的版本锁内判断。 */
-    protected function secretFields(array $values): bool
-    {
-        if (!array_is_list($values) || count($values) > 128) { return false; }
-        foreach ($values as $value) {
-            if (!is_string($value) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $value)) { return false; }
-        }
-        return count(array_unique($values)) === count($values);
-    }
 }

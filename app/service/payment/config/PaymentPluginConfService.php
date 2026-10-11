@@ -3,14 +3,10 @@ declare(strict_types=1);
 
 namespace app\service\payment\config;
 
-use app\service\system\audit\ConfigurationAuditService;
-use app\service\system\audit\ConfigurationActionContext;
-use app\service\payment\plugin\PluginDefinition;
-use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
+use app\common\interface\ReceiptCollectorInterface;
 use app\common\util\Clock;
-use app\service\file\FileAssetService;
 use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use app\repository\payment\config\PaymentCatalogRepository;
@@ -18,7 +14,16 @@ use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\runtime\ReceiptRuntimeStateRepository;
+use app\repository\payment\runtime\ReceiptSessionRepository;
+use app\service\file\FileAssetService;
+use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\service\payment\plugin\PluginDefinition;
 use app\service\payment\receipt\ReceiptScopeService;
+use app\service\system\audit\ConfigurationActionContext;
+use app\service\system\audit\ConfigurationAuditService;
+use LogicException;
+use RuntimeException;
+use SensitiveParameter;
 
 /** 通道专属插件参数及不可变版本管理；插件定义采集身份，本服务保存关联与快照，不猜平台字段。 */
 final class PaymentPluginConfService extends BaseService
@@ -27,7 +32,7 @@ final class PaymentPluginConfService extends BaseService
         private readonly PaymentChannelRepository $channels,
         private readonly ReceiptScopeRepository $scopes, private readonly PaymentCatalogRepository $catalog,
         private readonly PaymentPluginFactoryService $plugins, private readonly PluginConfigValidator $validator,
-        private readonly ReceiptRuntimeStateRepository $runtime, private readonly \app\repository\payment\runtime\ReceiptSessionRepository $sessions,
+        private readonly ReceiptRuntimeStateRepository $runtime, private readonly ReceiptSessionRepository $sessions,
         private readonly ConfigurationAuditService $audit, private readonly Clock $clock, private readonly PaymentCatalogService $management,
         private readonly FileAssetService $files, private readonly ReceiptScopeService $scopeService) {}
 
@@ -36,7 +41,7 @@ final class PaymentPluginConfService extends BaseService
      * @param array<string,mixed> $settings
      * @return array{id:string,config_version:int,enabled:bool}
      */
-    public function createInTransaction(string $code, string $name, #[\SensitiveParameter] array $settings, ConfigurationActionContext $actor): array
+    public function createInTransaction(string $code, string $name, #[SensitiveParameter] array $settings, ConfigurationActionContext $actor): array
     {
         $this->requireTransaction();
         $this->management->assertNew($code);
@@ -60,15 +65,18 @@ final class PaymentPluginConfService extends BaseService
     }
 
     /**
-     * 组合编辑复用原版本、秘密保留与范围校验；调用方负责唯一外层事务。
+     * 组合编辑保存完整插件配置，并复核版本与范围；调用方负责唯一外层事务。
      * 参数、插件版本或采集身份改变时创建新快照并停用当前通道；存量快照不改写。
      * @param array<string,mixed> $settings
-     * @param list<string> $retainSecrets
      * @return array{id:string,config_version:int,enabled:bool}
      */
-    public function saveInTransaction(string $id, int $expectedVersion, string $name, #[\SensitiveParameter] array $settings,
-        ConfigurationActionContext $actor, array $retainSecrets = []): array
-    {
+    public function saveInTransaction(
+        string $id,
+        int $expectedVersion,
+        string $name,
+        #[SensitiveParameter] array $settings,
+        ConfigurationActionContext $actor
+    ): array {
         $this->requireTransaction();
         $this->audit->authorize($actor);
         $configuration = $this->configurations->lock($id);
@@ -76,14 +84,7 @@ final class PaymentPluginConfService extends BaseService
         $this->channels->lockForConfiguration($id);
         $definition = $this->plugins->definition($configuration['plugin_code']);
         $old = $configuration['config_json'];
-        if (!is_array($old)) { throw new \RuntimeException('原配置正文无效'); }
-        $fields = array_column($definition->configSchema, null, 'field');
-        foreach ($retainSecrets as $field) {
-            if (!is_string($field) || !($fields[$field]['secret'] ?? false) || !array_key_exists($field, $old) || array_key_exists($field, $settings)) {
-                throw new BusinessException('保留秘密字段无效或同时提交了替换值', ApiResponseConstant::VALIDATION_FAILED);
-            }
-            $settings[$field] = $old[$field];
-        }
+        if (!is_array($old)) { throw new RuntimeException('原配置正文无效'); }
         $settings = $this->validator->validate($definition->configSchema, $settings, true);
         $this->validateAssets($definition, $settings);
         $identity = $this->identity($definition->code, $settings, $id);
@@ -97,7 +98,7 @@ final class PaymentPluginConfService extends BaseService
         sort($keys, SORT_STRING);
         $this->lockScopes($keys, $definition);
         $revision = $this->configurations->revision($id, $expectedVersion)
-            ?? throw new \RuntimeException('插件配置版本缺失');
+            ?? throw new RuntimeException('插件配置版本缺失');
         $sameIdentity = true;
         foreach (['account_key', 'query_key', 'session_key', 'auth_fingerprint'] as $field) {
             if ($identity[$field] !== $configuration[$field]) { $sameIdentity = false; }
@@ -151,15 +152,15 @@ final class PaymentPluginConfService extends BaseService
     private function identity(string $code, array $settings, string $id): array
     {
         $plugin = $this->plugins->initialize($code, $settings, []);
-        if (!$plugin instanceof \app\common\interface\ReceiptCollectorInterface) {
+        if (!$plugin instanceof ReceiptCollectorInterface) {
             return ['account_key'=>hash('sha256', $code . ':configuration:' . $id), 'query_key'=>null, 'session_key'=>null, 'auth_fingerprint'=>null];
         }
         $identity = $plugin->getCollectionIdentity();
-        if (array_keys($identity) === []) { throw new \LogicException('采集身份声明缺失'); }
+        if (array_keys($identity) === []) { throw new LogicException('采集身份声明缺失'); }
         foreach (['account_key','query_key','session_key','auth_fingerprint'] as $field) {
             if (!array_key_exists($field, $identity) || ($field !== 'session_key' || $identity[$field] !== null)
                 && (!is_string($identity[$field]) || !preg_match('/^[a-f0-9]{64}$/D', $identity[$field]))) {
-                throw new \LogicException('插件采集身份须为明确的 SHA-256 摘要');
+                throw new LogicException('插件采集身份须为明确的 SHA-256 摘要');
             }
         }
         return array_intersect_key($identity, array_flip(['account_key', 'query_key', 'session_key', 'auth_fingerprint']));

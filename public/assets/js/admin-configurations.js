@@ -49,13 +49,13 @@ MpayAdmin.ready(function () {
 
     /**
      * 只解释声明中的控件类型与有限展示属性，不按插件 code 拼字段，不执行 schema 中的脚本。
-     * 图片先在表单预览，保存时经统一上传接口取得资产 ID；秘密明确保留或替换。
+     * 图片先在表单预览，保存时经统一上传接口取得资产 ID；所有字段按原值回填并直接保存；密钥只控制显示，不改变保存语义。
      */
     function pluginFields(target,definition,configuration,handle,form){
         const fields=[],pending=new Map();target.replaceChildren();
         if(definition.description?.trim()){const description=document.createElement('div');description.className='admin-field full admin-plugin-description';description.textContent=definition.description;target.append(description);}
         for(const field of definition.schema){
-            const value=configuration?.settings[field.field]??field.value??'',present=!!configuration?.secret_present[field.field];
+            const stored=configuration?.settings||{},present=Object.hasOwn(stored,field.field),value=present?stored[field.field]:(field.value??'');
             const required=Object.values(field.validate).includes('require'),full=['textarea','list','upload'].includes(field.type);
             const name='setting_'+field.field,wrapper=document.createElement('div');
             let control;
@@ -64,21 +64,18 @@ MpayAdmin.ready(function () {
             }else if(field.type==='select')control=UI.select(name,field.options||[],value,required?'required':'');
             else if(field.type==='switch')control='<input name="'+E(name)+'" type="checkbox" lay-skin="switch"'+(value?' checked':'')+'>';
             else{
-                const attributes=[required&&!present?'required':'',field.secret?'autocomplete="new-password"':'autocomplete="off"'];
+                const attributes=[required?'required':'',field.secret?'autocomplete="new-password"':'autocomplete="off"'];
                 if(field.type==='number')attributes.push('type="number" step="1"','min="'+E(field.validate.between?.[0]??'')+'"','max="'+E(field.validate.between?.[1]??'')+'"');
-                else if(field.secret)attributes.push('type="password"');
-                if(field.validate.length){attributes.push('maxlength="'+E(field.validate.length[1])+'"');if(required)attributes.push('minlength="'+E(field.validate.length[0])+'"');}
+                else if(field.secret)attributes.push('type="password" lay-affix="eye"');
+                if(field.validate.length)attributes.push('maxlength="'+E(field.validate.length[1])+'"','minlength="'+E(field.validate.length[0])+'"');
                 if(field.placeholder)attributes.push('placeholder="'+E(field.placeholder)+'"');
                 if(field.rows)attributes.push('rows="'+E(field.rows)+'"');
-                if(present)attributes.push('disabled placeholder="已配置"');
-                const text=field.secret?'':Array.isArray(value)?value.join('\n'):value;
+                const text=Array.isArray(value)?value.join('\n'):value;
                 control=['textarea','list'].includes(field.type)?UI.textarea(name,text,attributes.join(' ')):UI.input(name,text,attributes.join(' '));
             }
             wrapper.innerHTML=UI.field(field.title,control,{required,full,help:field.help});
             const node=wrapper.firstElementChild;node.dataset.pluginField=field.field;target.append(node);
-            const input=node.querySelector('[name="'+name+'"]');let replace=null;
-            if(present){const line=document.createElement('div');line.className='admin-keep-secret';replace=document.createElement('input');replace.type='checkbox';replace.title='修改已保存的值';line.append(replace);node.append(line);
-                replace.addEventListener('change',()=>{input.disabled=!replace.checked;input.required=replace.checked&&required;if(!replace.checked)input.value='';UI.render(form);});}
+            const input=node.querySelector('[name="'+name+'"]');
             if(field.type==='upload'){
                 const image=node.querySelector('img'),remove=node.querySelector('[data-remove-image]');remove.hidden=!value;
                 const preview=url=>{image.hidden=!url;remove.hidden=!url;if(url)image.src=url;else image.removeAttribute('src');};
@@ -89,20 +86,20 @@ MpayAdmin.ready(function () {
                 });
                 remove.addEventListener('click',()=>{pending.delete(field.field);input.value='';preview('');form.dispatchEvent(new Event('input',{bubbles:true}));});
             }
-            fields.push({field,input,replace,present,required,node});
+            fields.push({field,input,present,required,node});
         }
         const visibility=()=>fields.forEach(item=>{const condition=item.field.visible_when;if(!condition)return;const source=fields.find(other=>other.field.field===condition.field);item.node.hidden=!source||(source.field.type==='switch'?source.input.checked:source.field.type==='number'?Number(source.input.value):source.input.value)!==condition.value;});
         target.addEventListener('change',visibility);visibility();UI.render(form);
         return {
             async values(){
                 for(const [field,file] of pending){const data=new FormData();data.set('image',file);const result=await MpayHttp.request(api+'image-upload',{method:'POST',data,timeout:30000});fields.find(item=>item.field.field===field).input.value=result.data.id;pending.delete(field);}
-                const settings={},retain=[];
-                fields.forEach(({field,input,replace,present,required})=>{
-                    if(present&&!replace.checked){retain.push(field.field);return;}
-                    if(input.value===''&&!required&&!Object.hasOwn(field,'value')&&!present)return;
-                    settings[field.field]=field.type==='number'?Number(input.value):field.type==='switch'?input.checked:field.type==='list'?input.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean):input.value;
+                const settings={};
+                fields.forEach(({field,input,present,required})=>{
+                    // 未填写的可选数字保持缺失，不能被 Number('') 静默改成 0；列表只分行，不修剪插件的文本。
+                    if(input.value===''&&!required&&(field.type==='number'||(!Object.hasOwn(field,'value')&&!present)))return;
+                    settings[field.field]=field.type==='number'?(input.value===''?'':Number(input.value)):field.type==='switch'?input.checked:field.type==='list'?input.value.split(/\r?\n/).filter(line=>line!==''):input.value;
                 });
-                return {settings,retain_secrets:retain};
+                return {settings};
             },
             dispose(){pending.clear();target.removeEventListener('change',visibility);}
         };
@@ -213,7 +210,7 @@ MpayAdmin.ready(function () {
             const values={},images=[];configuration.plugin.schema.forEach(field=>{
                 const value=configuration.settings[field.field];
                 if(field.type==='upload'){if(value)images.push({id:value,title:field.title});else values[field.title]='未设置';}
-                else values[field.title]=field.secret?(configuration.secret_present[field.field]?'已配置':'未配置'):field.type==='select'?(field.options.find(option=>option.value===value)?.label??value):value;
+                else values[field.title]=field.secret?(value!==undefined&&value!==''?'已配置':'未配置'):field.type==='select'?(field.options.find(option=>option.value===value)?.label??value):value;
             });
             const content=UI.facts({'通道名称':detail.channel.name,'支付方式':UI.paymentLabels[detail.channel.pay_type],'插件':configuration.plugin.name,'单笔最小金额（元）':UI.money(detail.channel.minimum_amount),'单笔最大金额（元）':UI.money(detail.channel.maximum_amount),'每日限额（元）':detail.channel.daily_limit_amount?UI.money(detail.channel.daily_limit_amount):'不限','每日限笔':detail.channel.daily_limit_count||'不限','可用时段':detail.channel.available_from?detail.channel.available_from+'～'+detail.channel.available_to+'（上海时区）':'全天'})
                 +UI.tabs([{title:'插件参数',content:UI.facts(values)+images.map(image=>'<div class="admin-section-title">'+E(image.title)+'</div><img class="admin-qr-preview" data-asset="'+E(image.id)+'" alt="'+E(image.title)+'">').join('')},

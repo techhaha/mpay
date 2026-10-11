@@ -3,18 +3,24 @@ declare(strict_types=1);
 
 namespace app\service\payment\config;
 
-use app\service\system\audit\ConfigurationAuditService;
-use app\service\system\audit\ConfigurationActionContext;
-use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant as Code;
 use app\common\util\Clock;
 use app\exception\BusinessException;
+use app\model\payment\PaymentChannel;
+use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\config\PaymentPluginConfScopeRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
+use app\repository\payment\runtime\ReceiptRuntimeStateRepository;
+use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\service\payment\routing\DefaultRoutingService;
+use app\service\system\audit\ConfigurationActionContext;
+use app\service\system\audit\ConfigurationAuditService;
+use InvalidArgumentException;
+use SensitiveParameter;
 
 /**
  * 通道表单的完整用例：配置关联、插件参数、通道快照在一个服务事务中保存。
@@ -32,18 +38,18 @@ final class PaymentChannelEditorService extends BaseService
         private readonly PaymentChannelRepository $channels,
         private readonly ReceiptScopeRepository $scopes,
         private readonly PaymentCatalogRepository $catalog,
-        private readonly \app\service\payment\routing\DefaultRoutingService $defaults,
+        private readonly DefaultRoutingService $defaults,
         private readonly PaymentChannelRevisionService $revisions,
         private readonly Clock $clock,
         private readonly PaymentCatalogService $management,
-        private readonly \app\repository\payment\runtime\ReceiptRuntimeStateRepository $runtime,
+        private readonly ReceiptRuntimeStateRepository $runtime,
     ) {}
 
     /**
      * @param array<string,mixed> $input 已通过 editor-create 场景，settings 含平台秘密。
      * @return array{id:string,revision_id:string,configuration_id:string,configuration_version:int,enabled:bool}
      */
-    public function create(#[\SensitiveParameter] array $input, ConfigurationActionContext $actor): array
+    public function create(#[SensitiveParameter] array $input, ConfigurationActionContext $actor): array
     {
         $definition = $this->plugins->definition($input['plugin_code']);
         if (!in_array($input['pay_type'], $definition->payTypes, true)) {
@@ -137,7 +143,7 @@ final class PaymentChannelEditorService extends BaseService
      * 不通过额外调用“编辑通道”来完成配置更新，版本检查及快照刷新在同一事务中结束。
      * @param array<string,mixed> $input plugin-save 场景，配置正文不得记录到日志。
      */
-    public function configure(#[\SensitiveParameter] array $input, ConfigurationActionContext $actor): array
+    public function configure(#[SensitiveParameter] array $input, ConfigurationActionContext $actor): array
     {
         $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
         return $this->transaction(function () use ($input, $observed, $actor): array {
@@ -148,7 +154,7 @@ final class PaymentChannelEditorService extends BaseService
             $channel = $this->channels->lock($input['id']);
             $this->assertCurrent($configuration, $channel, $input);
             $saved = $this->configurationService->saveInTransaction($configuration['id'], $input['expected_configuration_version'],
-                $configuration['name'], $input['settings'], $actor, $input['retain_secrets']);
+                $configuration['name'], $input['settings'], $actor);
             if ($saved['config_version'] !== $input['expected_configuration_version']) {
                 $updated = $this->configurations->lock($configuration['id']);
                 $this->revisions->freezeLocked($updated, $this->channels->lock($channel['id']));
@@ -205,7 +211,7 @@ final class PaymentChannelEditorService extends BaseService
         });
     }
 
-    private function assertCurrent(\app\model\payment\PaymentPluginConf $configuration, \app\model\payment\PaymentChannel $channel, array $input): void
+    private function assertCurrent(PaymentPluginConf $configuration, PaymentChannel $channel, array $input): void
     {
         if ($channel['deleted_at'] !== null) { throw new BusinessException('通道已删除', Code::NOT_FOUND); }
         if ($channel['api_config_id'] !== $configuration['id'] || $channel['current_revision_id'] !== $input['expected_revision']
@@ -217,6 +223,6 @@ final class PaymentChannelEditorService extends BaseService
     {
         try { return new PaymentChannelInput($values['name'], $scope, $type,
             $values['minimum_amount'], $values['maximum_amount'], $values['daily_limit_amount'], $values['daily_limit_count'], $values['available_from'], $values['available_to'], $participates); }
-        catch (\InvalidArgumentException) { throw new BusinessException('请核对通道名称、限额和可用时段', Code::VALIDATION_FAILED); }
+        catch (InvalidArgumentException) { throw new BusinessException('请核对通道名称、限额和可用时段', Code::VALIDATION_FAILED); }
     }
 }

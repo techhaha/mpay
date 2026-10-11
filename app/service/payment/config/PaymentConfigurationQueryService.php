@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 namespace app\service\payment\config;
 
-use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
+use app\common\interface\ChannelNotifyInterface;
+use app\common\interface\ReceiptCollectorInterface;
 use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use app\model\payment\ReceiptScope;
@@ -14,10 +15,14 @@ use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\config\PaymentPluginConfScopeRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
+use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\service\payment\routing\DefaultRoutingService;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * 后台配置读模型：在一致数据库视图内组合目录、当前版本及范围，只返回管理表单需要的白名单。
- * 秘密仅在内部读取并按原版本 schema 去除；不返回秘密原值、会话键、平台会话或历史秘密。
+ * 仅已认证的管理员配置入口读取当前 schema 内的完整值，包括密钥；不返回会话或历史配置。
  */
 final class PaymentConfigurationQueryService extends BaseService
 {
@@ -26,7 +31,7 @@ final class PaymentConfigurationQueryService extends BaseService
         private readonly PaymentPluginConfScopeRepository $bindings, private readonly ReceiptScopeRepository $scopes,
         private readonly PaymentCatalogRepository $catalog, private readonly PaymentPluginFactoryService $plugins,
         private readonly PluginConfigValidator $validator, private readonly PaymentCatalogService $management,
-        private readonly \app\service\payment\routing\DefaultRoutingService $defaults)
+        private readonly DefaultRoutingService $defaults)
     {
     }
 
@@ -45,7 +50,7 @@ final class PaymentConfigurationQueryService extends BaseService
         return $this->transaction(function () use ($kind, $filters, $page, $limit): array {
             $rows = match ($kind) {
                 'channels' => $this->channels->adminPage($filters, $page, $limit),
-                default => throw new \InvalidArgumentException('未知配置列表'),
+                default => throw new InvalidArgumentException('未知配置列表'),
             };
             $items = [];
             foreach ($rows['items'] as $row) {
@@ -59,9 +64,9 @@ final class PaymentConfigurationQueryService extends BaseService
     }
 
     /**
-     * 表单保存必须带本次读出的 config_version；秘密显示状态不能作为可回写的值。
+     * 表单保存必须带本次读出的 config_version，并提交实际配置值；不使用秘密占位值或保留标记。
      *
-     * @return array<string,mixed> settings 是公开字段对象，secret_present 是字段到是否已配置的对象。
+     * @return array<string,mixed> settings 是插件声明内的完整配置对象；调用方不得将其用于公开接口或日志。
      * @throws BusinessException 记录不存在、快照损坏或当前插件声明无法解释配置。
      */
     public function configuration(string $id): array
@@ -72,23 +77,23 @@ final class PaymentConfigurationQueryService extends BaseService
                 throw new BusinessException('收款配置不存在', ApiResponseConstant::NOT_FOUND);
             }
             $version = (int) $configuration['config_version'];
-            $revision = $this->configurations->revision($id, $version) ?? throw new \RuntimeException('配置版本缺失');
-            if ($revision['config_json'] !== $configuration['config_json']) { throw new \RuntimeException('配置正文与版本不一致'); }
+            $revision = $this->configurations->revision($id, $version) ?? throw new RuntimeException('配置版本缺失');
+            if ($revision['config_json'] !== $configuration['config_json']) { throw new RuntimeException('配置正文与版本不一致'); }
             $plugin = $this->plugin($configuration['plugin_code']);
 
             $original = $revision['config_json'];
-            if (!is_array($original)) { throw new \RuntimeException('配置正文无效'); }
-            $public = $this->validator->publicValues($plugin['schema'], $original);
+            if (!is_array($original)) { throw new RuntimeException('配置正文无效'); }
+            $settings = $this->validator->validate($plugin['schema'], $original);
             $keys = $this->bindings->keys($id, $version);
-            if ($keys === []) { throw new \RuntimeException('配置范围绑定缺失'); }
+            if ($keys === []) { throw new RuntimeException('配置范围绑定缺失'); }
             $scopes = [];
             $typeCodes = $this->catalog->typeCodes();
             foreach ($keys as $key) {
-                $scopes[] = $this->scope($this->scopes->find($key) ?? throw new \RuntimeException('配置授权范围缺失'), $typeCodes);
+                $scopes[] = $this->scope($this->scopes->find($key) ?? throw new RuntimeException('配置授权范围缺失'), $typeCodes);
             }
             return ['id' => $id, 'name' => $configuration['name'], 'config_version' => $version,
                 'enabled' => (int) $configuration['enabled'] === 1, 'plugin' => $plugin, 'scope_keys' => $keys, 'scopes' => $scopes,
-                'settings' => (object) $public['values'], 'secret_present' => (object) $public['secret_present']];
+                'settings' => (object) $settings];
         });
     }
 
@@ -103,18 +108,18 @@ final class PaymentConfigurationQueryService extends BaseService
             if ($channel === null || $channel['deleted_at'] !== null) {
                 throw new BusinessException('通道不存在', ApiResponseConstant::NOT_FOUND);
             }
-            $configuration = $this->configurations->find($channel['api_config_id']) ?? throw new \RuntimeException('通道配置缺失');
+            $configuration = $this->configurations->find($channel['api_config_id']) ?? throw new RuntimeException('通道配置缺失');
             $types = $channel['pay_types'];
-            if (!is_array($types) || count($types) !== 1) { throw new \RuntimeException('通道必须有一个明确支付方式'); }
+            if (!is_array($types) || count($types) !== 1) { throw new RuntimeException('通道必须有一个明确支付方式'); }
             $revision = $channel['current_revision_id'] === null ? null : $this->channels->revision($id, $channel['current_revision_id']);
-            if ($channel['current_revision_id'] !== null && $revision === null) { throw new \RuntimeException('通道快照缺失'); }
+            if ($channel['current_revision_id'] !== null && $revision === null) { throw new RuntimeException('通道快照缺失'); }
             $configurationRevision = $this->configurations->revision($configuration['id'], (int) $configuration['config_version'])
-                ?? throw new \RuntimeException('通道配置版本缺失');
+                ?? throw new RuntimeException('通道配置版本缺失');
             $definition = $this->plugins->definition($configuration['plugin_code']);
-            $scope = $this->scopes->find($channel['receipt_scope_key']) ?? throw new \RuntimeException('通道收款范围缺失');
+            $scope = $this->scopes->find($channel['receipt_scope_key']) ?? throw new RuntimeException('通道收款范围缺失');
             $plugin = $this->plugins->make($configuration['plugin_code']);
-            $push = $plugin instanceof \app\common\interface\ChannelNotifyInterface;
-            $polling = $plugin instanceof \app\common\interface\ReceiptCollectorInterface;
+            $push = $plugin instanceof ChannelNotifyInterface;
+            $polling = $plugin instanceof ReceiptCollectorInterface;
             return ['id' => $id, 'plugin_code' => $channel['plugin_code'], 'configuration_id' => $channel['api_config_id'],
                 'configuration_version' => (int) $configuration['config_version'], 'enabled' => (int) $channel['enabled'] === 1,
                 // 只返回当前已配置来源的固定路径；HTTP 入口按当前请求生成域名，不存入通道快照。
@@ -142,6 +147,6 @@ final class PaymentConfigurationQueryService extends BaseService
     /** @param array<int|string,string> $typeCodes 仅返回内部关联，不包含插件账号参数。 */
     private function scope(ReceiptScope $scope, array $typeCodes): array
     {
-        return ['scope_key' => $scope['receipt_scope_key'], 'pay_type' => $typeCodes[$scope['pay_type_id']] ?? throw new \RuntimeException('范围支付方式缺失')];
+        return ['scope_key' => $scope['receipt_scope_key'], 'pay_type' => $typeCodes[$scope['pay_type_id']] ?? throw new RuntimeException('范围支付方式缺失')];
     }
 }

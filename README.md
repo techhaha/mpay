@@ -1,3 +1,13 @@
+## 🚀 MPAY V1 · 后续主要维护版本
+
+> **MPAY 后续的功能更新、问题修复与文档维护将以 `v1` 分支为主。新用户请从 V1 开始了解和部署。**
+>
+> **[进入 V1 · Gitee](https://gitee.com/technical-laohu/mpay/tree/v1/)　｜　[进入 V1 · GitHub](https://github.com/techhaha/mpay/tree/v1)**
+>
+> 当前页面介绍的是其他分支版本，其功能、配置和安装步骤与 V1 存在差异。部署 V1 请使用 V1 分支内的 README 和使用文档。
+
+---
+
 <p align="center">
 <div align="center">
     <a href="https://gitee.com/technical-laohu/mpay">
@@ -5,6 +15,7 @@
     </a>
 </div>
 <div align="center">
+    <a href="https://gitee.com/technical-laohu/mpay/tree/v1/" target="_blank"><strong>V1 主维护版本</strong></a> ｜
     <a href="https://gitee.com/technical-laohu/mpay" target="_blank">项目主页</a> ｜
     <a href="https://gitee.com/technical-laohu/mpay/releases" target="_blank">源码下载</a> ｜
     <a href="https://f0bmwzqjtq2.feishu.cn/docx/HBVrdrsACo36bzxUCSPcjOBNnyb" target="_blank">使用文档</a> ｜
@@ -28,7 +39,7 @@
 | <a href="https://gitee.com/technical-laohu/mpay"><img src="assets/20241122_113208_gitee.png" alt="mpay" width=128 /></a>|<a href="https://github.com/techhaha/mpay"><img src="assets/20241122_113331_github.png" alt="mpay" width=128 /></a>|
 
 
-## 🚀 Mpay v2 项目
+## 🧩 MPAY V2 · 独立项目
 
 **基于 webman 框架开发的全新版本支付中台，提供更稳定、更高效的收款体验** [立即访问Gitee](https://gitee.com/technical-laohu/mpay_v2_webman)、[立即访问Github](https://github.com/techhaha/mpay_v2)
 

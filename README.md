@@ -1,3 +1,13 @@
+## 🚀 MPAY V1 · 后续主要维护版本
+
+> **MPAY 后续的功能更新、问题修复与文档维护将以 `v1` 分支为主。新用户请从 V1 开始了解和部署。**
+>
+> **[进入 V1 · Gitee](https://gitee.com/technical-laohu/mpay/tree/v1/)　｜　[进入 V1 · GitHub](https://github.com/techhaha/mpay/tree/v1)**
+>
+> 当前页面介绍的是其他分支版本，其功能、配置和安装步骤与 V1 存在差异。部署 V1 请使用 V1 分支内的 README 和使用文档。
+
+---
+
 # 码支付
 
 #### 介绍

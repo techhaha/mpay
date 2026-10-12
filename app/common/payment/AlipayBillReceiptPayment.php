@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\common\payment;
 
 use app\common\constant\ApiResponseConstant;
+use app\common\constant\ReceiptRuntimeConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ReceiptCollectorInterface;
 use app\common\sdk\alipay\AlipayBillClient;
@@ -22,9 +23,9 @@ use DateTimeZone;
 use LogicException;
 use RuntimeException;
 use SensitiveParameter;
+use think\Cache;
+use think\Config;
 use think\facade\Db;
-use think\Request;
-use think\Response;
 
 /** 支付宝账单插件：主类解释账务流水，SDK 负责官方请求及 RSA2，核心服务负责轮询与最终状态。 */
 final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
@@ -54,9 +55,16 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
         ],
     ];
 
-    public function __construct(private readonly PayOrderRepository $orders, private readonly BizOrderRepository $businessOrders, private readonly ReceiptScopeRepository $scopes,
-        private readonly ReceiptMatchReservationRepository $reservations, private readonly Clock $clock, private readonly AlipayBillClient $client)
-    {
+    public function __construct(
+        private readonly PayOrderRepository $orders,
+        private readonly BizOrderRepository $businessOrders,
+        private readonly ReceiptScopeRepository $scopes,
+        private readonly ReceiptMatchReservationRepository $reservations,
+        private readonly Clock $clock,
+        private readonly AlipayBillClient $client,
+        private readonly Cache $cache,
+        private readonly Config $config,
+    ) {
     }
 
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
@@ -78,16 +86,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     public function getVersion(): string { return $this->paymentInfo['version']; }
     public function getEnabledPayTypes(): array { return $this->paymentInfo['pay_types']; }
     public function getConfigSchema(): array { return $this->paymentInfo['config_schema']; }
-
-    /** 账单 API 无登录会话；应用授权确定查询身份，账单账号确定流水和识别金额范围。 */
-    public function getCollectionIdentity(): array
-    {
-        $prefix = $this->getCode(); $account = trim((string) $this->getConfig('bill_user_id'));
-        return ['account_key' => hash('sha256', $prefix . ':receipt:' . $account), 'session_key' => null,
-            'query_key' => hash('sha256', json_encode([$prefix, $this->getConfig('app_id'), $account], JSON_THROW_ON_ERROR)),
-            'auth_fingerprint' => hash('sha256', json_encode([$this->getConfig('private_key'),
-                $this->getConfig('alipay_public_key'), $this->getConfig('app_auth_token', '')], JSON_THROW_ON_ERROR))];
-    }
+    public function isPreloginEnabled(): bool { return $this->paymentInfo['prelogin'] ?? false; }
 
     /** 本插件仅生成本地识别材料，原订单下重复准备会复用已持久化的金额和备注。 */
     public function canRetryPay(): bool { return true; }
@@ -167,88 +166,38 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
         });
     }
 
-    /** 单条手机/内部通知只定位和返回证据；金额恢复与成功状态由生命周期在同一事务定稿。 */
-    public function notifyPayload(array $payload): array
-    {
-        return $this->receiptResult($this->locateReceipt($payload['record']), $payload['record']);
-    }
-
     /**
-     * 整批流水在插件内匹配；排除本批已选订单，重复事件只处理一次，未匹配条目不返回。
-     * 本方法不写库，后续确认失败可以重新输入同一批次，最终幂等由成功事务与唯一键保证。
+     * 一次匹配本响应全部记录，只使用服务提供的原单集合；已消费记录不重新分配。
+     * 付款在原窗口内但响应迟到仍可定位；最终状态和幂等由生命周期锁内复核。
      */
-    public function matchReceipts(array $receipts): array
+    public function matchReceipts(array $receipts, array $orders, array $channels): array
     {
+        usort($receipts, static fn (array $a, array $b): int =>
+            strcmp($a['record']['paid_at'] ?? '', $b['record']['paid_at'] ?? '')
+            ?: strcmp($a['record']['event_key'], $b['record']['event_key']));
         $results = []; $used = []; $seen = [];
         foreach ($receipts as $entry) {
             $record = $entry['record'];
-            $identity = $entry['scope_key'] . ':' . ($record['trade_no'] ?? $record['event_key']);
-            if (isset($seen[$identity])) { continue; }
-            $seen[$identity] = true;
-            try { $selected = $this->locateReceipt($record, $entry['scope_key'], $used); }
-            catch (BusinessException $error) {
-                if ($error->getCode() !== ApiResponseConstant::CONFLICT) { throw $error; }
-                continue;
-            }
-            if (isset($used[$selected['pay_no']])) { continue; }
-            $used[$selected['pay_no']] = true;
-            $results[] = $this->receiptResult($selected, $record);
+            if ($entry['consumed_pay_no'] !== null || isset($seen[$record['event_key']]) || $record['paid_at'] === null) { continue; }
+            $seen[$record['event_key']] = true;
+            $candidates = array_filter($orders, static function (array $pay) use ($record, $used, $channels): bool {
+                return !isset($used[$pay['pay_no']]) && isset($channels[$pay['channel_revision_id']])
+                    && $pay['pay_type'] === $record['pay_type'] && $pay['receipt_amount'] === $record['amount']
+                    && $pay['request_at'] <= $record['paid_at'] && $record['paid_at'] < $pay['expire_at']
+                    && ($pay['match_mode'] === 'amount' || ($pay['match_mode'] === 'remark' && $pay['remark'] === $record['remark']));
+            });
+            if ($candidates === []) { continue; }
+            $paid = strtotime($record['paid_at']);
+            usort($candidates, static fn (array $a, array $b): int =>
+                (abs(strtotime($a['request_at']) - $paid) <=> abs(strtotime($b['request_at']) - $paid))
+                ?: strcmp($a['created_at'], $b['created_at']) ?: (strlen($a['id']) <=> strlen($b['id'])) ?: strcmp($a['id'], $b['id']));
+            $pay = $candidates[0];
+            $used[$pay['pay_no']] = true;
+            $results[] = ['status' => 'success', 'pay_no' => $pay['pay_no'], 'paid_amount' => $pay['amount'],
+                'chan_order_no' => $record['trade_no'], 'chan_trade_no' => $record['trade_no'],
+                'paid_at' => $record['paid_at'], 'receipt' => $record];
         }
         return $results;
-    }
-
-    /** @return array<string,mixed> 仅表达插件所选订单与来源证据，不代表订单已在数据库确认。 */
-    private function receiptResult(PayOrder $pay, array $record): array
-    {
-        return ['status'=>'success','pay_no'=>$pay['pay_no'],'paid_amount'=>$pay->originalAmount(),
-            'chan_order_no'=>$record['trade_no'],'chan_trade_no'=>$record['trade_no'],
-            'paid_at'=>$record['paid_at'],'receipt'=>$record];
-    }
-
-    /**
-     * 按付款时间与 request_at 的距离选择最近候选；不套用手机通知的单候选限制。
-     * 相同距离保留仓储的 created_at/id 顺序，重复流水优先返回原订单。
-     *
-     * @param array{amount:int,paid_at:?string,trade_no:?string,remark:?string,pay_type:string,event_key:string} $record
-     */
-    private function locateReceipt(array $record, ?string $scopeKey = null, array $excluded = []): PayOrder
-    {
-        $scope = $scopeKey ?? (string) $this->getConfig('receipt_scope_key');
-        if ($scope === '') { throw new LogicException('服务未注入收款范围'); }
-        if ($record['trade_no'] !== null) {
-            $known = $this->orders->successfulForTrade($scope, $record['trade_no']);
-            if ($known !== null) { return $this->assertCollectionOrder($known); }
-        }
-        // 没有平台交易号时，稳定事件键仍可定位已经确认的原订单。
-        $prepared = $this->orders->successfulForEvent($scope, $record['event_key']);
-        if ($prepared !== null) { return $this->assertCollectionOrder($prepared); }
-        // 使用每单准备时保存的模式；当前通道后续修改不能重新解释已展示的金额或备注。
-        $candidates = $this->orders->receiptCandidates($scope, $record['amount'], $record['remark'], $record['paid_at'],
-            $this->clock->now()->format('Y-m-d H:i:s'));
-        $candidates = array_values(array_filter($candidates, fn (PayOrder $pay): bool => !isset($excluded[$pay['pay_no']]) && $this->collectionAllows($pay)));
-        if ($candidates === []) {
-            throw new BusinessException('收款消息未定位到支付单', ApiResponseConstant::CONFLICT);
-        }
-        if ($record['paid_at'] !== null) {
-            $paid = strtotime($record['paid_at']);
-            usort($candidates, static fn (PayOrder $left, PayOrder $right): int =>
-                abs(strtotime($left['request_at'] ?? $left['created_at']) - $paid)
-                <=> abs(strtotime($right['request_at'] ?? $right['created_at']) - $paid));
-        }
-        return $candidates[0];
-    }
-
-    /** 共享流水范围仍只选本次完整查询覆盖的配置，避免门店或终端过滤互相串单。 */
-    private function collectionAllows(PayOrder $pay): bool
-    {
-        $ids = $this->getConfig('collection_configuration_ids');
-        return $ids === null || in_array($pay->channelRevision['api_config_id'], $ids, true);
-    }
-
-    private function assertCollectionOrder(PayOrder $pay): PayOrder
-    {
-        if (!$this->collectionAllows($pay)) { throw new BusinessException('流水已由其他查询范围确认', ApiResponseConstant::CONFLICT); }
-        return $pay;
     }
 
     /** 监听来源不调用上游订单查询；到账仍经通知或采集确认，不以本地材料证明成功。 */
@@ -267,34 +216,81 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     /** 码牌监听没有原路退款接口，人工退款不伪造成插件退款成功。 */
     public function refund(array $order): array { throw new UnsupportedPaymentOperationException(); }
 
-    /** 本插件只接受 CLI 采集流水，未提供平台 HTTP 推送合同。 */
-    public function notify(Request $request): array { throw new UnsupportedPaymentOperationException(); }
-    public function notifySuccess(): string|Response { return 'success'; }
-    public function notifyFail(): string|Response { return 'fail'; }
+    /** 账单接口逐次签名，没有网页登录态；未声明 prelogin，调度器不会调用保活。 */
+    public function prelogin(array $channels, DateTimeImmutable $deadline): iterable { return []; }
 
-    /**
-     * 使用 V2 的收入方向、alipay_order_no、trans_dt、trans_memo 解释方式。
-     * trans_dt 在平台协议中是入账时间，本插件按 V2 用于匹配窗口；并不宣称它是独立支付接口的成交时间。
-     */
-    public function collectPage(array $window, ?array $pageToken, #[SensitiveParameter] ?array $session): array
+    /** 同账单主体的通道合并一次查询，凭证解释和查询间隔留在本插件。 */
+    public function collect(array $orders, array $channels, DateTimeImmutable $deadline): iterable
     {
-        $page = $pageToken['page'] ?? 1;
-        if (!is_int($page) || $page < 1) { throw new ReceiptCollectionException('pagination_incomplete'); }
-        $settings = array_intersect_key($this->channelConfig, array_flip(['app_id', 'private_key', 'alipay_public_key', 'bill_user_id', 'app_auth_token']));
-        $data = $this->client->queryPage($settings, $window['from'], $window['to'], $page, $window['deadline']);
-        if ($pageToken !== null && ($pageToken['total'] ?? null) !== $data->total) { throw new ReceiptCollectionException('pagination_incomplete'); }
+        $active = array_fill_keys(array_column($orders, 'channel_revision_id'), true);
+        $groups = [];
+        foreach ($channels as $id => $channel) {
+            if (!isset($active[$id])) { continue; }
+            $settings = $channel['configuration'];
+            $current = $channel['current_configuration'];
+            // 相同账单主体允许更新认证，不能把新收款主体的参数用于原单。
+            if (is_array($current) && ($current['bill_user_id'] ?? null) === $settings['bill_user_id']) {
+                foreach (['app_id', 'private_key', 'alipay_public_key', 'app_auth_token'] as $field) {
+                    if (array_key_exists($field, $current)) { $settings[$field] = $current[$field]; }
+                    else { unset($settings[$field]); }
+                }
+            }
+            $key = hash('sha256', $this->getCode() . ':' . $settings['bill_user_id']);
+            $groups[$key]['channels'][(string) $id] = $channel;
+            $groups[$key]['settings'] ??= $settings;
+        }
+        ksort($groups);
+        $store = $this->cache->store('receipt');
+        $keys = array_keys($groups);
+        $last = $store->get('alipay_bill.rotation');
+        $offset = is_string($last) ? array_search($last, $keys, true) : false;
+        if ($offset !== false) { $keys = [...array_slice($keys, $offset + 1), ...array_slice($keys, 0, $offset + 1)]; }
+        foreach ($keys as $key) {
+            if ($this->clock->now() >= $deadline) { break; }
+            $state = $store->get('alipay_bill.account.' . $key, []);
+            if (!is_array($state)) { $state = []; }
+            $now = $this->clock->now()->getTimestamp();
+            if ((int) ($state['next_query_at'] ?? 0) > $now) { continue; }
+            $group = $groups[$key];
+            $store->set('alipay_bill.rotation', $key, 0);
+            $selected = array_filter($orders, static fn (array $order): bool => isset($group['channels'][$order['channel_revision_id']]));
+            $from = min(array_map(static fn (array $order): int => strtotime($order['request_at']), $selected));
+            $to = min($now, max(array_map(static fn (array $order): int => strtotime($order['expire_at']), $selected)));
+            $until = min($deadline, $this->clock->now()->modify('+' . (int) $this->config->get('receipt.account_budget_seconds', 15) . ' seconds'));
+            $batch = ['channel_revision_ids' => array_map('strval', array_keys($group['channels'])), 'records' => [], 'limit_reached' => false, 'error' => null];
+            try {
+                $settings = array_intersect_key($group['settings'], array_flip(['app_id', 'private_key', 'alipay_public_key', 'bill_user_id', 'app_auth_token']));
+                if (($settings['app_auth_token'] ?? '') === '') { unset($settings['app_auth_token']); }
+                $data = $this->client->query($settings, $from, $to, $until);
+                $batch['records'] = $this->normalizeBill($data, ['from' => $from, 'to' => $to]);
+                $batch['limit_reached'] = $data['limit_reached'];
+                $state['failures'] = 0;
+                $delay = (int) $this->config->get('receipt.query_interval_seconds', 3);
+            } catch (ReceiptCollectionException $error) {
+                $state['failures'] = min(10, (int) ($state['failures'] ?? 0) + 1);
+                $delay = $error->retryAfterSeconds ?? min(300, 30 * (2 ** min(4, $state['failures'] - 1)));
+                $batch['error'] = ['code' => ReceiptRuntimeConstant::failure($error->reasonCode), 'reason' => $error->reasonCode, 'retry_after' => $delay];
+            }
+            $state['next_query_at'] = $this->clock->now()->getTimestamp() + $delay;
+            $store->set('alipay_bill.account.' . $key, $state, 0);
+            yield $batch;
+        }
+    }
+
+    /** V2 以入账时间匹配付款窗口；收入分录仍须具有真实平台交易号。 */
+    private function normalizeBill(array $data, array $window): array
+    {
         $records = [];
-        foreach ($data->entries as $entry) {
+        foreach ($data['entries'] as $entry) {
             if ($entry['direction'] !== '收入' || $entry['amount_cents'] <= 0 || $entry['alipay_order_no'] === null) { continue; }
             Money::assertRange($entry['amount_cents']);
             $paid = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $entry['booked_at'], new DateTimeZone('Asia/Shanghai'));
             if (!$paid || $paid->format('Y-m-d H:i:s') !== $entry['booked_at']) { throw new ReceiptCollectionException('protocol_error'); }
-            if ($paid->getTimestamp() < $window['from'] || $paid->getTimestamp() >= $window['to']) { continue; }
+            if ($paid->getTimestamp() < $window['from'] || $paid->getTimestamp() > $window['to']) { continue; }
             $remark = preg_match('/(?:^|\D)([0-9]{4})(?:\D|$)/u', $entry['memo'] ?? '', $code) ? $code[1] : null;
             $records[] = ['pay_type' => 'alipay', 'event_key' => $entry['alipay_order_no'], 'trade_no' => $entry['alipay_order_no'],
                 'amount' => $entry['amount_cents'], 'paid_at' => $entry['booked_at'], 'remark' => $remark];
         }
-        $next = $data->nextPage();
-        return ['records' => $records, 'complete' => $next === null, 'next_page' => $next === null ? null : ['page' => $next, 'total' => $data->total], 'session' => null];
+        return $records;
     }
 }

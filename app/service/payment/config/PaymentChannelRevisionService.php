@@ -3,14 +3,16 @@ declare(strict_types=1);
 
 namespace app\service\payment\config;
 
-use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\common\base\BaseService;
 use app\common\validation\PluginConfigValidator;
-use app\model\payment\PaymentPluginConf;
 use app\model\payment\PaymentChannel;
+use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
+use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\receipt\ReceiptScopeService;
+use JsonException;
+use RuntimeException;
 
 /**
  * 将通道规则和平台配置冻结为不可变版本，隔离后续配置修改对旧单的影响。
@@ -32,8 +34,8 @@ final class PaymentChannelRevisionService extends BaseService
      * 冻结前再次核验已安装原版本的 schema，禁止用空 schema 或当前默认值掩盖配置缺失。
      *
      * @return numeric-string 新快照的数据库 ID，供支付单固定引用。
-     * @throws \RuntimeException 通道/配置缺失、归属不符或配置正文无效。
-     * @throws \JsonException 快照不能编码为 JSON。
+     * @throws RuntimeException 通道/配置缺失、归属不符或配置正文无效。
+     * @throws JsonException 快照不能编码为 JSON。
      */
     public function freeze(string $channelId): string
     {
@@ -57,18 +59,18 @@ final class PaymentChannelRevisionService extends BaseService
     {
         if ((string) $channel['api_config_id'] !== $configuration['id']
             || $channel['plugin_code'] !== $configuration['plugin_code']) {
-            throw new \RuntimeException('通道与收款配置不一致');
+            throw new RuntimeException('通道与收款配置不一致');
         }
         // 连凭证正文一起冻结，仅保存 config_version 指针无法恢复已被覆盖的活动配置。
         $configurationRevision = $this->configurations->revision($configuration['id'], (int) $configuration['config_version'], true)
-            ?? throw new \RuntimeException('收款配置版本缺失');
+            ?? throw new RuntimeException('收款配置版本缺失');
         $definition = $this->plugins->definition($configuration['plugin_code']);
         if ($configurationRevision['config_json'] !== $configuration['config_json']) {
-            throw new \RuntimeException('配置版本正文不一致');
+            throw new RuntimeException('配置版本正文不一致');
         }
         $authorized = $this->scopeAccess->current($configuration, true);
         if (!isset($authorized[$channel['receipt_scope_key']])) {
-            throw new \RuntimeException('通道范围不在当前配置授权中');
+            throw new RuntimeException('通道范围不在当前配置授权中');
         }
         $config = $this->validator->validate($definition->configSchema, $configuration['config_json']);
         $channelData = $channel->toArray();
@@ -76,7 +78,7 @@ final class PaymentChannelRevisionService extends BaseService
         unset($channelData['current_revision_id'], $channelData['created_at'], $channelData['updated_at']);
         // 账号身份随配置一起固定；旧单的采集来源不能因活动账号重命名而被重新解释。
         $snapshot = json_encode([
-            'channel' => $channelData, 'account_key' => $configuration['account_key'],
+            'channel' => $channelData,
             'config_version' => (int) $configuration['config_version'], 'configuration' => $config,
             'plugin_version' => $definition->version,
         ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
@@ -87,13 +89,13 @@ final class PaymentChannelRevisionService extends BaseService
      * 读取指定通道的历史规则和敏感配置；结果仅供内部执行，禁止直接输出到收银台。
      *
      * @param bool $currentRead 建单已锁通道时为 true，使版本指针与正文使用同一当前视图。
-     * @return array{channel:array<string,mixed>,account_key?:string,config_version:int,configuration:array<string,mixed>,
+     * @return array{channel:array<string,mixed>,config_version:int,configuration:array<string,mixed>,
      *     plugin_version?:string} 配置快照不可变，插件版本只用于追踪。
-     * @throws \RuntimeException 历史版本缺失或配置正文无效；禁止回退到活动配置。
+     * @throws RuntimeException 历史版本缺失或配置正文无效；禁止回退到活动配置。
      */
     public function snapshot(string $channelId, string $revisionId, bool $currentRead = false): array
     {
-        $revision = $this->channels->revision($channelId, $revisionId, $currentRead) ?? throw new \RuntimeException('通道版本不存在');
+        $revision = $this->channels->revision($channelId, $revisionId, $currentRead) ?? throw new RuntimeException('通道版本不存在');
         return $revision['snapshot_json'];
     }
 

@@ -71,7 +71,7 @@ final class PayOrderLifecycleService extends BaseService
             $before = (int) $pay['status'];
             // 此前只有锁定的当前读；范围锁串行化其他确认，首次一致性读取能看到已提交的原交易消费。
             if ($evidence->platformTradeNo !== null
-                && $this->payOrders->hasSuccessfulTrade($pay['receipt_scope_key'], $evidence->platformTradeNo, $payNo)) {
+                && $this->payOrders->hasSuccessfulTrade($pay['plugin_code'], $evidence->platformTradeNo, $payNo)) {
                 throw new BusinessException('该真实交易号已用于其他成功订单', ApiResponseConstant::CONFLICT);
             }
             if ($evidence->receivedAmount < (int) $biz['order_amount'] || $proof['paid_at'] < $pay['created_at'] || $proof['paid_at'] > $time) {
@@ -317,9 +317,9 @@ final class PayOrderLifecycleService extends BaseService
                 $consumed = $this->flows->lockByTrade($event->pluginCode, $event->platformTradeNo);
                 if ($consumed !== null && $consumed['pay_no'] !== $payNo) { return $ignore('platform_trade_already_consumed'); }
             }
-            $existing = $this->flows->lockByEvent($event->scopeKey, $event->pluginCode, $event->eventKey);
+            $existing = $this->flows->lockByEvent($event->pluginCode, $event->eventKey);
             if ($existing !== null) {
-                if (!hash_equals($existing['payload_digest'], $event->digest($existing['account_key']))) {
+                if (!hash_equals($existing['payload_digest'], $event->digest())) {
                     return $ignore('event_content_conflict');
                 }
                 if ($existing['pay_no'] !== $payNo) { return $ignore('platform_trade_already_consumed'); }
@@ -329,7 +329,7 @@ final class PayOrderLifecycleService extends BaseService
                 $this->assertNotification($biz, $pay);
                 return $this->recordReceipt($existing, $requestId, Result::CONFIRMATION_REPLAYED);
             }
-            if ($event->platformTradeNo !== null && $this->payOrders->hasSuccessfulTrade($event->scopeKey, $event->platformTradeNo, $payNo)) {
+            if ($event->platformTradeNo !== null && $this->payOrders->hasSuccessfulTrade($event->pluginCode, $event->platformTradeNo, $payNo)) {
                 return $ignore('platform_trade_already_consumed');
             }
             $before = (int) $pay['status'];
@@ -352,8 +352,7 @@ final class PayOrderLifecycleService extends BaseService
                 $reason = Result::MANUAL_EVIDENCE_SUPPLEMENTED;
             } else {
                 $reservation = $this->reservations->findForPay($payNo);
-                if ($reservation === null || $reservation['receipt_scope_key'] !== $event->scopeKey
-                    || ($pay['ext_json']['personal_receipt']['account_key'] ?? null) !== $event->accountKey) {
+                if ($reservation === null || $reservation['receipt_scope_key'] !== $event->scopeKey) {
                     return $ignore('receipt_context_mismatch');
                 }
                 if ($event->amount !== $pay->receiptAmount() || (int) $reservation['receipt_amount'] !== $event->amount
@@ -368,7 +367,7 @@ final class PayOrderLifecycleService extends BaseService
                     || $received > $pay['expire_at'] ? Result::LATE_DELIVERY_CONFIRMED : Result::RECEIPT_CONFIRMED;
             }
             // 至此已经确定最终绑定；不先写候选行、待核对行或其他账户的无关收款。
-            $flowId = $this->flows->create(['receipt_scope_key'=>$event->scopeKey,'account_key'=>$event->accountKey,
+            $flowId = $this->flows->create(['receipt_scope_key'=>$event->scopeKey,
                 'plugin_code'=>$event->pluginCode,'event_key'=>$event->eventKey,
                 'payload_digest'=>$event->digest(),'platform_trade_no'=>$event->platformTradeNo,'amount'=>$event->amount,
                 'remark'=>$event->remark,'paid_at'=>$event->paymentTime(),'received_at'=>$received,'pay_no'=>$payNo,

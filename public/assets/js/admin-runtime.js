@@ -18,15 +18,15 @@ MpayAdmin.ready(function () {
             page:{curr:current},feedback,done(result,curr){page=curr;},emptyText:'暂无采集记录',cols:[[
                 {field:'name',title:'收款通道',minWidth:180,templet:row=>E(row.name)},
                 {title:'状态',width:170,align:'center',templet:row=>UI.state(row.status_label)},
-                {field:'last_success_at',title:'最近成功',minWidth:175,templet:row=>E(row.last_success_at||'暂无记录')},
-                {field:'next_run_at',title:'下次执行',minWidth:175,templet:row=>E(row.next_run_at||'未安排')},
+                {field:'last_success_at',title:'最近查单成功',minWidth:175,templet:row=>E(row.last_success_at||'暂无记录')},
+                {field:'pending_count',title:'待核对订单',width:120,align:'center',templet:row=>E(row.pending_count??0)},
                 {field:'retry_count',title:'重试次数',width:110,align:'center',templet:row=>E(row.retry_count??'—')},
                 {title:'操作',width:100,align:'center',fixed:'right',templet:()=>'<button type="button" class="admin-link" lay-event="detail">详情</button>'}
             ]]});
     }
     layui.table.on('tool(runtime-collections)',event=>{if(event.event!=='detail')return;const item=event.data;
-        UI.open({title:'采集详情 · '+item.name,drawer:true,content:UI.state(item.status_label)+UI.facts({'收款账号':item.name,'启用采集':item.enabled,'最近成功':item.last_success_at,'下次执行':item.next_run_at,'最近心跳':item.last_heartbeat_at,'已采集至':item.cursor_completed_at,'重试次数':item.retry_count,'最近耗时（毫秒）':item.last_duration_ms,'处理说明':item.reason_label})
-            +'<details class="admin-details"><summary>技术信息</summary>'+UI.facts({'插件':item.plugin_code,'配置版本':item.configuration_version,'执行状态':item.lease_status})+'</details><a class="layui-btn layui-btn-primary" href="/admin/configurations?configuration_id='+encodeURIComponent(item.configuration_id)+'">查看收款通道</a>'});
+        UI.open({title:'采集详情 · '+item.name,drawer:true,content:UI.state(item.status_label)+UI.facts({'收款通道':item.name,'通道启用':item.enabled,'待核对订单':item.pending_count,'最近查单成功':item.last_success_at,'最近登录验证':item.last_verified_at,'最早允许尝试':item.next_run_at,'关联批次确认笔数':item.matched_count,'重试次数':item.retry_count,'最近耗时（毫秒）':item.last_duration_ms,'处理说明':item.reason_label})
+            +'<details class="admin-details"><summary>技术信息</summary>'+UI.facts({'插件':item.plugin_code,'配置版本':item.configuration_version,'最近更新':item.updated_at})+'</details><a class="layui-btn layui-btn-primary" href="/admin/configurations?configuration_id='+encodeURIComponent(item.configuration_id)+'">查看收款通道</a>'});
     });
     document.getElementById('runtime-doctor').addEventListener('click',()=>{
         const handle=UI.open({title:'只读环境诊断',width:850,content:'<table class="runtime-diagnosis"></table>'});
@@ -36,7 +36,8 @@ MpayAdmin.ready(function () {
             UI.table({elem:handle.node.querySelector('.runtime-diagnosis'),data:data.checks,page:false,cellExpandedMode:'tips',cols:[[{title:'项目',width:160,templet:row=>E(names[row.id]||row.id)},{title:'结果',width:100,align:'center',templet:row=>UI.badge(...(states[row.status]||['未知','gray']))},{field:'message',title:'说明',minWidth:300,templet:row=>E(row.message)}]]});handle.feedback('');
         });
     });
-    UI.all('/adminapi/configuration/list').then(items=>{items.forEach(item=>form.elements.configuration_id.add(new Option(item.name,item.id)));UI.render(form);}).catch(exception=>UI.error(feedback,exception));
+    // 通道列表提供当前专属配置 ID；筛选运行摘要时不能把通道 ID 当成配置 ID。
+    UI.all('/adminapi/configuration/channels').then(items=>{items.forEach(item=>form.elements.configuration_id.add(new Option(item.name,item.configuration_id)));UI.render(form);}).catch(exception=>UI.error(feedback,exception));
     form.addEventListener('submit',event=>{event.preventDefault();UI.feedback(feedback,'');collections(1);});UI.onReset(form,()=>{UI.render(form);collections(1);});
     document.getElementById('runtime-refresh').addEventListener('click',()=>{UI.feedback(feedback,'');overview();collections(page);});overview();collections();
 });

@@ -3,18 +3,23 @@ declare(strict_types=1);
 
 namespace app\service\system\runtime;
 
+use app\common\constant\ReceiptRuntimeConstant;
 use app\common\util\SafeLogger;
 use app\repository\system\RuntimeDiagnosticRepository;
 use app\service\system\install\MigrationService;
-use app\service\system\config\SystemConfigService;
 use think\App;
+use Throwable;
 
 /** 只读检查当前 PHP 入口环境与持久运行状态；不安装依赖、改配置、修复迁移或宣称真实平台已验收。 */
 final class SystemDoctorService
 {
-    public function __construct(private readonly App $app, private readonly SafeLogger $logger, private readonly RuntimeDiagnosticRepository $diagnostics,
-        private readonly RuntimeStatusService $runtime)
-    {
+    public function __construct(
+        private readonly App $app,
+        private readonly SafeLogger $logger,
+        private readonly RuntimeDiagnosticRepository $diagnostics,
+        private readonly RuntimeStatusService $runtime,
+        private readonly RuntimeQueryService $queries,
+    ) {
     }
 
     /**
@@ -72,13 +77,13 @@ final class SystemDoctorService
             return [$quarantined + $expired > 0 ? 'warning' : 'ok', '异常通知 ' . $quarantined . ' 条；等待恢复的通知 ' . $expired . ' 条'];
         });
         $checks[] = $this->check('collection', function (): array {
-            $raw = $this->diagnostics->collectionStates();
-            $allowed = \app\common\constant\ReceiptRuntimeConstant::LABELS;
+            $raw = $this->queries->collectionStates();
+            $allowed = ReceiptRuntimeConstant::LABELS;
             $states = array_intersect_key($raw, $allowed);
             if (array_diff_key($raw, $allowed) !== []) {
                 $states['invalid'] = array_sum(array_diff_key($raw, $allowed));
             }
-            $attention = array_diff(array_keys($states), [\app\common\constant\ReceiptRuntimeConstant::HEALTHY, \app\common\constant\ReceiptRuntimeConstant::IDLE, \app\common\constant\ReceiptRuntimeConstant::PUSH]);
+            $attention = array_diff(array_keys($states), [ReceiptRuntimeConstant::HEALTHY, ReceiptRuntimeConstant::IDLE, ReceiptRuntimeConstant::PUSH]);
             $labels = [];
             foreach ($states as $status => $count) { $labels[] = ($allowed[$status] ?? '未知状态') . ' ' . $count . ' 个'; }
             return [$states === [] || $attention !== [] ? 'warning' : 'ok',
@@ -111,7 +116,7 @@ final class SystemDoctorService
         try {
             [$status, $message] = $operation();
             return ['id' => $id, 'status' => $status, 'message' => $message];
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             $this->logger->exception($e);
             return ['id' => $id, 'status' => 'error', 'message' => '检查未完成，请核对本项配置及脱敏技术日志'];
         }

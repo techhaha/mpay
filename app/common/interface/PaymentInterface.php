@@ -3,11 +3,12 @@ declare(strict_types=1);
 
 namespace app\common\interface;
 
-use think\Request;
-use think\Response;
+use app\exception\PaymentDefinitiveException;
+use app\exception\PaymentUncertainException;
+use app\exception\UnsupportedPaymentOperationException;
 
 /**
- * V2 风格支付动作接口：插件解释平台协议，服务校验标准数组并负责最终状态转换。
+ * 通用元信息与 V2 风格支付动作；HTTP 通知和主动采集由各自接口声明。
  * 金额均为整数分；输入由服务按订单快照生成，不向插件暴露数据库锁、租约或核心证据对象。
  */
 interface PaymentInterface
@@ -39,8 +40,8 @@ interface PaymentInterface
      * @return array{status:string,pay_no:string,paid_amount:?int,chan_order_no:?string,chan_trade_no:?string,
      *     pay_type?:string,pay_product?:string,pay_action?:string,
      *     presentation?:array{pay_page:string,pay_params:array<string,mixed>},receipt?:array,paid_at?:?string}
-     * @throws \app\exception\PaymentDefinitiveException 渠道确定拒绝。
-     * @throws \app\exception\PaymentUncertainException 请求结果未知，服务不能另建订单重试。
+     * @throws PaymentDefinitiveException 渠道确定拒绝。
+     * @throws PaymentUncertainException 请求结果未知，服务不能另建订单重试。
      */
     public function pay(array $order): array;
 
@@ -59,14 +60,8 @@ interface PaymentInterface
     /**
      * @param array{refund_no:string,pay_no:string,refund_amount:int,chan_order_no:?string,chan_trade_no:?string,extra:array} $order 原订单及本次退款身份；金额为分。
      * @return array{status:string,refund_no:string,pay_no:string,refund_amount:int,chan_refund_no:?string} status 为 success/pending/unknown/failed。
-     * @throws \app\exception\UnsupportedPaymentOperationException 插件没有退款接口。
-     * @throws \app\exception\PaymentDefinitiveException 平台明确拒绝，且未退款。
+     * @throws UnsupportedPaymentOperationException 插件没有退款接口。
+     * @throws PaymentDefinitiveException 平台明确拒绝，且未退款。
      */
     public function refund(array $order): array;
-
-    /** @return array<string,mixed> 平台验签和语义转换后的结果；公共字段和订单归属由服务复核。 */
-    public function notify(Request $request): array;
-
-    public function notifySuccess(): string|Response;
-    public function notifyFail(): string|Response;
 }

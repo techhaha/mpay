@@ -5,6 +5,7 @@ namespace app\service\payment\plugin;
 
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
+use app\common\util\Money;
 use app\common\validation\PluginConfigValidator;
 use app\exception\PaymentDefinitiveException;
 use app\exception\PaymentUncertainException;
@@ -18,7 +19,10 @@ use app\service\payment\receipt\ChannelNotifyContext;
 use app\service\payment\receipt\PayOrderCallbackService;
 use app\service\payment\receipt\ReceiptScopeSet;
 use DateTimeImmutable;
+use RuntimeException;
 use think\Config;
+use Throwable;
+use UnexpectedValueException;
 
 /**
  * 按支付单冻结版本装配原插件，在持久执行标记之后、数据库事务之外调用 pay。
@@ -48,14 +52,14 @@ final class PayOrderChannelDispatchService
      */
     public function dispatch(string $payNo, DateTimeImmutable $now, string $requestId): PayOrder
     {
-        $pay = $this->payOrders->find($payNo) ?? throw new \RuntimeException('支付单不存在');
+        $pay = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
         if (!in_array((int) $pay['status'], [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)) {
             return $pay;
         }
         $time = $now->format('Y-m-d H:i:s');
         if ($pay['expire_at'] <= $time) {
             $this->lifecycle->expire($pay['biz_no']);
-            return $this->payOrders->find($payNo) ?? throw new \RuntimeException('到期后的支付单不可读取');
+            return $this->payOrders->find($payNo) ?? throw new RuntimeException('到期后的支付单不可读取');
         }
         $execution = $pay['ext_json']['payment_context']['execution'] ?? null;
         if (is_array($execution) && (($execution['phase'] ?? null) === 'presented'
@@ -66,7 +70,7 @@ final class PayOrderChannelDispatchService
         }
         $version = $pay['ext_json']['personal_receipt']['plugin_version'] ?? null;
         if (!is_string($version)) {
-            throw new \RuntimeException('订单插件版本快照缺失');
+            throw new RuntimeException('订单插件版本快照缺失');
         }
         $plugin = $this->plugins->make($pay['plugin_code']);
         $definition = $this->plugins->describe($plugin);
@@ -74,11 +78,11 @@ final class PayOrderChannelDispatchService
         $context = $this->context($pay);
         $this->validator->validate($definition->configSchema, $context->configuration);
         if (!in_array($context->payType, $definition->payTypes, true)) {
-            throw new \RuntimeException('插件实现与原订单来源合同不一致');
+            throw new RuntimeException('插件实现与原订单来源合同不一致');
         }
         $lease = $this->config->get('payment.execution_lease_seconds', 30);
         if (!is_int($lease)) {
-            throw new \RuntimeException('执行认领期限必须为整数秒');
+            throw new RuntimeException('执行认领期限必须为整数秒');
         }
         // 插件明确声明重放边界；有外部副作用的插件默认不得因租约到期再次发起交易。
         $claim = $this->lifecycle->beginExecution($payNo, $plugin->canRetryPay(), $lease, $requestId);
@@ -101,11 +105,11 @@ final class PayOrderChannelDispatchService
                 'amount' => $context->payAmount, 'expire_at' => $context->expiresAt->format('Y-m-d H:i:s'), 'extra' => $claim['pay']['ext_json']];
             $result = $this->results->validateResult($plugin->pay($order));
             if ($result['pay_no'] !== $payNo || ($result['status'] === 'success' && $result['paid_amount'] !== $context->payAmount)) {
-                throw new \UnexpectedValueException('插件结果与当前订单不一致');
+                throw new UnexpectedValueException('插件结果与当前订单不一致');
             }
             $presentation = null;
             if ($result['status'] === 'pending') {
-                if ($result['pay_type'] !== $context->payType) { throw new \UnexpectedValueException('插件支付方式不一致'); }
+                if ($result['pay_type'] !== $context->payType) { throw new UnexpectedValueException('插件支付方式不一致'); }
                 $params = $result['presentation']['pay_params'];
                 $presentation = new PaymentPresentation($params['qrcode_content'] ?? null, $params['qrcode_image_url'] ?? null);
             }
@@ -113,7 +117,7 @@ final class PayOrderChannelDispatchService
             return $this->lifecycle->finishExecution($payNo, $token, 'rejected', null, $requestId);
         } catch (PaymentUncertainException) {
             return $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $requestId);
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $requestId);
             throw $exception;
         }
@@ -121,13 +125,13 @@ final class PayOrderChannelDispatchService
         if ($result['status'] === 'pending') {
             return $this->lifecycle->finishExecution($payNo, $token, 'presented', $presentation, $requestId, $result['chan_order_no']);
         }
-        $callback = new ChannelNotifyContext($pay['channel_id'], $context->channel['api_config_id'], $context->accountKey,
+        $callback = new ChannelNotifyContext($pay['channel_id'], $context->channel['api_config_id'],
             $context->configVersion, $pay['plugin_code'], $version,
             new ReceiptScopeSet([$context->scopeKey => ['pay_type' => $context->payType]]),
             $context->configuration, $finishedAt);
         $this->callbacks->acceptPluginResult($result, $callback, $requestId);
         // 返回生命周期已经提交的实际状态，不能仅依据插件字符串向客户端宣称支付成功。
-        return $this->payOrders->find($payNo) ?? throw new \RuntimeException('回调后支付单不可读取');
+        return $this->payOrders->find($payNo) ?? throw new RuntimeException('回调后支付单不可读取');
     }
 
     /** 从原版本重建敏感执行上下文，不使用当前通道或当前账号凭证补缺字段。 */
@@ -138,22 +142,19 @@ final class PayOrderChannelDispatchService
         $payment = $pay['ext_json']['payment_context'] ?? [];
         if (($snapshot['channel']['id'] ?? null) !== $pay['channel_id']
             || ($snapshot['channel']['receipt_scope_key'] ?? null) !== $pay['receipt_scope_key']
-            || ($snapshot['account_key'] ?? null) !== ($receipt['account_key'] ?? null)
             || ($snapshot['config_version'] ?? null) !== ($receipt['config_version'] ?? null)
-            || !is_string($receipt['account_key'] ?? null)
             || !is_string($payment['pay_type'] ?? null)) {
-            throw new \RuntimeException('原支付上下文与通道快照不一致');
+            throw new RuntimeException('原支付上下文与通道快照不一致');
         }
         $receiptAmount = (int) $pay->receiptAmount();
-        \app\common\util\Money::assertRange($receiptAmount);
-        if ($receiptAmount < $pay->originalAmount()) { throw new \RuntimeException('原付款金额小于订单金额'); }
+        Money::assertRange($receiptAmount);
+        if ($receiptAmount < $pay->originalAmount()) { throw new RuntimeException('原付款金额小于订单金额'); }
         return new PaymentContext(
             bizNo: $pay['biz_no'],
             payType: $payment['pay_type'],
             payAmount: $pay->originalAmount(),
             expiresAt: new DateTimeImmutable($pay['expire_at']),
             scopeKey: $pay['receipt_scope_key'],
-            accountKey: $receipt['account_key'],
             configVersion: $receipt['config_version'],
             channel: $snapshot['channel'],
             configuration: $snapshot['configuration'],

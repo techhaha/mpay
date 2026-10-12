@@ -25,6 +25,8 @@ final readonly class MigrationStep
         public ?array $nullableColumns = null,
         /** @var list<string>|null 明确退役的两列；旧迁移摘要保留，删除步骤独立记录。 */
         public ?array $removedColumns = null,
+        /** 仅对应已确认的订单驱动监听结构清理，不接受外部 SQL 或任意升级回调。 */
+        public bool $collectionCleanup = false,
     ) {
     }
 
@@ -35,6 +37,15 @@ final readonly class MigrationStep
     public static function fromDefinition(string $version, string $name, mixed $definition): self
     {
         if (is_array($definition)) {
+            if (array_key_exists('collection_cleanup', $definition)) {
+                if ($version !== '202610110300_order_driven_collection'
+                    || $name !== 'ma_payment_plugin_conf_collection_cleanup'
+                    || $definition !== ['table' => 'ma_payment_plugin_conf', 'collection_cleanup' => true]) {
+                    throw new RuntimeException('未声明的采集结构清理步骤');
+                }
+                return new self($version, $name, 'ma_payment_plugin_conf', '',
+                    hash('sha256', json_encode($definition, JSON_THROW_ON_ERROR)), collectionCleanup: true);
+            }
             if (array_key_exists('drop_columns', $definition)) {
                 if (array_diff(array_keys($definition), ['table', 'drop_columns']) !== []
                     || $version !== '202610110200_unified_channel_order'

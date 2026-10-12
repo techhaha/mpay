@@ -6,7 +6,6 @@ namespace app\common\payment;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ChannelNotifyInterface;
-use app\common\interface\ReceiptMatcherInterface;
 use app\common\sdk\smsforwarder\SmsForwarderVerifier;
 use app\common\sdk\wechat\WechatMessageXml;
 use app\common\util\Clock;
@@ -32,7 +31,7 @@ use think\Request;
 use think\Response;
 
 /** 微信手机及 wxtool PC 监听的独立主类；平台模板、消息身份及金额解释集中在本类。 */
-final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatcherInterface
+final class WechatReceiptPayment implements ChannelNotifyInterface
 {
     private const PAY_ACCOUNT = 'gh_3dfda90e39d6';
     private const RECEIPT_ACCOUNT = 'gh_f0a92aa7146c';
@@ -169,30 +168,6 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
         return $this->receiptResult($this->locateReceipt($payload['record']), $payload['record']);
     }
 
-    /**
-     * 整批流水在插件内匹配；排除本批已选订单，重复事件只处理一次，未匹配条目不返回。
-     * 本方法不写库，后续确认失败可以重新输入同一批次，最终幂等由成功事务与唯一键保证。
-     */
-    public function matchReceipts(array $receipts): array
-    {
-        $results = []; $used = []; $seen = [];
-        foreach ($receipts as $entry) {
-            $record = $entry['record'];
-            $identity = $entry['scope_key'] . ':' . ($record['trade_no'] ?? $record['event_key']);
-            if (isset($seen[$identity])) { continue; }
-            $seen[$identity] = true;
-            try { $selected = $this->locateReceipt($record, $entry['scope_key'], $used); }
-            catch (BusinessException $error) {
-                if ($error->getCode() !== ApiResponseConstant::CONFLICT) { throw $error; }
-                continue;
-            }
-            if (isset($used[$selected['pay_no']])) { continue; }
-            $used[$selected['pay_no']] = true;
-            $results[] = $this->receiptResult($selected, $record);
-        }
-        return $results;
-    }
-
     /** @return array<string,mixed> 仅表达插件所选订单与来源证据，不代表订单已在数据库确认。 */
     private function receiptResult(PayOrder $pay, array $record): array
     {
@@ -266,7 +241,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
         }
         $remark = preg_match('/(?:备注|留言|附言|付款备注|收款备注)[:：\s]*([0-9]{4})/u', $content['msg'], $code) ? $code[1] : null;
         // 沿用 V2 手机合同：通知时间参与监听编号及订单窗口，不称其为微信官方交易时间/交易号。
-        $reference = 'SF' . substr(hash('sha256', $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
+        $reference = 'SF' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
         return $this->record($reference, Money::parse($amount[1]), intdiv($message->transportTimestampMilliseconds, 1000), $remark);
     }
 
@@ -332,7 +307,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             || $parts[3] !== (string) $message['createTime'] || $parts[4] !== (string) ($message['localId'] ?? '') || !ctype_digit($parts[4])) {
             throw new ReceiptMessageException('invalid_message');
         }
-        $reference = 'WX' . substr(hash('sha256', $key), 0, 40);
+        $reference = 'WX' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $key), 0, 40);
         $remark = $fields['付款方备注'] ?? null;
         return $this->record($reference, Money::parse($titleMoney[1]), $timestamp, $remark === '' ? null : $remark);
     }

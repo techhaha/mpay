@@ -5,8 +5,6 @@ namespace app\common\payment;
 
 use app\common\interface\PaymentInterface;
 use app\exception\UnsupportedPaymentOperationException;
-use think\Request;
-use think\Response;
 
 /**
  * 文档中的完整接口骨架，演示元信息和配置声明；不连接平台，不接受任何交易。
@@ -46,7 +44,4 @@ final class ExamplePayment implements PaymentInterface
     public function query(array $order): array { throw new UnsupportedPaymentOperationException(); }
     public function close(array $order): array { throw new UnsupportedPaymentOperationException(); }
     public function refund(array $order): array { throw new UnsupportedPaymentOperationException(); }
-    public function notify(Request $request): array { throw new UnsupportedPaymentOperationException(); }
-    public function notifySuccess(): string|Response { return 'success'; }
-    public function notifyFail(): string|Response { return 'fail'; }
 }

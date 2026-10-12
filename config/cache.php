@@ -10,6 +10,14 @@ return [
 
     // 缓存连接方式配置
     'stores'  => [
+        // 平台状态单独保存，CLI/Web 共用站点目录；插件根据真实认证状态刷新。
+        'receipt' => [
+            'type' => 'File',
+            'path' => dirname(__DIR__) . '/runtime/receipt/',
+            // File 驱动把 prefix 作为子目录；独立 path 已完成隔离，不使用含冒号的目录名。
+            'prefix' => '',
+            'expire' => 0,
+        ],
         'file' => [
             // 驱动方式
             'type'       => 'File',

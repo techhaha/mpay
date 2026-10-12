@@ -18,6 +18,9 @@ use RuntimeException;
  */
 final class MigrationService
 {
+    private const RETIRED_COLLECTION_TABLES = ['ma_payment_plugin_conf_scope', 'ma_receipt_runtime_state', 'ma_receipt_session'];
+    private const COLLECTION_CLEANUP_ID = '202610110300_order_driven_collection:ma_payment_plugin_conf_collection_cleanup';
+
     public const MINIMUM_MYSQL = '5.7.9';
 
     public function __construct(private readonly PDO $pdo)
@@ -90,7 +93,9 @@ final class MigrationService
                 }
                 // 同摘要 pending 且表已存在，表示建表完成但确认中断；不重复 CREATE，也不清空该表。
                 // 只有 state 已确认属于本次迁移的表可走此分支；同名未知表在执行前即被拒绝。
-                if ($step->removedColumns !== null) {
+                if ($step->collectionCleanup) {
+                    $this->cleanupCollection();
+                } elseif ($step->removedColumns !== null) {
                     $present = $this->removalColumnsPresent($step);
                     if ($present !== []) {
                         $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
@@ -135,9 +140,13 @@ final class MigrationService
     /** @return list<string> 固定建表集合，供安装服务检查已有业务数据，不连接数据库。 */
     public function managedTables(string $directory): array
     {
-        // 迁移账本的注释也有版本记录，但账本本身不是初始化要检查的业务表。
-        return array_values(array_unique(array_map(static fn (MigrationStep $step): string => $step->table,
-            array_filter($this->loadPlan($directory), static fn (MigrationStep $step): bool => $step->comments === null))));
+        $steps = $this->loadPlan($directory);
+        $tables = array_values(array_unique(array_map(static fn (MigrationStep $step): string => $step->table,
+            array_filter($steps, static fn (MigrationStep $step): bool => $step->comments === null))));
+        foreach ($steps as $step) {
+            if ($step->collectionCleanup) { return array_values(array_diff($tables, self::RETIRED_COLLECTION_TABLES)); }
+        }
+        return $tables;
     }
 
     /** 初始化和迁移共用连接级命名锁；重入时每次取得都对应一次释放。 */
@@ -164,7 +173,7 @@ final class MigrationService
             foreach ($definitions as $name => $definition) {
                 if (!is_string($name)) { throw new RuntimeException('迁移步骤缺少表名'); }
                 $step = MigrationStep::fromDefinition(pathinfo($file, PATHINFO_FILENAME), $name, $definition);
-                if ($step->nullableColumns !== null || $step->removedColumns !== null) {
+                if ($step->collectionCleanup || $step->nullableColumns !== null || $step->removedColumns !== null) {
                     if (!isset($tables[$step->table])) { throw new RuntimeException('可空迁移缺少前置建表定义'); }
                     $steps[] = $step;
                     continue;
@@ -205,7 +214,7 @@ final class MigrationService
         $removals = [];
         foreach ($steps as $step) {
             $expected[$step->identity()] = $step;
-            if ($step->comments === null && $step->addedColumn === null && $step->nullableColumns === null && $step->removedColumns === null) { $byTable[$step->table] = $step->identity(); }
+            if ($step->comments === null && $step->addedColumn === null && $step->nullableColumns === null && $step->removedColumns === null && !$step->collectionCleanup) { $byTable[$step->table] = $step->identity(); }
             foreach ($step->removedColumns ?? [] as $column) { $removals[$step->table . '.' . $column] = $step->identity(); }
         }
         if (array_diff(array_keys($tables), [...array_keys($byTable), '_mpay_migration_step']) !== []) {
@@ -220,7 +229,7 @@ final class MigrationService
             }
             $step = $expected[$identity];
             if (!hash_equals($step->checksum, $record['checksum'])
-                && ($step->comments !== null || $step->nullableColumns !== null || $step->addedColumn !== null || $record['state'] !== 'pending' || isset($tables[$step->table]))) {
+                && ($step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->addedColumn !== null || $record['state'] !== 'pending' || isset($tables[$step->table]))) {
                 throw new RuntimeException('已创建表的迁移 SQL 摘要已改变，拒绝覆盖');
             }
             $records[$identity] = $record;
@@ -229,6 +238,17 @@ final class MigrationService
         foreach ($steps as $step) {
             $record = $records[$step->identity()] ?? null;
             if ($record !== null && $unfinished) { throw new RuntimeException('迁移进度不连续，需先核对中断步骤'); }
+            if ($step->collectionCleanup) {
+                if (($record['state'] ?? null) === 'complete') { $this->assertCollectionCleanup(); }
+                $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
+                continue;
+            }
+            // 后续有明确 pending/complete 退役意图，才能认可原已建表不再存在；不能自动重建。
+            if (in_array($step->table, self::RETIRED_COLLECTION_TABLES, true)
+                && !isset($tables[$step->table]) && isset($records[self::COLLECTION_CLEANUP_ID])) {
+                if (($record['state'] ?? null) !== 'complete') { throw new RuntimeException('退役表缺少完整前置迁移'); }
+                continue;
+            }
             if ($step->removedColumns !== null) {
                 if (!isset($tables[$step->table])) {
                     if ($record !== null) { throw new RuntimeException('列退役迁移缺少所属表'); }
@@ -445,7 +465,7 @@ final class MigrationService
         try {
             foreach ($steps as $step) {
                 // 注释 SQL 依赖服务器当前列声明，执行该步时生成；声明校验已在 loadPlan 完成。
-                if ($step->comments !== null || $step->nullableColumns !== null || $step->removedColumns !== null) { continue; }
+                if ($step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->removedColumns !== null) { continue; }
                 if ($step->addedColumn === null && isset($tables[$step->table])) { continue; }
                 // 空库时 ALTER 依赖尚未执行的 CREATE；所属表建成后由 MySQL 执行该固定追加语句。
                 if ($step->addedColumn !== null && (!isset($tables[$step->table]) || $this->addedColumnExists($step))) { continue; }
@@ -453,6 +473,86 @@ final class MigrationService
                 $statement = null;
             }
         } finally { $this->pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, $emulated); }
+    }
+
+    /**
+     * 开发阶段的明确结构替换：只在尚无插件配置/交易事实的库执行，不推断旧账号或改写旧证据。
+     * 每个 DDL 根据自身结果续跑，不能把 MySQL DDL 当作可回滚事务。
+     */
+    private function cleanupCollection(): void
+    {
+        foreach (['ma_payment_plugin_conf', 'ma_pay_order', 'ma_receipt_flow', 'ma_receipt_scope'] as $table) {
+            if ((int) $this->pdo->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() !== 0) {
+                throw new RuntimeException('监听结构需在空配置/交易库初始化；现有业务数据须先明确处理，不自动清空或回填');
+            }
+        }
+        foreach (self::RETIRED_COLLECTION_TABLES as $table) { $this->pdo->exec('DROP TABLE IF EXISTS `' . $table . '`'); }
+        foreach (['account_key', 'query_key', 'session_key', 'auth_fingerprint'] as $column) {
+            if ($this->collectionColumn('ma_payment_plugin_conf', $column)) {
+                $this->pdo->exec('ALTER TABLE ma_payment_plugin_conf DROP COLUMN `' . $column . '`');
+            }
+        }
+        $this->pdo->exec("ALTER TABLE ma_payment_plugin_conf COMMENT='通道独立插件配置；平台账号分组及登录状态由插件处理'");
+        if ($this->collectionIndex('ma_receipt_scope', 'uk_scope_account_type')) {
+            $this->pdo->exec('ALTER TABLE ma_receipt_scope DROP INDEX uk_scope_account_type');
+        }
+        if ($this->collectionColumn('ma_receipt_scope', 'account_key')) { $this->pdo->exec('ALTER TABLE ma_receipt_scope DROP COLUMN account_key'); }
+        if (!$this->collectionColumn('ma_receipt_scope', 'api_config_id')) {
+            $this->pdo->exec("ALTER TABLE ma_receipt_scope ADD COLUMN api_config_id BIGINT UNSIGNED NOT NULL COMMENT '通道专属插件配置ID；业务锁范围，不代表平台账号'");
+        }
+        if (!$this->collectionIndex('ma_receipt_scope', 'uk_scope_configuration_type')) {
+            $this->pdo->exec('ALTER TABLE ma_receipt_scope ADD UNIQUE KEY uk_scope_configuration_type (api_config_id,pay_type_id)');
+        }
+        $foreign = $this->pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='ma_receipt_scope' AND CONSTRAINT_NAME='fk_scope_configuration'");
+        $foreign->execute();
+        if ((int) $foreign->fetchColumn() === 0) {
+            $this->pdo->exec('ALTER TABLE ma_receipt_scope ADD CONSTRAINT fk_scope_configuration FOREIGN KEY (api_config_id) REFERENCES ma_payment_plugin_conf(id)');
+        }
+        $this->pdo->exec("ALTER TABLE ma_receipt_scope COMMENT='配置与支付方式的识别占用锁范围；不用于采集账号分组'");
+        if ($this->collectionColumn('ma_receipt_flow', 'account_key')) { $this->pdo->exec('ALTER TABLE ma_receipt_flow DROP COLUMN account_key'); }
+        if ($this->collectionIndex('ma_receipt_flow', 'uk_flow_plugin_event')) { $this->pdo->exec('ALTER TABLE ma_receipt_flow DROP INDEX uk_flow_plugin_event'); }
+        if (!$this->collectionIndex('ma_receipt_flow', 'uk_flow_event')) {
+            $this->pdo->exec('ALTER TABLE ma_receipt_flow ADD UNIQUE KEY uk_flow_event (plugin_code,event_key)');
+        }
+        if ($this->collectionIndex('ma_pay_order', 'uk_pay_scope_trade')) { $this->pdo->exec('ALTER TABLE ma_pay_order DROP INDEX uk_pay_scope_trade'); }
+        if (!$this->collectionIndex('ma_pay_order', 'uk_pay_plugin_trade')) {
+            $this->pdo->exec('ALTER TABLE ma_pay_order ADD UNIQUE KEY uk_pay_plugin_trade (plugin_code,channel_trade_no)');
+        }
+        if (!$this->collectionIndex('ma_pay_order', 'idx_pay_collection')) {
+            $this->pdo->exec('ALTER TABLE ma_pay_order ADD KEY idx_pay_collection (plugin_code,status,expire_at,id)');
+        }
+        $this->assertCollectionCleanup();
+    }
+
+    /** 完成后只核对本次明确退役/新增的结构，不重建全库元数据校验器。 */
+    private function assertCollectionCleanup(): void
+    {
+        $tables = $this->tables();
+        if (array_intersect(self::RETIRED_COLLECTION_TABLES, array_keys($tables)) !== []) { throw new RuntimeException('旧采集运行表未退役'); }
+        foreach (['account_key', 'query_key', 'session_key', 'auth_fingerprint'] as $column) {
+            if ($this->collectionColumn('ma_payment_plugin_conf', $column)) { throw new RuntimeException('旧采集身份字段未退役'); }
+        }
+        if ($this->collectionColumn('ma_receipt_scope', 'account_key') || $this->collectionColumn('ma_receipt_flow', 'account_key')
+            || !$this->collectionColumn('ma_receipt_scope', 'api_config_id')
+            || !$this->collectionIndex('ma_receipt_scope', 'uk_scope_configuration_type')
+            || !$this->collectionIndex('ma_receipt_flow', 'uk_flow_event')
+            || !$this->collectionIndex('ma_pay_order', 'uk_pay_plugin_trade') || !$this->collectionIndex('ma_pay_order', 'idx_pay_collection')) {
+            throw new RuntimeException('订单驱动监听结构未完成');
+        }
+    }
+
+    private function collectionColumn(string $table, string $column): bool
+    {
+        $query = $this->pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
+        $query->execute([$table, $column]);
+        return (int) $query->fetchColumn() > 0;
+    }
+
+    private function collectionIndex(string $table, string $index): bool
+    {
+        $query = $this->pdo->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?');
+        $query->execute([$table, $index]);
+        return (int) $query->fetchColumn() > 0;
     }
 
     /**

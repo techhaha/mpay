@@ -3,6 +3,10 @@ declare(strict_types=1);
 
 namespace app\common\util;
 
+use InvalidArgumentException;
+use LogicException;
+use RuntimeException;
+
 /** CLI 进程的安全退出、短等待和进程心跳；心跳只证明本地工作者运行，不证明任何设备在线。 */
 final class CliWorkerControl
 {
@@ -16,7 +20,7 @@ final class CliWorkerControl
 
     /**
      * 信号处理是可选增强；不依赖 fork/posix/exec，也不要求为常驻启动解除禁用函数。
-     * 返回 false 时由外部守护停止进程，已认领任务依靠数据库租约恢复，不能声称平滑退出。
+     * 返回 false 时由外部守护停止进程；通知依靠持久任务恢复，采集重新读取待核对订单。
      */
     public function install(): bool
     {
@@ -35,19 +39,19 @@ final class CliWorkerControl
         return true;
     }
 
-    /** 同一站点每个角色只启动一个进程；数据库账号/通知租约继续防止跨主机重复认领。 */
+    /** 同一运行目录每个角色只启动一个进程；watch 不支持跨主机多实例登录同一账号。 */
     public function acquire(string $runtimePath, string $role): void
     {
-        if (!in_array($role, ['work', 'watch'], true) || $this->roleLock !== null) { throw new \LogicException('工作者角色无效或重复获取锁'); }
+        if (!in_array($role, ['work', 'watch'], true) || $this->roleLock !== null) { throw new LogicException('工作者角色无效或重复获取锁'); }
         $directory = rtrim($runtimePath, '/\\') . '/workers';
         if (is_link($directory) || (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory))) {
-            throw new \RuntimeException('工作者目录无效');
+            throw new RuntimeException('工作者目录无效');
         }
         $path = $directory . '/' . $role . '.lock';
-        if (is_link($path)) { throw new \RuntimeException('工作者锁不能是符号链接'); }
+        if (is_link($path)) { throw new RuntimeException('工作者锁不能是符号链接'); }
         $stream = fopen($path, 'c+b');
-        if ($stream === false) { throw new \RuntimeException('无法打开工作者锁'); }
-        if (!flock($stream, LOCK_EX | LOCK_NB)) { fclose($stream); throw new \RuntimeException('该角色已有工作者运行'); }
+        if ($stream === false) { throw new RuntimeException('无法打开工作者锁'); }
+        if (!flock($stream, LOCK_EX | LOCK_NB)) { fclose($stream); throw new RuntimeException('该角色已有工作者运行'); }
         $this->roleLock = $stream;
     }
 
@@ -71,25 +75,25 @@ final class CliWorkerControl
     public function heartbeat(string $runtimePath, string $role, string $owner, bool $running): void
     {
         if (!in_array($role, ['work', 'watch'], true) || !preg_match('/^[a-f0-9]{32}$/D', $owner)) {
-            throw new \InvalidArgumentException('工作者心跳身份无效');
+            throw new InvalidArgumentException('工作者心跳身份无效');
         }
         $directory = rtrim($runtimePath, '/\\') . '/workers';
         if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
-            throw new \RuntimeException('无法创建工作者心跳目录');
+            throw new RuntimeException('无法创建工作者心跳目录');
         }
         $path = $directory . '/' . $role . '-' . $owner . '.json';
         $stream = fopen($path, 'c+b');
         if ($stream === false) {
-            throw new \RuntimeException('无法写入工作者心跳');
+            throw new RuntimeException('无法写入工作者心跳');
         }
         try {
             if (!flock($stream, LOCK_EX)) {
-                throw new \RuntimeException('无法锁定工作者心跳');
+                throw new RuntimeException('无法锁定工作者心跳');
             }
             $json = json_encode(['role' => $role, 'owner' => $owner, 'pid' => getmypid(),
                 'running' => $running, 'observed_at' => time()], JSON_THROW_ON_ERROR);
             if (!ftruncate($stream, 0) || fwrite($stream, $json) !== strlen($json) || !fflush($stream)) {
-                throw new \RuntimeException('工作者心跳未完整写入');
+                throw new RuntimeException('工作者心跳未完整写入');
             }
         } finally {
             fclose($stream);

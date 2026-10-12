@@ -20,7 +20,6 @@ final class ReceiptFlow extends BaseModel
             'schema' => [
                 'id' => 'string',
                 'receipt_scope_key' => 'string',
-                'account_key' => 'string',
                 'plugin_code' => 'string',
                 'event_key' => 'string',
                 'payload_digest' => 'string',

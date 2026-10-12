@@ -5,17 +5,17 @@ namespace app\repository\payment\config;
 
 use app\common\base\BaseRepository;
 use app\common\constant\TradeConstant;
-use app\model\payment\PaymentPlugin;
+use app\common\validation\PluginConfigValidator;
 use app\model\payment\PaymentChannel;
+use app\model\payment\PaymentPlugin;
 use app\model\payment\PaymentPluginConf;
-use app\model\payment\ReceiptRuntimeState;
 use app\model\payment\PayOrder;
 
 /** @extends BaseRepository<PaymentPlugin> 插件目录查询/持久化；不加载 PHP 文件或决定停用业务策略。 */
 final class PaymentPluginRepository extends BaseRepository
 {
     public function __construct(PaymentPlugin $model, private readonly PaymentChannel $channels,
-        private readonly PaymentPluginConf $configurations, private readonly ReceiptRuntimeState $runtime,
+        private readonly PaymentPluginConf $configurations,
         private readonly PayOrder $orders) { parent::__construct($model); }
 
     /** @return list<PaymentPlugin> 包含代码已经移除的目录记录，管理页应明确显示未安装。 */
@@ -52,7 +52,7 @@ final class PaymentPluginRepository extends BaseRepository
             $changed = false;
             foreach ($values as $field => $value) {
                 $same = is_array($value)
-                    ? \app\common\validation\PluginConfigValidator::sameSchema($value, $row[$field])
+                    ? PluginConfigValidator::sameSchema($value, $row[$field])
                     : $row[$field] === $value;
                 if (!$same) { $changed = true; break; }
             }
@@ -78,13 +78,11 @@ final class PaymentPluginRepository extends BaseRepository
         }
     }
 
-    /** 调用服务已锁定目录并完成版本校验；唤醒等待记录，不撤销正在执行的存量租约。 */
+    /** 调用服务已锁定目录并完成版本校验；只改变新单准入，监听按存量订单独立调度。 */
     public function setEnabled(PaymentPlugin $plugin, bool $enabled, string $now): void
     {
         $this->requireTransaction();
         $this->model->where('id', $plugin['id'])->where('revision', $plugin['revision'])
             ->update(['enabled' => (int) $enabled, 'revision' => (int) $plugin['revision'] + 1, 'updated_at' => $now]);
-        $ids = $this->configurations->where('plugin_code', $plugin['code'])->whereNotNull('query_key')->column('query_key');
-        if ($ids !== []) { $this->runtime->whereIn('query_key', $ids)->whereNull('claim_token')->update(['next_run_at' => $now]); }
     }
 }

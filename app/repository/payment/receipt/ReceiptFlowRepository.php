@@ -5,6 +5,8 @@ namespace app\repository\payment\receipt;
 
 use app\common\base\BaseRepository;
 use app\model\payment\ReceiptFlow;
+use RuntimeException;
+use think\db\Query;
 
 /**
  * 持久化首次到账事实及受控绑定；原金额、时间、来源和摘要在重投时不可覆盖。
@@ -22,6 +24,20 @@ final class ReceiptFlowRepository extends BaseRepository
     public function find(string $id): ?ReceiptFlow
     {
         return $this->model->find($id);
+    }
+
+    /**
+     * 本批先查询已有消费，避免成功订单不在待付集合后，旧流水被匹配到另一订单。
+     * 此读取仅供插件排除，最终确认仍由唯一键和锁内复核保证。
+     * @return list<ReceiptFlow>
+     */
+    public function consumed(string $plugin, array $events, array $trades): array
+    {
+        if ($events === [] && $trades === []) { return []; }
+        return $this->model->where('plugin_code', $plugin)->where(function (Query $query) use ($events, $trades): void {
+            $query->whereIn('event_key', $events);
+            if ($trades !== []) { $query->whereOr('platform_trade_no', 'in', $trades); }
+        })->select()->all();
     }
 
     /**
@@ -44,14 +60,14 @@ final class ReceiptFlowRepository extends BaseRepository
     public function lock(string $id): ReceiptFlow
     {
         $this->requireTransaction();
-        return $this->model->where('id', $id)->lock(true)->find() ?? throw new \RuntimeException('到账流水不存在');
+        return $this->model->where('id', $id)->lock(true)->find() ?? throw new RuntimeException('到账流水不存在');
     }
 
-    /** 稳定身份采用范围 + 来源 + 事件键；null 只表示当前未持久化，唯一键仍承担最终保护。 */
-    public function lockByEvent(string $scopeKey, string $pluginCode, string $eventKey): ?ReceiptFlow
+    /** 稳定身份采用插件 + 事件键，不随通道配置改变；null 只表示当前未持久化，唯一键仍承担最终保护。 */
+    public function lockByEvent(string $pluginCode, string $eventKey): ?ReceiptFlow
     {
         $this->requireTransaction();
-        return $this->model->where('receipt_scope_key', $scopeKey)->where('plugin_code', $pluginCode)
+        return $this->model->where('plugin_code', $pluginCode)
             ->where('event_key', $eventKey)->lock(true)->find();
     }
 
@@ -65,7 +81,7 @@ final class ReceiptFlowRepository extends BaseRepository
     /**
      * 生命周期已锁订单和范围并确认最终匹配；只插入最终绑定，失败由同一成功事务回滚。
      *
-     * @param array{receipt_scope_key:string,account_key:string,plugin_code:string,
+     * @param array{receipt_scope_key:string,plugin_code:string,
      *     event_key:string,payload_digest:string,platform_trade_no:?string,
      *     amount:int,remark:?string,paid_at:?string,received_at:string,pay_no:string,
      *     reason_code:?string,evidence_json:string} $data 金额为分，时间为上海时区秒精度。
@@ -73,7 +89,7 @@ final class ReceiptFlowRepository extends BaseRepository
     public function create(array $data): string
     {
         $this->requireTransaction();
-        return $this->insert($data, ['receipt_scope_key', 'account_key', 'plugin_code',
+        return $this->insert($data, ['receipt_scope_key', 'plugin_code',
             'event_key', 'payload_digest', 'platform_trade_no', 'amount', 'remark',
             'paid_at', 'received_at', 'pay_no', 'reason_code', 'evidence_json']);
     }

@@ -8,71 +8,82 @@ use app\common\util\HttpClient;
 use app\common\util\PlatformTargetPolicy;
 use app\exception\HttpRequestException;
 use app\exception\ReceiptCollectionException;
+use DateTimeImmutable;
 use GuzzleHttp\Psr7\Request;
+use InvalidArgumentException;
+use JsonException;
+use SensitiveParameter;
 
 /**
  * 收钱吧商户后台只读客户端，接口、登录摘要和字段口径依据 V2 直连 watcher。
- * 负责登录/刷新、商户上下文和交易页，不依赖订单表；会话由上层服务按账号保存并限制公开输出。
+ * 负责登录/刷新、商户上下文和交易页，不依赖订单表；会话由插件按账号缓存，客户端不持久化或参与订单确认。
  */
 final class ShouQianBaClient
 {
     private const ORIGIN = 'https://web-platforms-msp.shouqianba.com';
-    private const PAGE_SIZE = 200;
 
     public function __construct(private readonly HttpClient $http, private readonly Clock $clock) {}
 
     /**
-     * 全部外呼共享绝对期限；明确认证失效时至多重新登录一次，网络错误不冒充认证失效。
-     *
-     * @param array<string,mixed> $settings 已验证的平台配置。
-     * @param array{from:int,to:int,deadline:\DateTimeImmutable} $window
-     * @param array<string,mixed>|null $session 原配置版本的会话。
-     * @return array{rows:list<array<string,mixed>>,total:int,session:array<string,mixed>}
+     * 恢复或刷新平台认证；调用者取得返回值立即持久保存，再执行流水查询。
+     * 未提供 valid_time 时不臆造到期时间；临期刷新暂时失败仍可用未过期 token 验证。
+     * @param array<string,mixed> $settings 收钱吧声明的配置，不接受其他平台字段。
+     * @param array<string,mixed> $state 插件保存的私有认证状态。
+     * @return array<string,mixed>
      */
-    public function queryPage(array $settings, array $window, int $page, #[\SensitiveParameter] ?array $session): array
+    public function authenticate(array $settings, #[SensitiveParameter] array $state, DateTimeImmutable $deadline): array
     {
-        if ($page < 1 || $window['from'] < 1 || $window['to'] <= $window['from']) { throw new \InvalidArgumentException('收钱吧查询窗口无效'); }
-        $state = $session ?? [];
-        for ($attempt = 0; $attempt < 2; $attempt++) {
-            try {
-                if (!is_string($state['token'] ?? null) || $state['token'] === '') {
-                    $state = $this->login($settings, $window['deadline']);
-                } elseif (($state['expires_at'] ?? 0) <= $this->clock->now()->getTimestamp() + 60) {
-                    try {
-                        $refreshed = $this->request('POST', '/api/login/ucUser/refreshToken', ['token' => $state['token']], [],
-                            $window['deadline'], ['Authorization' => 'Bearer ' . $state['token']]);
-                        $state['token'] = $this->text($refreshed['token'] ?? null);
-                        $state['expires_at'] = $this->expires($refreshed['valid_time'] ?? null);
-                        unset($state['scope']);
-                    } catch (ReceiptCollectionException $error) {
-                        // V2 会保留旧 token，让真实查询判断认证是否失效；到期预算仍须立即结束。
-                        if ($error->reasonCode === 'budget_exhausted') { throw $error; }
-                    }
-                }
-                $scope = $this->scope($settings, $state['token'], $window['deadline']);
-                $query = ['token' => $state['token'], 'client_version' => '7.0.0'];
-                $filters = array_filter(array_intersect_key($scope, array_flip(['merchant_sn', 'store_sn', 'store_id', 'merchant_name', 'store_name'])), static fn ($v): bool => $v !== '');
-                if (!empty($settings['receipt_terminal_no'])) { $filters['terminal_sn'] = $settings['receipt_terminal_no']; }
-                $data = $this->request('POST', '/api/transaction/findTransactions', $query,
-                    ['upayQueryType' => 0, 'page' => $page, 'page_size' => self::PAGE_SIZE,
-                        'date_start' => $window['from'] * 1000, 'date_end' => $window['to'] * 1000, 'show_fund_state' => true] + $filters, $window['deadline']);
-                if (!is_array($data['records'] ?? null) || !array_is_list($data['records'])) { throw new ReceiptCollectionException('protocol_error'); }
-                $total = $this->integer($data['total'] ?? null);
-                if (count($data['records']) !== max(0, min(self::PAGE_SIZE, $total - ($page - 1) * self::PAGE_SIZE))) {
-                    throw new ReceiptCollectionException('pagination_incomplete');
-                }
-                $state['scope'] = $scope;
-                return ['rows' => $data['records'], 'total' => $total, 'session' => $state];
-            } catch (ReceiptCollectionException $error) {
-                if ($error->reasonCode !== 'authentication_expired' || $attempt !== 0) { throw $error; }
-                $state = [];
-            }
+        if (!is_string($state['token'] ?? null) || $state['token'] === '') { return $this->login($settings, $deadline); }
+        $expires = (int) ($state['expires_at'] ?? 0);
+        if ($expires === 0 || $expires > $this->clock->now()->getTimestamp() + 60) { return $state; }
+        try {
+            $data = $this->request('POST', '/api/login/ucUser/refreshToken', ['token' => $state['token']], [],
+                $deadline, ['Authorization' => 'Bearer ' . $state['token']]);
+            $state['token'] = $this->text($data['token'] ?? null);
+            $state['expires_at'] = $this->expires($data['valid_time'] ?? null);
+            unset($state['scope'], $state['scope_selector']);
+        } catch (ReceiptCollectionException $error) {
+            if ($error->reasonCode === 'authentication_expired') { return $this->login($settings, $deadline); }
+            if ($error->reasonCode === 'budget_exhausted' || $expires <= $this->clock->now()->getTimestamp()) { throw $error; }
         }
-        throw new ReceiptCollectionException('authentication_expired');
+        return $state;
     }
 
-    /** 登录凭证只用于认证；取得 token 后仍须核实商户并成功查询交易页，才交由服务保存会话。 */
-    private function login(#[\SensitiveParameter] array $settings, \DateTimeImmutable $deadline): array
+    /**
+     * 固定第一页，正式查询 200 条、预登录探测 1 条；不翻页、不在失败后重发流水请求。
+     * 范围状态按平台配置缓存，切换门店重新验证，普通查询不重复登录/切换商户。
+     * @param array{from:int,to:int,deadline:DateTimeImmutable} $window 秒级闭区间，由插件按原单生成。
+     * @param array<string,mixed> $state 已认证状态，范围变更通过引用交还插件保存。
+     * @return array{rows:list<array<string,mixed>>,limit_reached:bool}
+     */
+    public function query(array $settings, array $window, #[SensitiveParameter] array &$state, int $limit = 200): array
+    {
+        if (!in_array($limit, [1, 200], true) || $window['from'] < 1 || $window['to'] < $window['from']) {
+            throw new InvalidArgumentException('收钱吧查询窗口无效');
+        }
+        $token = $this->text($state['token'] ?? null);
+        $selector = hash('sha256', json_encode([$settings['receipt_account_no'], $settings['receipt_merchant_name'] ?? '',
+            $settings['receipt_terminal_no'] ?? ''], JSON_THROW_ON_ERROR));
+        if (($state['scope_selector'] ?? null) !== $selector || !is_array($state['scope'] ?? null)) {
+            $state['scope'] = $this->scope($settings, $token, $window['deadline']);
+            $state['scope_selector'] = $selector;
+        }
+        $filters = array_filter(array_intersect_key($state['scope'], array_flip(['merchant_sn', 'store_sn', 'store_id', 'merchant_name', 'store_name'])),
+            static fn ($value): bool => $value !== '');
+        if (!empty($settings['receipt_terminal_no'])) { $filters['terminal_sn'] = $settings['receipt_terminal_no']; }
+        $data = $this->request('POST', '/api/transaction/findTransactions', ['token' => $token, 'client_version' => '7.0.0'],
+            ['upayQueryType' => 0, 'page' => 1, 'page_size' => $limit, 'date_start' => $window['from'] * 1000,
+                'date_end' => $window['to'] * 1000 + 999, 'show_fund_state' => true] + $filters, $window['deadline']);
+        if (!is_array($data['records'] ?? null) || !array_is_list($data['records']) || count($data['records']) > $limit) {
+            throw new ReceiptCollectionException('protocol_error');
+        }
+        $total = $this->integer($data['total'] ?? null);
+        if ($total < count($data['records'])) { throw new ReceiptCollectionException('protocol_error'); }
+        return ['rows' => $data['records'], 'limit_reached' => $total > $limit || count($data['records']) === $limit];
+    }
+
+    /** 登录凭证只用于认证；取得 token 后仍须核实商户并成功查询交易页，才说明状态已通过真实查询验证；取得 token 后应立即交回插件缓存。 */
+    private function login(#[SensitiveParameter] array $settings, DateTimeImmutable $deadline): array
     {
         $password = trim($this->text($settings['watcher_password'] ?? null));
         $data = $this->request('POST', '/api/login/ucUser/login', [], [
@@ -86,7 +97,7 @@ final class ShouQianBaClient
     }
 
     /** 根据 V2 对应接口的商户与门店字段核对查询范围，不能把登录账号直接当成收款主体。 */
-    private function scope(array $settings, #[\SensitiveParameter] string $token, \DateTimeImmutable $deadline): array
+    private function scope(array $settings, #[SensitiveParameter] string $token, DateTimeImmutable $deadline): array
     {
         $query = ['token' => $token, 'client_version' => '7.0.0'];
         $info = $this->request('GET', '/api/login/ucUser/getLoginInfo', $query, null, $deadline);
@@ -131,8 +142,8 @@ final class ShouQianBaClient
     }
 
     /** 固定官方站点和接口路径；Guzzle PSR-7 请求交给现有传输，响应错误只保留分类，不保留秘密报文。 */
-    private function request(string $method, string $path, #[\SensitiveParameter] array $query, #[\SensitiveParameter] ?array $body,
-        \DateTimeImmutable $deadline, #[\SensitiveParameter] array $headers = []): array
+    private function request(string $method, string $path, #[SensitiveParameter] array $query, #[SensitiveParameter] ?array $body,
+        DateTimeImmutable $deadline, #[SensitiveParameter] array $headers = []): array
     {
         $headers += ['Accept' => 'application/json', 'Content-Type' => 'application/json;charset=UTF-8',
             'Origin' => 'https://s.shouqianba.com', 'Referer' => 'https://s.shouqianba.com/',
@@ -145,7 +156,7 @@ final class ShouQianBaClient
         if ($response->getStatusCode() === 429) { throw new ReceiptCollectionException('rate_limited'); }
         if ($response->getStatusCode() !== 200) { throw new ReceiptCollectionException('network_error'); }
         try { $data = json_decode((string) $response->getBody(), true, 64, JSON_THROW_ON_ERROR); }
-        catch (\JsonException) { throw new ReceiptCollectionException('protocol_error'); }
+        catch (JsonException) { throw new ReceiptCollectionException('protocol_error'); }
         if (!is_array($data) || array_is_list($data)) { throw new ReceiptCollectionException('protocol_error'); }
         $code = (string) ($data['code'] ?? '');
         if (in_array($code, ['50201', '50210', '50211', '50212'], true)) { throw new ReceiptCollectionException('authentication_expired'); }
@@ -178,6 +189,8 @@ final class ShouQianBaClient
     private function expires(mixed $milliseconds): int
     {
         if ($milliseconds === null || $milliseconds === '') { return 0; }
-        return $this->clock->now()->getTimestamp() + intdiv($this->integer($milliseconds), 1000);
+        $duration = $this->integer($milliseconds);
+        // 平台未提供有效期限时，以真实认证结果判断失效，不能把零解释为立即过期。
+        return $duration === 0 ? 0 : $this->clock->now()->getTimestamp() + intdiv($duration, 1000);
     }
 }

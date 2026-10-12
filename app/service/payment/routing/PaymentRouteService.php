@@ -4,16 +4,21 @@ declare(strict_types=1);
 namespace app\service\payment\routing;
 
 use app\common\constant\ApiResponseConstant;
+use app\common\constant\RouteConstant;
+use app\common\util\Clock;
 use app\common\util\Money;
 use app\exception\BusinessException;
 use app\model\payment\PaymentChannel;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
+use app\repository\payment\config\PaymentPollGroupRepository;
+use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\config\PaymentCatalogService;
 use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\receipt\ReceiptScopeService;
+use RuntimeException;
 
 /**
  * 应用支付方式绑定的轮询组选路：核对已安装插件、冻结规则和账号归属；本地可选不代表平台在线。
@@ -23,15 +28,15 @@ final class PaymentRouteService
 {
     public function __construct(
         private readonly PaymentCatalogRepository $catalog,
-        private readonly \app\repository\payment\config\PaymentPollGroupRepository $groups,
+        private readonly PaymentPollGroupRepository $groups,
         private readonly PaymentChannelRepository $channels,
         private readonly PaymentPluginConfRepository $configurations,
         private readonly PaymentChannelRevisionService $revisions,
         private readonly PaymentPluginFactoryService $plugins,
         private readonly ReceiptScopeService $scopeAccess,
         private readonly PaymentCatalogService $management,
-        private readonly \app\repository\payment\trade\PayOrderRepository $orders,
-        private readonly \app\common\util\Clock $clock,
+        private readonly PayOrderRepository $orders,
+        private readonly Clock $clock,
     ) {
     }
 
@@ -40,7 +45,7 @@ final class PaymentRouteService
      * 外层持应用/业务单锁；本层依次锁支付方式、绑定、组和配置/通道。
      *
      * @param bool $advance 仅新支付尝试为 true；预览为 false，仍在短事务内取一致的配置。
-     * @return array{channel:PaymentChannel,account_key:string,config_version:int,plugin_version:string,poll_group_id:string,route_mode:int}
+     * @return array{channel:PaymentChannel,config_version:int,plugin_version:string,poll_group_id:string,route_mode:int}
      */
     public function selectFor(string $appId, int $amount, string $payType, bool $advance = true): array
     {
@@ -73,15 +78,14 @@ final class PaymentRouteService
                 continue;
             }
             $configurationRevision = $this->configurations->revision($configuration['id'], (int) $configuration['config_version'], true)
-                ?? throw new \RuntimeException('当前收款配置版本缺失');
+                ?? throw new RuntimeException('当前收款配置版本缺失');
             if (!$this->management->allowsNew($channel['plugin_code'], true)) { continue; }
             $definition = $this->plugins->definition($channel['plugin_code']);
             if (!in_array($payType, $definition->payTypes, true)) { continue; }
             $authorized = $this->scopeAccess->current($configuration, false);
             if (!isset($authorized[$channel['receipt_scope_key']])) { continue; }
             $snapshot = $this->revisions->snapshot($channel['id'], $channel['current_revision_id'], true);
-            if (($snapshot['account_key'] ?? null) !== $configuration['account_key']
-                || $snapshot['config_version'] !== (int) $configuration['config_version']
+            if ($snapshot['config_version'] !== (int) $configuration['config_version']
                 || !$this->revisions->rulesMatch($channel, $snapshot['channel'])
                 || $configurationRevision['config_json'] !== $configuration['config_json']) { continue; }
             $this->assertRules($channel);
@@ -97,7 +101,7 @@ final class PaymentRouteService
             }
             $eligible[] = [
                 'member' => $members[$channel['id']], 'poll_group_id' => $group['id'], 'route_mode' => $group['route_mode'],
-                'channel' => $channel, 'account_key' => $configuration['account_key'],
+                'channel' => $channel,
                 'config_version' => (int) $configuration['config_version'], 'plugin_version' => $definition->version,
             ];
         }
@@ -106,21 +110,21 @@ final class PaymentRouteService
             ((int) $a['member']['sort_no'] <=> (int) $b['member']['sort_no']) ?: ((int) $a['channel']['id'] <=> (int) $b['channel']['id']));
         $selected = 0;
         switch ($group['route_mode']) {
-            case \app\common\constant\RouteConstant::ORDER:
+            case RouteConstant::ORDER:
                 $selected = (int) $binding['cursor'] % count($eligible);
                 // 游标只在新尝试的事务中修改；预览读取同一个下次位置，不消耗序号。
                 if ($advance) { $this->groups->advance($binding, ($selected + 1) % count($eligible), $this->clock->now()->format('Y-m-d H:i:s')); }
                 break;
-            case \app\common\constant\RouteConstant::WEIGHTED:
+            case RouteConstant::WEIGHTED:
                 $total = array_sum(array_map(static fn (array $row): int => (int) $row['member']['weight'], $eligible));
-                if ($total < 1) { throw new \RuntimeException('轮询组权重无效'); }
+                if ($total < 1) { throw new RuntimeException('轮询组权重无效'); }
                 $draw = random_int(1, $total);
                 foreach ($eligible as $index => $row) { $draw -= (int) $row['member']['weight']; if ($draw <= 0) { $selected = $index; break; } }
                 break;
-            case \app\common\constant\RouteConstant::FIRST_AVAILABLE:
+            case RouteConstant::FIRST_AVAILABLE:
                 foreach ($eligible as $index => $row) { if ((int) $row['member']['is_default'] === 1) { $selected = $index; break; } }
                 break;
-            default: throw new \RuntimeException('未知轮询组策略');
+            default: throw new RuntimeException('未知轮询组策略');
         }
         unset($eligible[$selected]['member']);
         return $eligible[$selected];
@@ -131,7 +135,7 @@ final class PaymentRouteService
     {
         $from = $channel['available_from']; $to = $channel['available_to'];
         if ($from === null && $to === null) { return true; }
-        if (!is_string($from) || !is_string($to) || $from === $to) { throw new \RuntimeException('通道可用时段无效'); }
+        if (!is_string($from) || !is_string($to) || $from === $to) { throw new RuntimeException('通道可用时段无效'); }
         return $from < $to ? $time >= $from && $time < $to : $time >= $from || $time < $to;
     }
 
@@ -140,7 +144,7 @@ final class PaymentRouteService
     {
         Money::assertRange((int) $channel['max_amount']);
         if ((int) $channel['min_amount'] < 1 || (int) $channel['min_amount'] > (int) $channel['max_amount']) {
-            throw new \RuntimeException('通道付款规则越界');
+            throw new RuntimeException('通道付款规则越界');
         }
     }
 

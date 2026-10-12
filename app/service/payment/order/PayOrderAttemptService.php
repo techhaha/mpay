@@ -129,7 +129,6 @@ final class PayOrderAttemptService
         $snapshot = $this->revisions->snapshot($channelId, $revision, true);
         return $this->persist($biz, $type['id'], $payType, [
             'channel' => $channel,
-            'account_key' => $snapshot['account_key'],
             'config_version' => $snapshot['config_version'],
             'plugin_version' => $snapshot['plugin_version'],
             'poll_group_id' => null,
@@ -142,7 +141,6 @@ final class PayOrderAttemptService
      *
      * @param array{
      *     channel:PaymentChannel,
-     *     account_key:string,
      *     config_version:int,
      *     plugin_version:string,
      *     poll_group_id:?string,
@@ -177,7 +175,6 @@ final class PayOrderAttemptService
                 'personal_receipt' => [
                     // 测试身份只取自运行环境，不接受易支付参数伪造；后续切换入口仍明确标注合成订单。
                     'test_only' => $this->config->get('mpay.environment') === 'testing',
-                    'account_key' => $selection['account_key'],
                     'config_version' => $selection['config_version'], 'plugin_version' => $selection['plugin_version'],
                 ],
             ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),

@@ -12,9 +12,7 @@ use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
-use app\repository\payment\config\PaymentPluginConfScopeRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
-use app\repository\payment\runtime\ReceiptRuntimeStateRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\routing\DefaultRoutingService;
 use app\service\system\audit\ConfigurationActionContext;
@@ -34,7 +32,6 @@ final class PaymentChannelEditorService extends BaseService
         private readonly PaymentPluginConfService $configurationService,
         private readonly PaymentChannelService $channelService,
         private readonly PaymentPluginConfRepository $configurations,
-        private readonly PaymentPluginConfScopeRepository $bindings,
         private readonly PaymentChannelRepository $channels,
         private readonly ReceiptScopeRepository $scopes,
         private readonly PaymentCatalogRepository $catalog,
@@ -42,7 +39,6 @@ final class PaymentChannelEditorService extends BaseService
         private readonly PaymentChannelRevisionService $revisions,
         private readonly Clock $clock,
         private readonly PaymentCatalogService $management,
-        private readonly ReceiptRuntimeStateRepository $runtime,
     ) {}
 
     /**
@@ -130,8 +126,8 @@ final class PaymentChannelEditorService extends BaseService
     private function scopeForType(string $id, int $version, string $type): string
     {
         $keys = [];
-        foreach ($this->bindings->keys($id, $version) as $key) {
-            $scope = $this->scopes->find($key);
+        foreach ($this->scopes->configurationScopes($id, false) as $scope) {
+            $key = $scope['receipt_scope_key'];
             if ($scope !== null && $this->catalog->typeCode($scope['pay_type_id']) === $type) { $keys[] = $key; }
         }
         if (count($keys) !== 1) { throw new BusinessException('插件配置缺少唯一的支付方式关联', Code::CONFLICT); }
@@ -183,7 +179,6 @@ final class PaymentChannelEditorService extends BaseService
                 $this->configurationService->setEnabledInTransaction($configuration['id'], $input['expected_configuration_version'], true, $actor);
             }
             $this->channelService->setEnabledInTransaction($input['id'], $input['expected_revision'], $input['expected_configuration_version'], $input['enabled'], $actor);
-            if ($configuration['query_key'] !== null) { $this->runtime->wake($configuration['query_key'], $this->clock->now()->format('Y-m-d H:i:s')); }
         });
     }
 
@@ -206,7 +201,6 @@ final class PaymentChannelEditorService extends BaseService
             if ($references !== []) { throw new BusinessException('请先在轮询组中移除该通道，再执行删除', Code::CONFLICT, ['groups' => array_column($references, 'name')]); }
             $this->defaults->removeChannel($channel['id']);
             $this->channels->markDeleted($channel['id'], $this->clock->now()->format('Y-m-d H:i:s'));
-            if ($configuration['query_key'] !== null) { $this->runtime->wake($configuration['query_key'], $this->clock->now()->format('Y-m-d H:i:s')); }
             $this->audit->record($actor, 'channel.delete', 'payment_channel', $channel['id'], 'deleted', ['enabled' => false]);
         });
     }

@@ -4,6 +4,9 @@ declare(strict_types=1);
 namespace app\service\payment\plugin;
 
 use app\common\util\Money;
+use app\common\validation\PaymentTypeCode;
+use DateTimeImmutable;
+use InvalidArgumentException;
 
 /**
  * 派发服务从已冻结订单/配置构造的内部上下文，不能用客户端金额或当前活动配置替换。
@@ -20,18 +23,17 @@ final readonly class PaymentContext
         public string $bizNo,
         public string $payType,
         public int $payAmount,
-        public \DateTimeImmutable $expiresAt,
+        public DateTimeImmutable $expiresAt,
         public string $scopeKey,
-        public string $accountKey,
         public int $configVersion,
         public array $channel,
         public array $configuration,
     ) {
         Money::assertRange($payAmount);
-        if ($payAmount < 1 || !\app\common\validation\PaymentTypeCode::valid($payType)
-            || $bizNo === '' || $scopeKey === '' || $accountKey === ''
+        if ($payAmount < 1 || !PaymentTypeCode::valid($payType)
+            || $bizNo === '' || $scopeKey === ''
             || $configVersion < 1) {
-            throw new \InvalidArgumentException('支付执行上下文无效');
+            throw new InvalidArgumentException('支付执行上下文无效');
         }
     }
 }

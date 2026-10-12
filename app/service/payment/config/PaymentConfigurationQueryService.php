@@ -13,7 +13,6 @@ use app\model\payment\ReceiptScope;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
-use app\repository\payment\config\PaymentPluginConfScopeRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\routing\DefaultRoutingService;
@@ -28,7 +27,7 @@ final class PaymentConfigurationQueryService extends BaseService
 {
     public function __construct(
         private readonly PaymentPluginConfRepository $configurations, private readonly PaymentChannelRepository $channels,
-        private readonly PaymentPluginConfScopeRepository $bindings, private readonly ReceiptScopeRepository $scopes,
+        private readonly ReceiptScopeRepository $scopes,
         private readonly PaymentCatalogRepository $catalog, private readonly PaymentPluginFactoryService $plugins,
         private readonly PluginConfigValidator $validator, private readonly PaymentCatalogService $management,
         private readonly DefaultRoutingService $defaults)
@@ -84,7 +83,7 @@ final class PaymentConfigurationQueryService extends BaseService
             $original = $revision['config_json'];
             if (!is_array($original)) { throw new RuntimeException('配置正文无效'); }
             $settings = $this->validator->validate($plugin['schema'], $original);
-            $keys = $this->bindings->keys($id, $version);
+            $keys = array_map(static fn (ReceiptScope $scope): string => $scope['receipt_scope_key'], $this->scopes->configurationScopes($id, false));
             if ($keys === []) { throw new RuntimeException('配置范围绑定缺失'); }
             $scopes = [];
             $typeCodes = $this->catalog->typeCodes();

@@ -6,6 +6,11 @@ namespace app\repository\payment\trade;
 use app\common\base\BaseRepository;
 use app\common\constant\TradeConstant;
 use app\model\payment\PayOrder;
+use InvalidArgumentException;
+use RuntimeException;
+use think\db\exception\PDOException;
+use think\db\Query;
+use think\facade\Db;
 
 /**
  * 保存具体支付尝试和提示付款金额；成功确认、状态流转及通知责任由生命周期服务统一处理。
@@ -19,6 +24,26 @@ final class PayOrderRepository extends BaseRepository
         parent::__construct($model);
     }
 
+    /** 固定本轮上界，新插入订单下轮读取；不得按最近 N 条覆盖掉长期待核对订单。 */
+    public function collectionUpperId(): string
+    {
+        return (string) ($this->model->max('id') ?? '0');
+    }
+
+    /**
+     * 分页只控制数据库取数，不拆分插件的账号查询；原通道版本用 ORM 预载避免逐单查询。
+     * 停用通道不取消原订单责任，到期/本地关闭在给定补查范围内仍返回。
+     * @return list<PayOrder>
+     */
+    public function collectionPage(string $plugin, string $since, string $after, string $upper, int $limit): array
+    {
+        return $this->model->with(['channelRevision'])->where('plugin_code', $plugin)
+            ->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING,
+                TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT])
+            ->whereNotNull('request_at')->where('expire_at', '>=', $since)
+            ->where('id', '>', $after)->where('id', '<=', $upper)->order('id')->limit($limit)->select()->all();
+    }
+
     /**
      * 新建时 pay_amount 为原金额；插件准备后可改为识别金额，原金额及收款证据保存于扩展数据。
      * attempt_no 是数据库固定生成的 1，调用方不能指定第二次尝试。
@@ -28,7 +53,7 @@ final class PayOrderRepository extends BaseRepository
      * @param array{pay_no:string, biz_no:string, trace_no:string, poll_group_id:string, route_mode:int, channel_id:string,
      *     channel_revision_id:string, pay_type_id:string, plugin_code:string, pay_amount:int,
      *     receipt_scope_key:string, expire_at:string, ext_json?:string} $data
-     * @throws \think\db\exception\PDOException 支付号或业务单有效尝试重复。
+     * @throws PDOException 支付号或业务单有效尝试重复。
      */
     public function create(array $data): string
     {
@@ -38,12 +63,12 @@ final class PayOrderRepository extends BaseRepository
     /**
      * 调用方先持有对应 BizOrder 锁，再锁已有支付单；后续才允许取得 ReceiptScope 锁。
      *
-     * @throws \RuntimeException 指定支付单不存在。
+     * @throws RuntimeException 指定支付单不存在。
      */
     public function lock(string $payNo): PayOrder
     {
         $this->requireTransaction();
-        return $this->model->where('pay_no', $payNo)->lock(true)->find() ?? throw new \RuntimeException('支付单不存在');
+        return $this->model->where('pay_no', $payNo)->lock(true)->find() ?? throw new RuntimeException('支付单不存在');
     }
 
     /** 只为查询或确定锁目标读取；生命周期仍须按业务单在先的顺序重新取锁。 */
@@ -63,12 +88,12 @@ final class PayOrderRepository extends BaseRepository
     {
         $this->requireTransaction();
         // 以配置数组作为 ThinkORM 连接键，与名为 mysql 的主事务连接分离。
-        $reader = \think\facade\Db::connect(\think\facade\Db::getConfig('connections.mysql'));
+        $reader = Db::connect(Db::getConfig('connections.mysql'));
         try {
             $row = $reader->table('ma_pay_order')->alias('p')->join('ma_biz_order b', 'b.biz_no=p.biz_no')
                 ->where('p.channel_id', $channelId)->where('p.created_at', '>=', $from)->where('p.created_at', '<', $to)
-                ->where(function (\think\db\Query $query) use ($now): void {
-                    $query->where('p.status', TradeConstant::ORDER_STATUS_SUCCESS)->whereOr(function (\think\db\Query $pending) use ($now): void {
+                ->where(function (Query $query) use ($now): void {
+                    $query->where('p.status', TradeConstant::ORDER_STATUS_SUCCESS)->whereOr(function (Query $pending) use ($now): void {
                         $pending->whereIn('p.status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING])->where('p.expire_at', '>', $now);
                     });
                 })->fieldRaw('COUNT(*) AS used_count, COALESCE(SUM(b.order_amount), 0) AS used_amount')->find();
@@ -86,8 +111,8 @@ final class PayOrderRepository extends BaseRepository
         $this->requireTransaction();
         $orders = $this->model->where('receipt_scope_key', $scopeKey)
             ->where('pay_no', '<>', $exceptPayNo)->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING])
-            ->where('expire_at', '>', $now)->where(function (\think\db\Query $prepared): void {
-                $prepared->whereNotNull('request_at')->whereOr(function (\think\db\Query $metadata): void {
+            ->where('expire_at', '>', $now)->where(function (Query $prepared): void {
+                $prepared->whereNotNull('request_at')->whereOr(function (Query $metadata): void {
                     $metadata->whereNotNull('ext_json->personal_receipt->original_amount');
                 });
             })->select();
@@ -104,13 +129,13 @@ final class PayOrderRepository extends BaseRepository
     public function receiptCandidates(string $scopeKey, int $amount, ?string $remark, ?string $paidAt, string $now, ?string $channelId = null): array
     {
         $query = $this->model->where('receipt_scope_key', $scopeKey)->where('pay_amount', $amount)
-            ->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING])
-            ->where('expire_at', '>', $now);
+            ->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING, TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT]);
+        if ($paidAt === null) { $query->where('expire_at', '>', $now); }
         if ($channelId !== null) { $query->where('channel_id', $channelId); }
-        $query->where(function (\think\db\Query $mode) use ($remark): void {
+        $query->where(function (Query $mode) use ($remark): void {
             $mode->where('ext_json->personal_receipt->match_mode', 'amount');
             if ($remark !== null && $remark !== '') {
-                $mode->whereOr(function (\think\db\Query $code) use ($remark): void {
+                $mode->whereOr(function (Query $code) use ($remark): void {
                     $code->where('ext_json->personal_receipt->match_mode', 'remark')
                         ->where('ext_json->personal_receipt->remark', $remark);
                 });
@@ -154,8 +179,8 @@ final class PayOrderRepository extends BaseRepository
      */
     public function recoverableExecutionNumbers(string $now, int $limit): array
     {
-        return $this->model->where('expire_at', '>', $now)->where(function (\think\db\Query $query) use ($now): void {
-            $query->where('status', TradeConstant::ORDER_STATUS_CREATED)->whereOr(function (\think\db\Query $retry) use ($now): void {
+        return $this->model->where('expire_at', '>', $now)->where(function (Query $query) use ($now): void {
+            $query->where('status', TradeConstant::ORDER_STATUS_CREATED)->whereOr(function (Query $retry) use ($now): void {
                 $retry->where('status', TradeConstant::ORDER_STATUS_PAYING)
                     ->where('ext_json->payment_context->execution->replay_safe', 'true')
                     ->whereIn('ext_json->payment_context->execution->phase', ['claimed', 'uncertain'])
@@ -185,10 +210,10 @@ final class PayOrderRepository extends BaseRepository
      * 调用者已持有范围锁，且此查询前未建立一致性快照；其他确认也受同一范围锁串行化。
      * 这里不能反向锁其他 PayOrder（它可能正等待范围锁）；P2 追加迁移的唯一索引承担最终约束。
      */
-    public function hasSuccessfulTrade(string $scopeKey, string $tradeNo, string $exceptPayNo): bool
+    public function hasSuccessfulTrade(string $pluginCode, string $tradeNo, string $exceptPayNo): bool
     {
         $this->requireTransaction();
-        return $this->model->where('receipt_scope_key', $scopeKey)->where('channel_trade_no', $tradeNo)
+        return $this->model->where('plugin_code', $pluginCode)->where('channel_trade_no', $tradeNo)
             ->where('status', TradeConstant::ORDER_STATUS_SUCCESS)->where('pay_no', '<>', $exceptPayNo)->find() !== null;
     }
 
@@ -216,12 +241,12 @@ final class PayOrderRepository extends BaseRepository
         $fields = ['status', 'pay_amount', 'receipt_flow_id', 'confirmation_source', 'channel_trade_no', 'channel_order_no',
             'paid_at', 'closed_at', 'failed_at', 'timeout_at', 'request_at', 'ext_json'];
         if ($changes === [] || array_diff(array_keys($changes), $fields) !== []) {
-            throw new \InvalidArgumentException('支付生命周期写入字段无效');
+            throw new InvalidArgumentException('支付生命周期写入字段无效');
         }
         $changed = $this->model->where('pay_no', $payNo)->where('status', $expectedStatus)
             ->update($changes + ['updated_at' => $now]);
         if ($changed !== 1) {
-            throw new \RuntimeException('支付生命周期写入未改变预期记录');
+            throw new RuntimeException('支付生命周期写入未改变预期记录');
         }
     }
 }

@@ -6,11 +6,11 @@ namespace app\model\payment;
 use app\common\base\BaseModel;
 
 /**
- * 流水身份与支付方式的内部关联，也是同一收款范围的行锁目标。
- * 不保存或比较平台账号，账号含义由插件声明，服务不猜字段。
+ * 通道配置与支付方式的内部关联，也是识别值占用的行锁目标。
+ * 不保存或比较平台账号；实际账号合并和平台登录由插件自行处理。
  *
  * @property string $receipt_scope_key
- * @property string $account_key 插件声明的流水身份摘要。
+ * @property string $api_config_id 通道专属配置 ID，不代表平台账号。
  */
 final class ReceiptScope extends BaseModel
 {
@@ -22,7 +22,7 @@ final class ReceiptScope extends BaseModel
                 'id' => 'string',
                 'receipt_scope_key' => 'string',
                 'pay_type_id' => 'string',
-                'account_key' => 'string',
+                'api_config_id' => 'string',
                 'created_at' => 'string',
                 'updated_at' => 'string',
             ],

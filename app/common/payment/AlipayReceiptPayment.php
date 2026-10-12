@@ -6,7 +6,6 @@ namespace app\common\payment;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ChannelNotifyInterface;
-use app\common\interface\ReceiptMatcherInterface;
 use app\common\sdk\smsforwarder\SmsForwarderVerifier;
 use app\common\util\Clock;
 use app\common\util\Money;
@@ -29,7 +28,7 @@ use think\Request;
 use think\Response;
 
 /** 支付宝手机监听：本类集中配置、通知模板及字段转换，标准订单处理复用服务调用链。 */
-final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatcherInterface
+final class AlipayReceiptPayment implements ChannelNotifyInterface
 {
     /** @var array<string,mixed> 随代码交付的元信息和配置字段列表，不含实际账号秘密。 */
     private array $paymentInfo = [
@@ -162,30 +161,6 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
         return $this->receiptResult($this->locateReceipt($payload['record']), $payload['record']);
     }
 
-    /**
-     * 整批流水在插件内匹配；排除本批已选订单，重复事件只处理一次，未匹配条目不返回。
-     * 本方法不写库，后续确认失败可以重新输入同一批次，最终幂等由成功事务与唯一键保证。
-     */
-    public function matchReceipts(array $receipts): array
-    {
-        $results = []; $used = []; $seen = [];
-        foreach ($receipts as $entry) {
-            $record = $entry['record'];
-            $identity = $entry['scope_key'] . ':' . ($record['trade_no'] ?? $record['event_key']);
-            if (isset($seen[$identity])) { continue; }
-            $seen[$identity] = true;
-            try { $selected = $this->locateReceipt($record, $entry['scope_key'], $used); }
-            catch (BusinessException $error) {
-                if ($error->getCode() !== ApiResponseConstant::CONFLICT) { throw $error; }
-                continue;
-            }
-            if (isset($used[$selected['pay_no']])) { continue; }
-            $used[$selected['pay_no']] = true;
-            $results[] = $this->receiptResult($selected, $record);
-        }
-        return $results;
-    }
-
     /** @return array<string,mixed> 仅表达插件所选订单与来源证据，不代表订单已在数据库确认。 */
     private function receiptResult(PayOrder $pay, array $record): array
     {
@@ -264,7 +239,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface, ReceiptMatch
             throw new ReceiptMessageException('unsupported_message');
         }
         $remark = preg_match('/(?:备注|留言|附言|付款备注|收款备注)[:：\s]*([0-9]{4})/u', $text, $code) ? $code[1] : null;
-        $reference = 'SF' . substr(hash('sha256', $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
+        $reference = 'SF' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
         $time = (new DateTimeImmutable('@' . intdiv($message->transportTimestampMilliseconds, 1000)))->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return ['pay_type' => 'alipay', 'event_key' => $reference, 'trade_no' => $reference,
             'amount' => Money::parse($amount[1]), 'paid_at' => $time->format('Y-m-d H:i:s'), 'remark' => $remark];

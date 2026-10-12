@@ -4,10 +4,12 @@ declare(strict_types=1);
 namespace app\repository\payment\config;
 
 use app\common\base\BaseRepository;
+use app\common\constant\TradeConstant;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentChannelRevision;
 use app\model\payment\PayOrder;
-use app\common\constant\TradeConstant;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
  * 通道规则和历史快照的持久化；快照生成及账号归属检查由 PaymentChannelRevisionService 完成。
@@ -19,6 +21,24 @@ final class PaymentChannelRepository extends BaseRepository
     public function __construct(PaymentChannel $model, private readonly PaymentChannelRevision $revisions, private readonly PayOrder $payments)
     {
         parent::__construct($model);
+    }
+
+    /** @return list<PaymentChannel> 仅新增保活来源，存量订单由独立订单查询装配，不依赖当前开关。 */
+    public function preloginChannels(string $plugin): array
+    {
+        return $this->model->alias('ch')->join('ma_payment_plugin p', 'p.code=ch.plugin_code')
+            ->join('ma_payment_plugin_conf c', 'c.id=ch.api_config_id')->where('ch.plugin_code', $plugin)
+            ->where('ch.enabled', 1)->where('c.enabled', 1)->where('p.enabled', 1)->whereNull('ch.deleted_at')
+            ->field('ch.*')->order('ch.id')->select()->all();
+    }
+
+    /** @return array<string,PaymentChannelRevision> 服务只读装配，秘密快照不直接返回前端。 */
+    public function revisionsForIds(array $ids): array
+    {
+        if ($ids === []) { return []; }
+        $result = [];
+        foreach ($this->revisions->whereIn('id', array_values(array_unique($ids)))->select() as $row) { $result[$row['id']] = $row; }
+        return $result;
     }
 
     /**
@@ -35,23 +55,23 @@ final class PaymentChannelRepository extends BaseRepository
     /**
      * 配置事务中在对应 PaymentPluginConf 之后锁定通道，保护配置引用及当前版本指针。
      *
-     * @throws \RuntimeException 通道不存在。
+     * @throws RuntimeException 通道不存在。
      */
     public function lock(string $id): PaymentChannel
     {
         $this->requireTransaction();
-        return $this->model->where('id', $id)->lock(true)->find() ?? throw new \RuntimeException('通道不存在');
+        return $this->model->where('id', $id)->lock(true)->find() ?? throw new RuntimeException('通道不存在');
     }
 
 
     /**
      * 无锁读取配置锁目标，调用方进入事务后必须再次核对该引用，不能把此值当稳定快照。
      *
-     * @throws \RuntimeException 通道不存在。
+     * @throws RuntimeException 通道不存在。
      */
     public function configurationId(string $id): string
     {
-        return (string) ($this->model->where('id', $id)->value('api_config_id') ?? throw new \RuntimeException('通道不存在'));
+        return (string) ($this->model->where('id', $id)->value('api_config_id') ?? throw new RuntimeException('通道不存在'));
     }
 
     /** 消息入口只据此定位配置锁；进入事务后仍须重新核验真实归属。 */
@@ -101,7 +121,7 @@ final class PaymentChannelRepository extends BaseRepository
     {
         $this->requireTransaction();
         if (array_diff(array_keys($rules), ['name', 'receipt_scope_key', 'pay_types', 'min_amount', 'max_amount', 'daily_limit_amount', 'daily_limit_count', 'available_from', 'available_to']) !== []) {
-            throw new \InvalidArgumentException('通道规则包含未知字段');
+            throw new InvalidArgumentException('通道规则包含未知字段');
         }
         $this->model->where('id', $id)->update($rules + ['enabled' => 0, 'updated_at' => $now]);
     }

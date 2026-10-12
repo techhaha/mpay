@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\common\payment;
 
 use app\common\constant\ApiResponseConstant;
+use app\common\constant\ReceiptRuntimeConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ReceiptCollectorInterface;
 use app\common\sdk\shouqianba\ShouQianBaClient;
@@ -22,9 +23,9 @@ use DateTimeZone;
 use LogicException;
 use RuntimeException;
 use SensitiveParameter;
+use think\Cache;
+use think\Config;
 use think\facade\Db;
-use think\Request;
-use think\Response;
 
 /** 收钱吧码牌插件：SDK 处理登录及交易页，本类解释成功状态、原交易金额、方式、终端和备注。 */
 final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
@@ -32,6 +33,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
     /** @var array<string,mixed> 随代码交付的元信息和配置字段列表，不含实际账号秘密。 */
     private array $paymentInfo = [
         'code' => 'shouqianba_receipt', 'name' => '收钱吧码牌收款', 'version' => '1.0.0', 'pay_types' => ['alipay', 'wxpay'],
+        'prelogin' => true,
         'config_schema' => [
             ['type' => 'select', 'field' => 'receipt_match_mode', 'title' => '匹配方式',
                 'options' => [['value' => 'amount', 'label' => '按金额识别'], ['value' => 'remark', 'label' => '按备注识别']],
@@ -54,9 +56,16 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         ],
     ];
 
-    public function __construct(private readonly PayOrderRepository $orders, private readonly BizOrderRepository $businessOrders, private readonly ReceiptScopeRepository $scopes,
-        private readonly ReceiptMatchReservationRepository $reservations, private readonly Clock $clock, private readonly ShouQianBaClient $client)
-    {
+    public function __construct(
+        private readonly PayOrderRepository $orders,
+        private readonly BizOrderRepository $businessOrders,
+        private readonly ReceiptScopeRepository $scopes,
+        private readonly ReceiptMatchReservationRepository $reservations,
+        private readonly Clock $clock,
+        private readonly ShouQianBaClient $client,
+        private readonly Cache $cache,
+        private readonly Config $config,
+    ) {
     }
 
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
@@ -78,21 +87,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
     public function getVersion(): string { return $this->paymentInfo['version']; }
     public function getEnabledPayTypes(): array { return $this->paymentInfo['pay_types']; }
     public function getConfigSchema(): array { return $this->paymentInfo['config_schema']; }
-
-    /** 登录身份不含密码；查询范围包含门店/终端，流水范围不因切换登录账号而改变。 */
-    public function getCollectionIdentity(): array
-    {
-        $prefix = $this->getCode();
-        $login = trim((string) $this->getConfig('watcher_username'));
-        $account = trim((string) $this->getConfig('receipt_account_no'));
-        $password = trim((string) $this->getConfig('watcher_password'));
-        $password = preg_match('/^[a-fA-F0-9]{32}$/D', $password) ? strtolower($password) : md5($password);
-        return ['account_key' => hash('sha256', $prefix . ':receipt:' . $account),
-            'session_key' => hash('sha256', $prefix . ':login:' . $login),
-            'query_key' => hash('sha256', json_encode([$prefix, $login, $account,
-                $this->getConfig('receipt_merchant_name', ''), $this->getConfig('receipt_terminal_no', '')], JSON_THROW_ON_ERROR)),
-            'auth_fingerprint' => hash('sha256', $prefix . ':' . $password)];
-    }
+    public function isPreloginEnabled(): bool { return $this->paymentInfo['prelogin'] ?? false; }
 
     /** 本插件仅生成本地识别材料，原订单下重复准备会复用已持久化的金额和备注。 */
     public function canRetryPay(): bool { return true; }
@@ -172,88 +167,38 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         });
     }
 
-    /** 单条手机/内部通知只定位和返回证据；金额恢复与成功状态由生命周期在同一事务定稿。 */
-    public function notifyPayload(array $payload): array
-    {
-        return $this->receiptResult($this->locateReceipt($payload['record']), $payload['record']);
-    }
-
     /**
-     * 整批流水在插件内匹配；排除本批已选订单，重复事件只处理一次，未匹配条目不返回。
-     * 本方法不写库，后续确认失败可以重新输入同一批次，最终幂等由成功事务与唯一键保证。
+     * 一次匹配本响应全部记录，只使用服务提供的原单集合；已消费记录不重新分配。
+     * 付款在原窗口内但响应迟到仍可定位；最终状态和幂等由生命周期锁内复核。
      */
-    public function matchReceipts(array $receipts): array
+    public function matchReceipts(array $receipts, array $orders, array $channels): array
     {
+        usort($receipts, static fn (array $a, array $b): int =>
+            strcmp($a['record']['paid_at'] ?? '', $b['record']['paid_at'] ?? '')
+            ?: strcmp($a['record']['event_key'], $b['record']['event_key']));
         $results = []; $used = []; $seen = [];
         foreach ($receipts as $entry) {
             $record = $entry['record'];
-            $identity = $entry['scope_key'] . ':' . ($record['trade_no'] ?? $record['event_key']);
-            if (isset($seen[$identity])) { continue; }
-            $seen[$identity] = true;
-            try { $selected = $this->locateReceipt($record, $entry['scope_key'], $used); }
-            catch (BusinessException $error) {
-                if ($error->getCode() !== ApiResponseConstant::CONFLICT) { throw $error; }
-                continue;
-            }
-            if (isset($used[$selected['pay_no']])) { continue; }
-            $used[$selected['pay_no']] = true;
-            $results[] = $this->receiptResult($selected, $record);
+            if ($entry['consumed_pay_no'] !== null || isset($seen[$record['event_key']]) || $record['paid_at'] === null) { continue; }
+            $seen[$record['event_key']] = true;
+            $candidates = array_filter($orders, static function (array $pay) use ($record, $used, $channels): bool {
+                return !isset($used[$pay['pay_no']]) && isset($channels[$pay['channel_revision_id']])
+                    && $pay['pay_type'] === $record['pay_type'] && $pay['receipt_amount'] === $record['amount']
+                    && $pay['request_at'] <= $record['paid_at'] && $record['paid_at'] < $pay['expire_at']
+                    && ($pay['match_mode'] === 'amount' || ($pay['match_mode'] === 'remark' && $pay['remark'] === $record['remark']));
+            });
+            if ($candidates === []) { continue; }
+            $paid = strtotime($record['paid_at']);
+            usort($candidates, static fn (array $a, array $b): int =>
+                (abs(strtotime($a['request_at']) - $paid) <=> abs(strtotime($b['request_at']) - $paid))
+                ?: strcmp($a['created_at'], $b['created_at']) ?: (strlen($a['id']) <=> strlen($b['id'])) ?: strcmp($a['id'], $b['id']));
+            $pay = $candidates[0];
+            $used[$pay['pay_no']] = true;
+            $results[] = ['status' => 'success', 'pay_no' => $pay['pay_no'], 'paid_amount' => $pay['amount'],
+                'chan_order_no' => $record['trade_no'], 'chan_trade_no' => $record['trade_no'],
+                'paid_at' => $record['paid_at'], 'receipt' => $record];
         }
         return $results;
-    }
-
-    /** @return array<string,mixed> 仅表达插件所选订单与来源证据，不代表订单已在数据库确认。 */
-    private function receiptResult(PayOrder $pay, array $record): array
-    {
-        return ['status'=>'success','pay_no'=>$pay['pay_no'],'paid_amount'=>$pay->originalAmount(),
-            'chan_order_no'=>$record['trade_no'],'chan_trade_no'=>$record['trade_no'],
-            'paid_at'=>$record['paid_at'],'receipt'=>$record];
-    }
-
-    /**
-     * 按付款时间与 request_at 的距离选择最近候选；不套用手机通知的单候选限制。
-     * 相同距离保留仓储的 created_at/id 顺序，重复流水优先返回原订单。
-     *
-     * @param array{amount:int,paid_at:?string,trade_no:?string,remark:?string,pay_type:string,event_key:string} $record
-     */
-    private function locateReceipt(array $record, ?string $scopeKey = null, array $excluded = []): PayOrder
-    {
-        $scope = $scopeKey ?? (string) $this->getConfig('receipt_scope_key');
-        if ($scope === '') { throw new LogicException('服务未注入收款范围'); }
-        if ($record['trade_no'] !== null) {
-            $known = $this->orders->successfulForTrade($scope, $record['trade_no']);
-            if ($known !== null) { return $this->assertCollectionOrder($known); }
-        }
-        // 没有平台交易号时，稳定事件键仍可定位已经确认的原订单。
-        $prepared = $this->orders->successfulForEvent($scope, $record['event_key']);
-        if ($prepared !== null) { return $this->assertCollectionOrder($prepared); }
-        // 使用每单准备时保存的模式；当前通道后续修改不能重新解释已展示的金额或备注。
-        $candidates = $this->orders->receiptCandidates($scope, $record['amount'], $record['remark'], $record['paid_at'],
-            $this->clock->now()->format('Y-m-d H:i:s'));
-        $candidates = array_values(array_filter($candidates, fn (PayOrder $pay): bool => !isset($excluded[$pay['pay_no']]) && $this->collectionAllows($pay)));
-        if ($candidates === []) {
-            throw new BusinessException('收款消息未定位到支付单', ApiResponseConstant::CONFLICT);
-        }
-        if ($record['paid_at'] !== null) {
-            $paid = strtotime($record['paid_at']);
-            usort($candidates, static fn (PayOrder $left, PayOrder $right): int =>
-                abs(strtotime($left['request_at'] ?? $left['created_at']) - $paid)
-                <=> abs(strtotime($right['request_at'] ?? $right['created_at']) - $paid));
-        }
-        return $candidates[0];
-    }
-
-    /** 共享流水范围仍只选本次完整查询覆盖的配置，避免门店或终端过滤互相串单。 */
-    private function collectionAllows(PayOrder $pay): bool
-    {
-        $ids = $this->getConfig('collection_configuration_ids');
-        return $ids === null || in_array($pay->channelRevision['api_config_id'], $ids, true);
-    }
-
-    private function assertCollectionOrder(PayOrder $pay): PayOrder
-    {
-        if (!$this->collectionAllows($pay)) { throw new BusinessException('流水已由其他查询范围确认', ApiResponseConstant::CONFLICT); }
-        return $pay;
     }
 
     /** 监听来源不调用上游订单查询；到账仍经通知或采集确认，不以本地材料证明成功。 */
@@ -272,20 +217,152 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
     /** 码牌监听没有原路退款接口，人工退款不伪造成插件退款成功。 */
     public function refund(array $order): array { throw new UnsupportedPaymentOperationException(); }
 
-    /** 本插件只接受 CLI 采集流水，未提供平台 HTTP 推送合同。 */
-    public function notify(Request $request): array { throw new UnsupportedPaymentOperationException(); }
-    public function notifySuccess(): string|Response { return 'success'; }
-    public function notifyFail(): string|Response { return 'fail'; }
+    /** @var array<string,true> 本实例已处理的登录账号，防止同一轮正式查单后重复保活。 */
+    private array $queriedAccounts = [];
 
-    /** 成功状态 0/2000、original_amount 为分、payway 2/3 的映射均沿用 V2；费用和净额不代替交易金额。 */
-    public function collectPage(array $window, ?array $pageToken, #[SensitiveParameter] ?array $session): array
+    /** 只把有原单的通道交给账号归并；范围轮换不产生同轮第二次流水查询。 */
+    public function collect(array $orders, array $channels, DateTimeImmutable $deadline): iterable
     {
-        $page = $pageToken['page'] ?? 1;
-        if (!is_int($page) || $page < 1) { throw new ReceiptCollectionException('pagination_incomplete'); }
-        $data = $this->client->queryPage($this->channelConfig, $window, $page, $session);
-        if ($pageToken !== null && ($pageToken['total'] ?? null) !== $data['total']) { throw new ReceiptCollectionException('pagination_incomplete'); }
+        $this->queriedAccounts = [];
+        $active = array_fill_keys(array_column($orders, 'channel_revision_id'), true);
+        $channels = array_intersect_key($channels, $active);
+        foreach ($this->collectionGroups($channels) as $key => $group) {
+            if ($this->clock->now() >= $deadline) { break; }
+            $result = $this->runAccount($key, $group, $orders, $deadline, false);
+            if ($result !== null) { yield $result; }
+        }
+    }
+
+    /** 无订单时也可低频探测；正常查询已验证的状态推迟专门保活。 */
+    public function prelogin(array $channels, DateTimeImmutable $deadline): iterable
+    {
+        foreach ($this->collectionGroups($channels) as $key => $group) {
+            if ($this->clock->now() >= $deadline) { break; }
+            if (isset($this->queriedAccounts[$key])) { continue; }
+            $result = $this->runAccount($key, $group, [], $deadline, true);
+            if ($result !== null) {
+                yield ['channel_revision_ids' => $result['channel_revision_ids'], 'verified' => $result['error'] === null, 'error' => $result['error']];
+            }
+        }
+    }
+
+    /**
+     * 只有本插件解释收钱吧登录、门店和终端字段；相同登录不同门店共用状态并按轮切换。
+     * 原单收款范围不变时才使用当前认证参数，避免编辑配置把旧订单切到另一收款账号。
+     * @return array<string,array<string,array{channels:array,settings:array,digests:array}>> 登录账号 → 查询范围。
+     */
+    private function collectionGroups(array $channels): array
+    {
+        $groups = [];
+        foreach ($channels as $id => $channel) {
+            $settings = $channel['configuration'];
+            $current = $channel['current_configuration'];
+            $scopeFields = ['watcher_username', 'receipt_account_no', 'receipt_merchant_name', 'receipt_terminal_no'];
+            if (is_array($current)) {
+                $same = true;
+                foreach ($scopeFields as $field) { if (($current[$field] ?? '') !== ($settings[$field] ?? '')) { $same = false; break; } }
+                if ($same) { $settings['watcher_password'] = $current['watcher_password']; }
+            }
+            $login = hash('sha256', $this->getCode() . ':' . $settings['watcher_username']);
+            $scope = hash('sha256', json_encode([$settings['receipt_account_no'], $settings['receipt_merchant_name'] ?? '',
+                $settings['receipt_terminal_no'] ?? ''], JSON_THROW_ON_ERROR));
+            $password = $settings['watcher_password'];
+            $digest = hash('sha256', preg_match('/^[a-fA-F0-9]{32}$/D', $password) ? strtolower($password) : md5($password));
+            $groups[$login][$scope]['channels'][(string) $id] = $channel;
+            $groups[$login][$scope]['settings'] ??= $settings;
+            $groups[$login][$scope]['digests'][$digest] = $settings;
+        }
+        ksort($groups);
+        $keys = array_keys($groups);
+        $last = $this->cache->store('receipt')->get('shouqianba.rotation');
+        $offset = is_string($last) ? array_search($last, $keys, true) : false;
+        if ($offset !== false) {
+            $keys = [...array_slice($keys, $offset + 1), ...array_slice($keys, 0, $offset + 1)];
+            $groups = array_replace(array_fill_keys($keys, []), $groups);
+        }
+        return $groups;
+    }
+
+    /**
+     * 一个账号只执行一个范围。状态始终按 expire=0 保存，网络失败不丢失已经取得的 token。
+     * 明确认证拒绝清除失效认证，下轮恢复；本轮不重发流水接口。秘密只进入插件缓存。
+     */
+    private function runAccount(string $key, array $group, array $orders, DateTimeImmutable $deadline, bool $probe): ?array
+    {
+        $store = $this->cache->store('receipt');
+        $state = $store->get('shouqianba.account.' . $key, []);
+        if (!is_array($state)) { $state = []; }
+        $digests = [];
+        foreach ($group as $item) { $digests += $item['digests']; }
+        // 明确换了唯一认证参数可立即重试；普通配置变化不会跳过保活间隔或清除登录态。
+        if (count($digests) === 1 && ($state['credential_digest'] ?? '') !== (string) array_key_first($digests)) {
+            unset($state['session'], $state['last_verified_at'], $state['retry_at'], $state['next_query_at']);
+        }
+        $now = $this->clock->now()->getTimestamp();
+        $interval = (int) $this->config->get('receipt.prelogin_interval_seconds', 600);
+        $expires = (int) ($state['session']['expires_at'] ?? 0);
+        if ((int) ($state['retry_at'] ?? 0) > $now) { return null; }
+        if ($probe && (int) ($state['last_verified_at'] ?? 0) + $interval > $now && ($expires === 0 || $expires > $now + 60)) { return null; }
+        if (!$probe && (int) ($state['next_query_at'] ?? 0) > $now) { return null; }
+        ksort($group);
+        $scopes = array_values($group);
+        $index = (int) ($state['scope_cursor'] ?? 0) % count($scopes);
+        $scope = $scopes[$index];
+        $settings = $scope['settings'];
+        $batch = ['channel_revision_ids' => array_map('strval', array_keys($scope['channels'])), 'records' => [], 'limit_reached' => false, 'error' => null];
+        $until = min($deadline, $this->clock->now()->modify('+' . (int) $this->config->get('receipt.account_budget_seconds', 15) . ' seconds'));
+        $state['scope_cursor'] = $index + 1;
+        $store->set('shouqianba.rotation', $key, 0);
+        $this->queriedAccounts[$key] = true;
+        try {
+            // 已验证凭证仍在当前配置中时优先复用；不在不同密码之间反复登录。
+            $known = $state['credential_digest'] ?? '';
+            if (isset($digests[$known])) { $credential = $known; }
+            elseif (count($digests) === 1) { $credential = (string) array_key_first($digests); }
+            else { throw new ReceiptCollectionException('configuration_conflict'); }
+            $settings['watcher_password'] = $digests[$credential]['watcher_password'];
+            if ($known !== $credential) { unset($state['session'], $state['last_verified_at']); }
+            $state['credential_digest'] = $credential;
+            $session = is_array($state['session'] ?? null) ? $state['session'] : [];
+            $state['session'] = $this->client->authenticate($settings, $session, $until);
+            $store->set('shouqianba.account.' . $key, $state, 0);
+            if ($probe) {
+                $from = $now - 600; $to = $now;
+            } else {
+                $selected = array_filter($orders, static fn (array $order): bool => isset($scope['channels'][$order['channel_revision_id']]));
+                if ($selected === []) { return null; }
+                $from = min(array_map(static fn (array $order): int => strtotime($order['request_at']), $selected));
+                $to = min($now, max(array_map(static fn (array $order): int => strtotime($order['expire_at']), $selected)));
+            }
+            $window = ['from' => $from, 'to' => $to, 'deadline' => $until];
+            $data = $this->client->query($settings, $window, $state['session'], $probe ? 1 : 200);
+            if (!$probe) {
+                $batch['records'] = $this->normalizeTransactions($data, $settings, $state['session'], $window);
+                $batch['limit_reached'] = $data['limit_reached'];
+            }
+            $state['last_verified_at'] = $this->clock->now()->getTimestamp();
+            $state['failures'] = 0;
+            $state['retry_at'] = 0;
+        } catch (ReceiptCollectionException $error) {
+            if ($error->reasonCode === 'authentication_expired') { unset($state['session'], $state['last_verified_at']); }
+            if ($error->reasonCode === 'scope_mismatch') { unset($state['session']['scope'], $state['session']['scope_selector']); }
+            $state['failures'] = min(10, (int) ($state['failures'] ?? 0) + 1);
+            $delay = $error->retryAfterSeconds ?? (in_array($error->reasonCode, ['configuration_conflict', 'protocol_error'], true)
+                ? $interval : min(300, 30 * (2 ** min(4, $state['failures'] - 1))));
+            $state['retry_at'] = $this->clock->now()->getTimestamp() + $delay;
+            $batch['error'] = ['code' => ReceiptRuntimeConstant::failure($error->reasonCode), 'reason' => $error->reasonCode, 'retry_after' => $delay];
+        } finally {
+            $state['next_query_at'] = $this->clock->now()->getTimestamp() + (int) $this->config->get('receipt.query_interval_seconds', 3);
+            $store->set('shouqianba.account.' . $key, $state, 0);
+        }
+        return $batch;
+    }
+
+    /** 收钱吧原交易金额为分，按 V2 核对成功状态、商户/终端归属及付款时间。 */
+    private function normalizeTransactions(array $data, array $settings, array $state, array $window): array
+    {
         $records = [];
-        $scope = $data['session']['scope'];
+        $scope = $state['scope'];
         foreach ($data['rows'] as $row) {
             if (!is_array($row) || !isset($row['status']) || !in_array((string) $row['status'], ['0', '2000'], true)) { continue; }
             $type = match ((string) ($row['payway'] ?? '')) { '2' => 'alipay', '3' => 'wxpay', default => null };
@@ -293,10 +370,10 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             foreach (['merchant_sn', 'merchant_id', 'store_sn', 'store_id'] as $key) {
                 if (!empty($scope[$key]) && (string) ($row[$key] ?? '') !== $scope[$key]) { continue 2; }
             }
-            $account = $this->getConfig('receipt_account_no');
+            $account = $settings['receipt_account_no'];
             $ids = array_map('strval', array_intersect_key($row, array_flip(['merchant_sn', 'merchant_id', 'store_sn', 'store_id', 'store_client_sn'])));
             if (!in_array($account, $ids, true)) { continue; }
-            $terminal = (string) $this->getConfig('receipt_terminal_no', '');
+            $terminal = (string) ($settings['receipt_terminal_no'] ?? '');
             $terminals = [(string) ($row['terminal_sn'] ?? ''), (string) ($row['terminal_device_fingerprint'] ?? ''),
                 preg_replace('/^QRCODE:/', '', (string) ($row['operator'] ?? ''))];
             if ($terminal !== '' && !in_array($terminal, $terminals, true)) { continue; }
@@ -307,16 +384,14 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             Money::assertRange((int) $amount);
             if (!is_string($row['order_sn'] ?? null) || $row['order_sn'] === '') { throw new ReceiptCollectionException('protocol_error'); }
             $paid = $this->paymentTime($row['finish_time'] ?? $row['channel_finish_time'] ?? $row['ctime'] ?? null);
-            if ($paid->getTimestamp() < $window['from'] || $paid->getTimestamp() >= $window['to']) { continue; }
+            if ($paid->getTimestamp() < $window['from'] || $paid->getTimestamp() > $window['to']) { continue; }
             $remark = $row['reflect'] ?? null;
             if ($remark !== null && !is_string($remark)) { throw new ReceiptCollectionException('protocol_error'); }
             $remark = preg_match('/(?:^|\D)([0-9]{4})(?:\D|$)/u', $remark ?? '', $code) ? $code[1] : null;
             $records[] = ['pay_type' => $type, 'event_key' => $row['order_sn'], 'trade_no' => $row['order_sn'], 'amount' => (int) $amount,
                 'paid_at' => $paid->format('Y-m-d H:i:s'), 'remark' => $remark === '' ? null : $remark];
         }
-        $complete = $page * 200 >= $data['total'];
-        return ['records' => $records, 'complete' => $complete, 'next_page' => $complete ? null : ['page' => $page + 1, 'total' => $data['total']],
-            'session' => $data['session']];
+        return $records;
     }
 
     /** 秒/毫秒时间戳及明确日期文本为 V2 已登记的接口表示；不以本地接收时间填补缺失值。 */

@@ -3,18 +3,19 @@ declare(strict_types=1);
 
 namespace app\service\payment\config;
 
-use app\service\system\audit\ConfigurationAuditService;
-use app\service\system\audit\ConfigurationActionContext;
-use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
-use app\common\base\BaseService;
 use app\exception\BusinessException;
 use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
+use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\receipt\ReceiptScopeService;
+use app\service\payment\routing\DefaultRoutingService;
+use app\service\system\audit\ConfigurationActionContext;
+use app\service\system\audit\ConfigurationAuditService;
 
 /**
  * 正式通道管理：完整规则、配置授权、冻结快照与审计一起提交；新通道和修改后的通道保持停用。
@@ -28,7 +29,7 @@ final class PaymentChannelService extends BaseService
         private readonly PaymentCatalogRepository $catalog, private readonly PaymentPluginFactoryService $plugins,
         private readonly ReceiptScopeService $scopeAccess,
         private readonly Clock $clock, private readonly PaymentCatalogService $management,
-        private readonly \app\service\payment\routing\DefaultRoutingService $defaults)
+        private readonly DefaultRoutingService $defaults)
     {
     }
 
@@ -114,8 +115,7 @@ final class PaymentChannelService extends BaseService
             if ((int) $configuration['enabled'] !== 1) { throw new BusinessException('请先启用收款账号采集', ApiResponseConstant::CONFLICT); }
             $definition = $this->plugins->definition($configuration['plugin_code']);
             $snapshot = $this->revisions->snapshot($id, $expectedRevision, true);
-            if (!$this->revisions->rulesMatch($channel, $snapshot['channel']) || $snapshot['config_version'] !== $expectedConfigurationVersion
-                || ($snapshot['account_key'] ?? null) !== $configuration['account_key']) {
+            if (!$this->revisions->rulesMatch($channel, $snapshot['channel']) || $snapshot['config_version'] !== $expectedConfigurationVersion) {
                 throw new BusinessException('收款账号配置已更新，请重新保存通道后再启用', ApiResponseConstant::CONFLICT);
             }
             $authorized = $this->scopeAccess->current($configuration, true);

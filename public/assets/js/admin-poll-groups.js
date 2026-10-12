@@ -45,7 +45,7 @@ MpayAdmin.ready(function () {
                     const options=channels.filter(channel=>channel.pay_types.includes(form.elements.pay_type.value)).map(channel=>({value:channel.id,label:channel.name+(channel.enabled?'':'（已停用）')}));
                     if(member&&!options.some(option=>option.value===member.channel_id))options.push({value:member.channel_id,label:'当前通道 #'+member.channel_id+'（不可用）'});
                     const row=document.createElement('tr');row.dataset.member=String(++index);
-                    row.innerHTML='<td>'+UI.select('member_channel_'+index,[{value:'',label:'请选择通道'},...options],member?.channel_id||'','data-member-field="channel_id" required'+(group?.is_default?' disabled':''))+'</td>'
+                    row.innerHTML='<td>'+UI.select('member_channel_'+index,[{value:'',label:'请选择通道'},...options],member?.channel_id||'','data-member-field="channel_id" required lay-search'+(group?.is_default?' disabled':''))+'</td>'
                         +'<td data-sort>'+UI.input('member_sort_'+index,member?.sort_no??0,'data-member-field="sort_no" type="number" min="0" max="1000000" step="1" required')+'</td>'
                         +'<td data-weight>'+UI.input('member_weight_'+index,member?.weight??1,'data-member-field="weight" type="number" min="1" max="1000000" step="1" required')+'</td>'
                         +'<td data-default><input type="radio" name="default_member" value="'+index+'" data-member-field="is_default"'+(member?.is_default?' checked':'')+' title="默认"></td>'

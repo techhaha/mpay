@@ -275,3 +275,7 @@ a.admin-reference{color:var(--mpay-link)}
 
 /* Layui eye 点缀切换 type；多行私钥保留原 textarea、行数和换行，仅随 type 切换遮罩。 */
 .channel-settings textarea[type="password"][lay-affix="eye"]{-webkit-text-security:disc}
+
+/* 插件详情按项展示列表，沿用参数区的字号、换行和间距。 */
+.admin-plugin-values{margin:0;padding-left:18px;list-style:disc}
+.admin-plugin-values li+li{margin-top:4px}

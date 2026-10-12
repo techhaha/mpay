@@ -81,7 +81,7 @@ MpayAdmin.ready(function () {
         const options = (routing?.items || []).filter(group=>routing.types[group.pay_type_id] === type).map(group=>({value:group.id,label:group.name + (group.enabled ? '' : '（已停用）')}));
         const configuration = app.use_default_route
             ? '<div class="admin-route-summary"><span class="admin-label">轮询组</span><strong>'+E(group?.name || '尚未绑定')+'</strong><p class="admin-muted">'+E(group ? (modes[group.route_mode]||'')+' · '+group.members.length+' 个成员' : '暂无路由配置')+'</p></div>'
-            : UI.field('轮询组',UI.select('group_id',[{value:'',label:'请选择轮询组'},...options],binding?.poll_group_id || '','required'),{required:true})
+            : UI.field('轮询组',UI.select('group_id',[{value:'',label:'请选择轮询组'},...options],binding?.poll_group_id || '','required lay-search'),{required:true})
                 + '<div class="admin-route-binding">'+UI.field('绑定状态','<input type="checkbox" name="enabled" lay-skin="switch" lay-text="启用|停用"' + (!binding || Number(binding.status) === 1 ? ' checked' : '') + '>')+'<button type="submit" class="layui-btn layui-btn-sm">保存绑定</button></div>';
         // 一种支付方式对应一个官方 card；控件仍由 form 渲染，模式与选路结果不在展示层推断。
         return '<form class="layui-form layui-card admin-route-card app-binding" data-pay-type="' + E(type) + '" novalidate>'+header

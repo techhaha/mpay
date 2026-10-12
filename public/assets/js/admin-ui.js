@@ -51,7 +51,8 @@
     }
     function input(name, value = '', attributes = '') { return '<input class="layui-input" name="' + escape(name) + '" value="' + escape(value) + '" ' + attributes + '>'; }
     function select(name, options, value = '', attributes = '') {
-        return '<select name="' + escape(name) + '" lay-search ' + attributes + '>' + options.map(option => '<option value="' + escape(option.value) + '"' + (String(option.value) === String(value) ? ' selected' : '') + (option.disabled ? ' disabled' : '') + '>' + escape(option.label) + '</option>').join('') + '</select>';
+        // 默认使用普通选择；需要检索的业务列表由调用方显式传入官方 lay-search 属性。
+        return '<select name="' + escape(name) + '" ' + attributes + '>' + options.map(option => '<option value="' + escape(option.value) + '"' + (String(option.value) === String(value) ? ' selected' : '') + (option.disabled ? ' disabled' : '') + '>' + escape(option.label) + '</option>').join('') + '</select>';
     }
     function textarea(name, value = '', attributes = '') { return '<textarea class="layui-textarea" name="' + escape(name) + '" ' + attributes + '>' + escape(value) + '</textarea>'; }
     function unit(name, value, suffix, attributes = '') { return '<div class="admin-unit">' + input(name, value, attributes) + '<span>' + escape(suffix) + '</span></div>'; }

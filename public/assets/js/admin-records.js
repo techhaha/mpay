@@ -18,16 +18,16 @@ MpayAdmin.ready(function () {
     Object.assign(actions,{'orders.export':'导出订单','biz.local_close':'关闭业务订单'});
     Object.assign(results,{prepared:'已生成导出内容',verified:'已核验'});
     Object.assign(targets,{system_installation:'系统安装',payment_plugin:'支付插件'});
-    function filter(name,label,options,advanced=false){
+    function filter(name,label,options,advanced=false,searchable=false){
         const wrapper=document.createElement('label');wrapper.textContent=label;
         const control=document.createElement(options?'select':'input');control.name=name;
-        if(options){control.setAttribute('lay-search','');control.add(new Option('全部',''));Object.entries(options).forEach(([value,text])=>control.add(new Option(text,value)));}
+        if(options){if(searchable)control.setAttribute('lay-search','');control.add(new Option('全部',''));Object.entries(options).forEach(([value,text])=>control.add(new Option(text,value)));}
         else{control.className='layui-input';control.maxLength=64;}
         if(locationValues.has(name))control.value=locationValues.get(name);wrapper.append(control);document.getElementById(advanced?'records-advanced-filters':'records-main-filters').append(wrapper);
     }
-    config.main.forEach(name=>filter(name,{status:'状态',plugin_code:'来源插件',channel_id:'收款通道',biz_no:'业务单号',action:'操作类型',result_code:'结果'}[name],name==='status'?config.states:name==='action'?actions:name==='result_code'?results:['plugin_code','channel_id'].includes(name)?{}:null));
+    config.main.forEach(name=>filter(name,{status:'状态',plugin_code:'来源插件',channel_id:'收款通道',biz_no:'业务单号',action:'操作类型',result_code:'结果'}[name],name==='status'?config.states:name==='action'?actions:name==='result_code'?results:['plugin_code','channel_id'].includes(name)?{}:null,false,['plugin_code','channel_id','action'].includes(name)));
     Object.entries(config.advanced).forEach(([name,label])=>filter(name,label,null,true));
-    if(kind==='notifications')filter('app_id','应用',{});
+    if(kind==='notifications')filter('app_id','应用',{},false,true);
     ['start_date','end_date'].forEach(name=>{if(locationValues.has(name))form.elements[name].value=locationValues.get(name);});
     // 从待处理队列进入时延续全部日期范围，并以可见开关让用户明确当前筛选。
     if(['receipts','notifications'].includes(kind)){

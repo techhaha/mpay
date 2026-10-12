@@ -117,7 +117,7 @@ MpayAdmin.ready(function () {
         const access=detail?'<div class="admin-form-grid">'+UI.field('支付方式',UI.select('pay_type',available.map(type=>({value:type.code,label:type.name})),detail.channel.pay_type,'required'),{required:true,full:true})+'</div>'
             :'<div class="admin-section-title">选择支付方式</div><div class="admin-payment-choices">'+available.map((type,index)=>choice('pay_type',type.code,type.name,
                 (type.logo?'<img class="admin-payment-logo" src="'+E(type.logo)+'" alt="'+E(type.name)+'">':'<strong>'+E(type.name)+'</strong>'),index===0)).join('')+'</div>';
-        const plugin=detail?'<div class="admin-form-grid">'+UI.field('支付插件',UI.select('plugin_code',[],'','required'),{required:true,full:true})+'</div>'
+        const plugin=detail?'<div class="admin-form-grid">'+UI.field('支付插件',UI.select('plugin_code',[],'','required lay-search'),{required:true,full:true})+'</div>'
             :'<div class="admin-section-title">选择支付插件</div><div class="channel-plugin-choices"></div>';
         const parameters='<div class="channel-settings admin-form-grid"></div>';
         UI.form({title:detail?'编辑通道 · '+detail.channel.name:'新增通道',width:860,className:detail?'admin-channel-editor':'admin-channel-wizard',
@@ -207,16 +207,32 @@ MpayAdmin.ready(function () {
     async function details(id){
         const handle=UI.open({title:'通道详情',drawer:true,width:820,content:'<div class="channel-detail"></div>'});handle.feedback('正在读取…','loading');
         try{const detail=await get('channel',{id}),configuration=await get('detail',{id:detail.configuration_id});if(handle.closed)return;
-            const values={},images=[];configuration.plugin.schema.forEach(field=>{
+            // 详情沿用 schema 顺序与严格类型的显示条件；说明/帮助仅用于配置表单。
+            // 每个字段保留独立行，避免同名标题相互覆盖；图片原位留入口，预览集中放在下方。
+            const rows=[],images=[];configuration.plugin.schema.forEach(field=>{
+                if(field.visible_when&&configuration.settings[field.visible_when.field]!==field.visible_when.value)return;
                 const value=configuration.settings[field.field];
-                if(field.type==='upload'){if(value)images.push({id:value,title:field.title});else values[field.title]='未设置';}
-                else values[field.title]=field.secret?(value!==undefined&&value!==''?'已配置':'未配置'):field.type==='select'?(field.options.find(option=>option.value===value)?.label??value):value;
+                const empty=value==null||value===''||(Array.isArray(value)&&value.length===0);
+                let content;
+                if(empty)content='未设置';
+                else if(field.secret)content='已配置';
+                else if(field.type==='upload'){
+                    const targetId=handle.node.id+'-plugin-image-'+images.length;
+                    images.push({id:value,title:field.title,targetId});
+                    content='<button type="button" class="admin-link" data-plugin-image="'+E(targetId)+'" aria-controls="'+E(targetId)+'">已上传，查看图片</button>';
+                }else if(field.type==='list')content='<ul class="admin-plugin-values">'+value.map(item=>'<li>'+E(item)+'</li>').join('')+'</ul>';
+                else content=E(field.type==='select'?(field.options.find(option=>option.value===value)?.label??value):typeof value==='boolean'?(value?'是':'否'):value);
+                rows.push('<dt>'+E(field.title)+'</dt><dd>'+content+'</dd>');
             });
             const content=UI.facts({'通道名称':detail.channel.name,'支付方式':UI.paymentLabels[detail.channel.pay_type],'插件':configuration.plugin.name,'单笔最小金额（元）':UI.money(detail.channel.minimum_amount),'单笔最大金额（元）':UI.money(detail.channel.maximum_amount),'每日限额（元）':detail.channel.daily_limit_amount?UI.money(detail.channel.daily_limit_amount):'不限','每日限笔':detail.channel.daily_limit_count||'不限','可用时段':detail.channel.available_from?detail.channel.available_from+'～'+detail.channel.available_to+'（上海时区）':'全天'})
-                +UI.tabs([{title:'插件参数',content:UI.facts(values)+images.map(image=>'<div class="admin-section-title">'+E(image.title)+'</div><img class="admin-qr-preview" data-asset="'+E(image.id)+'" alt="'+E(image.title)+'">').join('')},
+                +UI.tabs([{title:'插件参数',content:'<dl class="admin-facts">'+rows.join('')+'</dl>'+images.map(image=>'<section id="'+E(image.targetId)+'" tabindex="-1" aria-label="'+E(image.title)+'"><div class="admin-section-title">'+E(image.title)+'</div><img class="admin-qr-preview" alt="'+E(image.title)+'"></section>').join('')},
                     {title:'接入信息',content:detail.notification.url?'<div class="admin-code">'+E(detail.notification.url)+'</div><button class="layui-btn layui-btn-primary" data-copy="'+E(detail.notification.url)+'">复制通知地址</button>':UI.notice(detail.notification.mode==='polling'?'由后台采集任务查询到账流水。':'当前插件没有通知地址。')}]);
             handle.node.querySelector('.channel-detail').innerHTML=UI.state(detail.enabled?'已启用':'已停用')+content;UI.render(handle.node);handle.feedback('');
-            for(const image of images){const data=await get('image',{id:image.id});if(handle.closed)return;handle.node.querySelector('[data-asset="'+image.id+'"]').src=data.url;}
+            handle.node.querySelectorAll('[data-plugin-image]').forEach(button=>button.addEventListener('click',()=>{
+                const target=handle.node.querySelector('#'+CSS.escape(button.dataset.pluginImage));
+                target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});
+            }));
+            for(const image of images){const data=await get('image',{id:image.id});if(handle.closed)return;handle.node.querySelector('#'+CSS.escape(image.targetId)+' img').src=data.url;}
         }catch(error){if(!handle.closed)handle.error(error);}
     }
     async function changeState(id,enabled,remove=false){
@@ -242,7 +258,7 @@ MpayAdmin.ready(function () {
         UI.form({title:'测试通道 · '+channel.name,width:460,submit:'发起支付',retrySafe:true,
             // 复用公共表单网格的行间距；窄弹窗内每个字段独占一行，说明归属金额字段。
             content:'<div class="admin-form-grid">'
-                +UI.field('应用',UI.select('app_id',applications.map(app=>({value:app.id,label:app.name+' · PID '+app.pid})),applications[0].id,'required'),{required:true,full:true})
+                +UI.field('应用',UI.select('app_id',applications.map(app=>({value:app.id,label:app.name+' · PID '+app.pid})),applications[0].id,'required lay-search'),{required:true,full:true})
                 +UI.field('测试金额',UI.unit('money','1.00','元','required inputmode="decimal" autocomplete="off"'),{required:true,full:true,hint:'本次为真实付款，支付后不会自动退款。'})
                 +'</div>',
             async onSubmit(form,handle){

@@ -15,6 +15,7 @@
 | 第一次使用，不知道先做什么 | [新手上手路线](V1-01-开始阅读.md) |
 | 网站和空数据库已准备好 | [网页安装四步](V1-03-安装与环境要求.md) |
 | 已安装，想接入自己的商城 | [应用与凭证](V1-05-应用与接入凭证.md) → [业务网站接入](V1-15-业务网站接入.md) |
+| 已配置通道，想先试一笔付款 | [收款配置 → 更多 → 测试](V1-06-收款通道与支付方式.md#快速测试当前通道) |
 | 已经收款，商城没有更新 | [查看商户通知](V1-10-商户通知与人工处理.md) → [按现象排查](V1-20-常见问题与运行排查.md) |
 | 配置后台任务，不知道路径怎么填 | [路径与命令填写](V1-18-部署与后台任务.md#准备命令中的路径) |
 | 修改系统设置、账户密码或查看统计 | [后台设置与日常检查](V1-29-后台设置与日常检查.md) |
@@ -77,7 +78,7 @@
 
 ## 版本与反馈
 
-- [Gitee 代码仓库](https://gitee.com/technical-laohu/mpay) · [GitHub 代码仓库](https://github.com/techhaha/mpay)
+- [Gitee V1 源码](https://gitee.com/technical-laohu/mpay/tree/v1/) · [GitHub V1 源码](https://github.com/techhaha/mpay/tree/v1)
 - [Gitee 问题反馈](https://gitee.com/technical-laohu/mpay/issues) · [GitHub 问题反馈](https://github.com/techhaha/mpay/issues)
 - [旧版使用百问百答](旧版-使用百问百答.md)：原文归档，仅供旧版安装查阅。
 

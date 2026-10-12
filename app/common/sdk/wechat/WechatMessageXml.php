@@ -18,7 +18,7 @@ final class WechatMessageXml
      * @return \DOMElement 文档根节点，后续解析应按已验证平台版本精确选择子节点，不能搜索任意金额文本。
      * @throws ReceiptMessageException 非法编码、XML 或禁止的结构；不把 libxml 错误/原文带入异常。
      */
-    public function parse(#[\SensitiveParameter] string $xml): \DOMElement
+    public function parse(string $xml): \DOMElement
     {
         // 先限制编码再检查声明，避免 UTF-16/NUL 使 ASCII 检查失效。保守拒绝任何位置的 DTD 声明字样。
         if ($xml === '' || strlen($xml) > 65536 || !mb_check_encoding($xml, 'UTF-8') || str_contains($xml, "\0")

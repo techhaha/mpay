@@ -74,7 +74,7 @@ final class PaymentAppService extends BaseService
     }
 
     /** @return array{id:string,version:int,key:string} 只供 no-store 响应，不能附加到应用列表。 */
-    public function reveal(string $id, string $expectedId, ConfigurationActionContext $actor, #[\SensitiveParameter] string $password): array
+    public function reveal(string $id, string $expectedId, ConfigurationActionContext $actor, string $password): array
     {
         $this->reauthenticate($actor, $password);
         return $this->transaction(function () use ($id, $expectedId, $actor): array {
@@ -88,7 +88,7 @@ final class PaymentAppService extends BaseService
     }
 
     /** @return array{id:string,version:int,key:string} 旧版本立即停止入站认证，已有订单仍引用它。 */
-    public function rotate(string $id, string $expectedId, #[\SensitiveParameter] ?string $key, ConfigurationActionContext $actor, #[\SensitiveParameter] string $password): array
+    public function rotate(string $id, string $expectedId, ?string $key, ConfigurationActionContext $actor, string $password): array
     {
         $this->reauthenticate($actor, $password);
         return $this->transaction(function () use ($id, $expectedId, $key, $actor): array {
@@ -100,7 +100,7 @@ final class PaymentAppService extends BaseService
     }
 
     /** @param array<string,string|null> $parameters 仅处理管理员输入的测试内容，不发 HTTP 或创建支付。 */
-    public function signatureTest(#[\SensitiveParameter] array $parameters, #[\SensitiveParameter] string $key): array
+    public function signatureTest(array $parameters, string $key): array
     {
         return ['sign' => $this->signer->sign($parameters, $key), 'sign_type' => 'MD5',
             'matches_supplied' => isset($parameters['sign']) ? $this->signer->verify($parameters, $key) : null];
@@ -135,7 +135,7 @@ final class PaymentAppService extends BaseService
         if ($existing !== null && $existing['id'] !== $except) { throw new BusinessException('PID 已被其他应用使用', ApiResponseConstant::CONFLICT); }
     }
 
-    private function reauthenticate(ConfigurationActionContext $actor, #[\SensitiveParameter] string $password): void
+    private function reauthenticate(ConfigurationActionContext $actor, string $password): void
     {
         if ($actor->origin !== 'admin' || $actor->adminId === null || $actor->sessionVersion === null) {
             throw new BusinessException('需要管理员身份', ApiResponseConstant::UNAUTHENTICATED);

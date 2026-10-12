@@ -6,7 +6,6 @@ namespace app\common\validation;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 use LogicException;
-use SensitiveParameter;
 use think\Validate;
 
 /** V2 字段列表到 ThinkPHP Validate 的轻量适配；规则来自插件代码，HTTP 只能提交字段值。 */
@@ -70,7 +69,7 @@ final class PluginConfigValidator extends Validate
      * @param array<string,mixed> $values
      * @return array<string,mixed> 严格 JSON 类型，默认值仅在新建/保存时应用；历史快照不补新默认值。
      */
-    public function validate(array $schema, #[SensitiveParameter] array $values, bool $applyDefaults = false): array
+    public function validate(array $schema, array $values, bool $applyDefaults = false): array
     {
         self::assertSchema($schema);
         $fields = array_column($schema, null, 'field');

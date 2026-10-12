@@ -50,7 +50,7 @@ final class EpayV1MessageService
      * @param array<string,string> $parameters successParameters 返回的固定参数。
      * @return array<string|int,string> 完整冻结参数，可重复编码为同一请求。
      */
-    public function signForTarget(string $target, array $parameters, #[\SensitiveParameter] string $key): array
+    public function signForTarget(string $target, array $parameters, string $key): array
     {
         $query = UrlEncodedForm::parse(HttpTargetPolicy::uri($target)->getQuery(), 128);
         foreach (self::SUCCESS_FIELDS as $field) {

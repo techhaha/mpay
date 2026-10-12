@@ -17,7 +17,7 @@ final readonly class SmsForwarderMessage
      * @param string $content 表单解码后的原始通知文本，不 trim、猜字段或写入日志。
      * @param int $transportTimestampMilliseconds 发送请求的 Unix 毫秒时间，不是付款时间或事件 ID。
      */
-    public function __construct(public string $from, #[\SensitiveParameter] public string $content,
+    public function __construct(public string $from, public string $content,
         public int $transportTimestampMilliseconds)
     {
     }

@@ -52,7 +52,7 @@ final class WebInstallService
      * @param array{host:string,port:int,name:string,user:string,pass:string} $database
      * @return array{ready:bool,message:string} 已迁移但无业务数据的库也可以继续初始化。
      */
-    public function check(#[\SensitiveParameter] array $database): array
+    public function check(array $database): array
     {
         return $this->files->exclusive(function () use ($database): array {
             $this->assertOpen();
@@ -74,7 +74,7 @@ final class WebInstallService
      * @param array{database:array,administrator:array} $input 来自 InstallValidator 的完整输入。
      * @return array{login_url:string,message:string} 不返回数据库密码、管理员密码或应用 KEY。
      */
-    public function install(#[\SensitiveParameter] array $input, bool $https): array
+    public function install(array $input, bool $https): array
     {
         return $this->files->exclusive(function () use ($input, $https): array {
             $this->assertOpen();
@@ -123,7 +123,7 @@ final class WebInstallService
     }
 
     /** 沿用已有 .env 的数据库目标，避免网页安装将一个已配置站点指向另一库。 */
-    private function assertExistingTarget(#[\SensitiveParameter] array $database): void
+    private function assertExistingTarget(array $database): void
     {
         $configured = $this->app->config->get('database.connections.mysql');
         if ((string) $configured['database'] !== '' && [(string) $configured['hostname'], (int) $configured['hostport'], (string) $configured['database']]
@@ -136,7 +136,7 @@ final class WebInstallService
      * 只在安装请求里替换框架当前连接配置，复用同一 ORM/PDO；不会修改全局 PHP 或其他应用。
      * @return array<string,mixed> 初始化服务的只读状态，绝不把原异常正文公开。
      */
-    private function connectAndInspect(#[\SensitiveParameter] array $database): array
+    private function connectAndInspect(array $database): array
     {
         try {
             $config = $this->app->config->get('database');

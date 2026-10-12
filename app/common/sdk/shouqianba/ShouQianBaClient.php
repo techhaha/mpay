@@ -12,7 +12,6 @@ use DateTimeImmutable;
 use GuzzleHttp\Psr7\Request;
 use InvalidArgumentException;
 use JsonException;
-use SensitiveParameter;
 
 /**
  * 收钱吧商户后台只读客户端，接口、登录摘要和字段口径依据 V2 直连 watcher。
@@ -31,7 +30,7 @@ final class ShouQianBaClient
      * @param array<string,mixed> $state 插件保存的私有认证状态。
      * @return array<string,mixed>
      */
-    public function authenticate(array $settings, #[SensitiveParameter] array $state, DateTimeImmutable $deadline): array
+    public function authenticate(array $settings, array $state, DateTimeImmutable $deadline): array
     {
         if (!is_string($state['token'] ?? null) || $state['token'] === '') { return $this->login($settings, $deadline); }
         $expires = (int) ($state['expires_at'] ?? 0);
@@ -56,7 +55,7 @@ final class ShouQianBaClient
      * @param array<string,mixed> $state 已认证状态，范围变更通过引用交还插件保存。
      * @return array{rows:list<array<string,mixed>>,limit_reached:bool}
      */
-    public function query(array $settings, array $window, #[SensitiveParameter] array &$state, int $limit = 200): array
+    public function query(array $settings, array $window, array &$state, int $limit = 200): array
     {
         if (!in_array($limit, [1, 200], true) || $window['from'] < 1 || $window['to'] < $window['from']) {
             throw new InvalidArgumentException('收钱吧查询窗口无效');
@@ -83,7 +82,7 @@ final class ShouQianBaClient
     }
 
     /** 登录凭证只用于认证；取得 token 后仍须核实商户并成功查询交易页，才说明状态已通过真实查询验证；取得 token 后应立即交回插件缓存。 */
-    private function login(#[SensitiveParameter] array $settings, DateTimeImmutable $deadline): array
+    private function login(array $settings, DateTimeImmutable $deadline): array
     {
         $password = trim($this->text($settings['watcher_password'] ?? null));
         $data = $this->request('POST', '/api/login/ucUser/login', [], [
@@ -97,7 +96,7 @@ final class ShouQianBaClient
     }
 
     /** 根据 V2 对应接口的商户与门店字段核对查询范围，不能把登录账号直接当成收款主体。 */
-    private function scope(array $settings, #[SensitiveParameter] string $token, DateTimeImmutable $deadline): array
+    private function scope(array $settings, string $token, DateTimeImmutable $deadline): array
     {
         $query = ['token' => $token, 'client_version' => '7.0.0'];
         $info = $this->request('GET', '/api/login/ucUser/getLoginInfo', $query, null, $deadline);
@@ -142,8 +141,8 @@ final class ShouQianBaClient
     }
 
     /** 固定官方站点和接口路径；Guzzle PSR-7 请求交给现有传输，响应错误只保留分类，不保留秘密报文。 */
-    private function request(string $method, string $path, #[SensitiveParameter] array $query, #[SensitiveParameter] ?array $body,
-        DateTimeImmutable $deadline, #[SensitiveParameter] array $headers = []): array
+    private function request(string $method, string $path, array $query, ?array $body,
+        DateTimeImmutable $deadline, array $headers = []): array
     {
         $headers += ['Accept' => 'application/json', 'Content-Type' => 'application/json;charset=UTF-8',
             'Origin' => 'https://s.shouqianba.com', 'Referer' => 'https://s.shouqianba.com/',

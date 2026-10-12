@@ -97,7 +97,7 @@ final class PayOrderValidator extends Validate
      * @param array<string,mixed> $input
      * @return array<string,mixed> 固定动作字段；received_amount/paid_at 仍由 evidence 转为领域值。
      */
-    public function action(string $action, #[\SensitiveParameter] array $input): array
+    public function action(string $action, array $input): array
     {
         if (!in_array($action, ['confirm', 'close', 'retry'], true)) { throw new \LogicException('未知订单操作场景'); }
         $this->known($input, $this->scene[$action]);

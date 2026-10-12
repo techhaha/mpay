@@ -32,7 +32,7 @@ final class PaymentAppValidator extends Validate
      * @param array<string,mixed> $input
      * @return array<string,mixed> 每次克隆场景，避免常驻容器中的规则累积。
      */
-    public function input(string $scene, #[\SensitiveParameter] array $input): array
+    public function input(string $scene, array $input): array
     {
         $fields = $this->scene[$scene] ?? throw new \LogicException('未知应用管理场景');
         if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) {

@@ -10,7 +10,7 @@ namespace Mpay\Docs\Example;
 final class EpaySignature
 {
     /** @param array<string, string|null> $parameters 原始表单值，不预先编码或格式化金额。 */
-    public static function sign(array $parameters, #[\SensitiveParameter] string $key): string
+    public static function sign(array $parameters, string $key): string
     {
         if ($key === '') { throw new \InvalidArgumentException('签名 KEY 不能为空'); }
         $parts = [];
@@ -24,7 +24,7 @@ final class EpaySignature
     }
 
     /** @param array<string, string|null> $parameters 完整通知参数；验签通过不等于业务订单处理完成。 */
-    public static function verify(array $parameters, #[\SensitiveParameter] string $key): bool
+    public static function verify(array $parameters, string $key): bool
     {
         $signature = $parameters['sign'] ?? '';
         return is_string($signature) && ($parameters['sign_type'] ?? '') === 'MD5'

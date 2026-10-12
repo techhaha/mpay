@@ -40,7 +40,7 @@ final class InstallationFiles
      * 首次 DDL 前固定数据库身份；失败后只能对同一个目标继续，密码不保存在进度文件中。
      * @param array{host:string,port:int,name:string,user:string,pass:string} $database
      */
-    public function begin(#[\SensitiveParameter] array $database): void
+    public function begin(array $database): void
     {
         $target = hash('sha256', json_encode([$database['host'], $database['port'], $database['name']], JSON_THROW_ON_ERROR));
         $path = $this->path('install-pending.json');
@@ -68,7 +68,7 @@ final class InstallationFiles
      * 临时文件完整写入再替换，浏览器永远拿不到数据库密码或密钥文件内容。
      * @param array<string,string> $values 服务器固定键名，禁止从 HTTP 提交任意环境变量。
      */
-    public function saveEnvironment(#[\SensitiveParameter] array $values): void
+    public function saveEnvironment(array $values): void
     {
         $path = $this->app->getRootPath() . '.env';
         if (is_link($path)) { throw new \RuntimeException('安装不能替换链接形式的环境文件'); }
@@ -111,7 +111,7 @@ final class InstallationFiles
     }
 
     /** 私有文件在同目录独占写临时文件后改名；失败只清自己的临时文件，不删除原文件。 */
-    private function write(string $path, #[\SensitiveParameter] string $body): void
+    private function write(string $path, string $body): void
     {
         if (is_link($path)) { throw new \RuntimeException('安装文件不能是链接'); }
         $temporary = $this->paths->forCreation($path . '.' . bin2hex(random_bytes(8)) . '.tmp');

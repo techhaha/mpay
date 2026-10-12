@@ -25,7 +25,6 @@ use DOMXPath;
 use JsonException;
 use LogicException;
 use RuntimeException;
-use SensitiveParameter;
 use think\facade\Db;
 use think\Request;
 use think\Response;
@@ -67,7 +66,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
     private array $channelConfig = [];
 
-    public function init(#[SensitiveParameter] array $channelConfig): void
+    public function init(array $channelConfig): void
     {
         $this->channelConfig = $channelConfig;
     }

@@ -32,7 +32,7 @@ final class AdminUserRepository extends BaseRepository
     }
 
     /** 初始化服务在已核对空业务库的事务内创建唯一管理员，密码原文不得交给仓储。 */
-    public function create(string $username, #[\SensitiveParameter] string $passwordHash): string
+    public function create(string $username, string $passwordHash): string
     {
         return $this->insert(['username' => $username, 'password_hash' => $passwordHash], ['username', 'password_hash']);
     }

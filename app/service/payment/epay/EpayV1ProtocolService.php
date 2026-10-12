@@ -48,7 +48,7 @@ final class EpayV1ProtocolService extends BaseService
      * @param array<string|int,string> $raw 未 trim/截断/转换的原始表单标量。
      * @return array{trade_no:string,payurl:string,reused:bool} 内部跳转结果，Controller 再适配 submit/mapi。
      */
-    public function create(#[\SensitiveParameter] array $raw, string $scene, ?string $clientIp, string $device, string $requestId): array
+    public function create(array $raw, string $scene, ?string $clientIp, string $device, string $requestId): array
     {
         $identity = $this->authenticate($raw, true);
         $input = $this->validator->order($raw, $scene, $identity['app']['id'], $identity['version'], $clientIp, $device);
@@ -72,7 +72,7 @@ final class EpayV1ProtocolService extends BaseService
      * @param array<string|int,string> $raw
      * @return array<string, int|string|array> 易支付自己的结构；金额为元字符串，绝不返回余额托管假数据。
      */
-    public function api(#[\SensitiveParameter] array $raw): array
+    public function api(array $raw): array
     {
         $identity = $this->authenticate($raw, false);
         $app = $identity['app'];
@@ -171,7 +171,7 @@ final class EpayV1ProtocolService extends BaseService
      * @param array<string|int,string> $raw
      * @return array{app:PaymentApp,version:string}
      */
-    private function authenticate(#[\SensitiveParameter] array $raw, bool $signed): array
+    private function authenticate(array $raw, bool $signed): array
     {
         $pid = $this->validator->pid($raw);
         if (($signed && (($raw['sign_type'] ?? null) !== 'MD5' || !preg_match('/^[a-f0-9]{32}$/D', $raw['sign'] ?? '')))

@@ -22,7 +22,7 @@ final class InitializationValidator extends Validate
      * @param array<string,mixed> $input 私有 JSON 根对象；pid 可省略，由服务随机生成，提供时不能为 null。
      * @return array{username:string,password:string,password_confirmation:string,app_name:string,pid?:string}
      */
-    public function validateInput(#[\SensitiveParameter] array $input): array
+    public function validateInput(array $input): array
     {
         if (array_diff(array_keys($input), array_keys($this->rule)) !== []
             || array_diff(['username', 'password', 'password_confirmation', 'app_name'], array_keys($input)) !== []) {

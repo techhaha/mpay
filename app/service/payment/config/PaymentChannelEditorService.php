@@ -18,7 +18,6 @@ use app\service\payment\routing\DefaultRoutingService;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
 use InvalidArgumentException;
-use SensitiveParameter;
 
 /**
  * 通道表单的完整用例：配置关联、插件参数、通道快照在一个服务事务中保存。
@@ -45,7 +44,7 @@ final class PaymentChannelEditorService extends BaseService
      * @param array<string,mixed> $input 已通过 editor-create 场景，settings 含平台秘密。
      * @return array{id:string,revision_id:string,configuration_id:string,configuration_version:int,enabled:bool}
      */
-    public function create(#[SensitiveParameter] array $input, ConfigurationActionContext $actor): array
+    public function create(array $input, ConfigurationActionContext $actor): array
     {
         $definition = $this->plugins->definition($input['plugin_code']);
         if (!in_array($input['pay_type'], $definition->payTypes, true)) {
@@ -139,7 +138,7 @@ final class PaymentChannelEditorService extends BaseService
      * 不通过额外调用“编辑通道”来完成配置更新，版本检查及快照刷新在同一事务中结束。
      * @param array<string,mixed> $input plugin-save 场景，配置正文不得记录到日志。
      */
-    public function configure(#[SensitiveParameter] array $input, ConfigurationActionContext $actor): array
+    public function configure(array $input, ConfigurationActionContext $actor): array
     {
         $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
         return $this->transaction(function () use ($input, $observed, $actor): array {

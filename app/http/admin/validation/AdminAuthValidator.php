@@ -37,7 +37,7 @@ final class AdminAuthValidator extends Validate
      * @return array<string,string> 只包含选定场景的显式字段。
      * @throws BusinessException 字段格式错误；错误说明不包含秘密值。
      */
-    public function validateInput(string $scene, #[\SensitiveParameter] array $input): array
+    public function validateInput(string $scene, array $input): array
     {
         $fields = $this->scene[$scene] ?? throw new \InvalidArgumentException('未知认证验证场景');
         if (array_diff(array_keys($input), $fields) !== []) {

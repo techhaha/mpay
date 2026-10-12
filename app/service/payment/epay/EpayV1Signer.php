@@ -14,7 +14,7 @@ final class EpayV1Signer
      * @param string $key 已按认证/订单版本读取的 KEY 明文，不得记录到日志。
      * @throws \InvalidArgumentException 非字符串参数或空 KEY，调用方不得把 JSON/数组当成等价表单。
      */
-    public function sign(array $parameters, #[\SensitiveParameter] string $key): string
+    public function sign(array $parameters, string $key): string
     {
         if ($key === '') {
             throw new \InvalidArgumentException('易支付签名凭证为空');
@@ -37,7 +37,7 @@ final class EpayV1Signer
      * @param array<string|int, string|null> $parameters 含原始 sign/sign_type 的完整参数。
      * @return bool 只证明签名匹配；业务字段、授权范围及通知目标仍须另行校验。
      */
-    public function verify(array $parameters, #[\SensitiveParameter] string $key): bool
+    public function verify(array $parameters, string $key): bool
     {
         $signature = $parameters['sign'] ?? null;
         if (($parameters['sign_type'] ?? null) !== 'MD5' || !is_string($signature)

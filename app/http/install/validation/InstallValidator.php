@@ -20,7 +20,7 @@ final class InstallValidator extends Validate
     ];
 
     /** @return array{host:string,port:int,name:string,user:string,pass:string} 不做 trim，密码保留输入字节。 */
-    public function database(#[\SensitiveParameter] array $input): array
+    public function database(array $input): array
     {
         $fields = array_keys($this->rule);
         if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) { $this->invalid(); }
@@ -30,7 +30,7 @@ final class InstallValidator extends Validate
     }
 
     /** @return array{database:array,administrator:array} 嵌套 JSON 必须为对象，不接受列表或额外安装开关。 */
-    public function installation(#[\SensitiveParameter] array $input): array
+    public function installation(array $input): array
     {
         if (count($input) !== 2 || !(($input['database'] ?? null) instanceof \stdClass) || !(($input['administrator'] ?? null) instanceof \stdClass)) { $this->invalid(); }
         $administrator = get_object_vars($input['administrator']);

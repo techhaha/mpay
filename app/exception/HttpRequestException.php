@@ -12,7 +12,7 @@ final class HttpRequestException extends \RuntimeException
      * @param int|null $httpStatus 已收到的 HTTP 状态；null 表示没有可用状态，不表示未发请求。
      */
     public function __construct(public readonly string $reasonCode, public readonly int $durationMs, public readonly ?int $httpStatus = null,
-        #[\SensitiveParameter] private readonly ?string $responsePrefix = null)
+        private readonly ?string $responsePrefix = null)
     {
         if (!in_array($reasonCode, ['target_rejected', 'dns_error', 'deadline_elapsed', 'timeout',
             'connect_error', 'tls_error', 'response_too_large', 'header_too_large', 'transport_error', 'address_mismatch'], true)) {

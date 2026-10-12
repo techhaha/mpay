@@ -36,7 +36,7 @@ final class AdminAuthService extends BaseService
      * @return array{id:string,username:string,session_version:int} 不含密码摘要的服务端身份。
      * @throws BusinessException 认证失败、十分钟失败次数超限或后台尚未初始化。
      */
-    public function login(string $username, #[\SensitiveParameter] string $password, string $requestId, string $clientIp): array
+    public function login(string $username, string $password, string $requestId, string $clientIp): array
     {
         $clientIp = $this->clientIp($clientIp);
         $result = $this->transaction(function () use ($username, $password, $requestId, $clientIp): array|string {
@@ -93,8 +93,8 @@ final class AdminAuthService extends BaseService
      * @param string $requestId 服务端生成的审计关联号。
      * @throws BusinessException 会话失效、原密码错误、限流或新密码不符合存储约束。
      */
-    public function changePassword(string $adminId, int $sessionVersion, string $requestId, #[\SensitiveParameter] string $currentPassword,
-        #[\SensitiveParameter] string $newPassword, string $clientIp): void
+    public function changePassword(string $adminId, int $sessionVersion, string $requestId, string $currentPassword,
+        string $newPassword, string $clientIp): void
     {
         if (!mb_check_encoding($newPassword, 'UTF-8') || mb_strlen($newPassword, 'UTF-8') < 12
             || strlen($newPassword) > 72 || str_contains($newPassword, "\0")) {
@@ -167,7 +167,7 @@ final class AdminAuthService extends BaseService
      * 敏感业务动作的密码复核；失败按管理员统一计数，不因调用入口或来源 IP 改变而得到无限猜测次数。
      * 独立短事务提交失败审计后返回；真正业务事务仍须锁定同一身份版本，不能把复核当作永久授权。
      */
-    public function verifyPassword(string $adminId, int $sessionVersion, string $requestId, #[\SensitiveParameter] string $password): void
+    public function verifyPassword(string $adminId, int $sessionVersion, string $requestId, string $password): void
     {
         $result = $this->transaction(function () use ($adminId, $sessionVersion, $requestId, $password): string {
             $admin = $this->authoriseLocked($adminId, $sessionVersion);

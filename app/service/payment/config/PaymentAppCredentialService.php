@@ -28,7 +28,7 @@ final class PaymentAppCredentialService
      * 调用方拥有事务并完成管理授权；本方法锁应用，追加凭证版本并切换指针，不嵌套事务。
      * @return array{id:string,version:int,key:string} key 只供专用 no-store 响应，不进入日志。
      */
-    public function rotateLocked(string $appId, ?string $expectedId, #[\SensitiveParameter] ?string $customKey = null): array
+    public function rotateLocked(string $appId, ?string $expectedId, ?string $customKey = null): array
     {
         $app = $this->apps->lock($appId);
         if ($expectedId !== null && $app['active_key_id'] !== $expectedId) {

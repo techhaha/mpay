@@ -39,7 +39,7 @@ class HttpClient
      * @param list<string>|null $allowedHosts 从冻结通知目标取得的域名；null 使用构造时的策略。
      * @throws HttpRequestException 目标拒绝、解析/网络失败、预算或响应大小超限。
      */
-    public function get(#[\SensitiveParameter] string $url, \DateTimeImmutable $deadline, ?array $allowedHosts = null): ResponseInterface
+    public function get(string $url, \DateTimeImmutable $deadline, ?array $allowedHosts = null): ResponseInterface
     {
         $started = hrtime(true);
         $this->assertDeadline($deadline, $started);

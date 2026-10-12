@@ -9,7 +9,7 @@ use app\exception\ReceiptCollectionException;
 final class AlipaySigner
 {
     /** @param array<string,string> $parameters 网关原始参数，签名前不做 URL 编码，sign_type 参与请求签名。 */
-    public function sign(array $parameters, #[\SensitiveParameter] string $privateKey): string
+    public function sign(array $parameters, string $privateKey): string
     {
         unset($parameters['sign']);
         ksort($parameters, SORT_STRING);
@@ -27,7 +27,7 @@ final class AlipaySigner
      * 响应必须对原始对象字节验签，禁止 decode 后重新 JSON 编码再验签。
      * @return string 已验签的业务响应对象 JSON；调用方再解释 code、账务及分页。
      */
-    public function response(string $body, #[\SensitiveParameter] string $publicKey): string
+    public function response(string $body, string $publicKey): string
     {
         try {
             $decoded = json_decode($body, false, 64, JSON_THROW_ON_ERROR);
@@ -48,7 +48,7 @@ final class AlipaySigner
     }
 
     /** PEM 或 Base64 的 RSA 私钥/公钥；只接受可加载的 2048～4096 位密钥，错误不回显内容。 */
-    private function key(#[\SensitiveParameter] string $value, bool $private): \OpenSSLAsymmetricKey
+    private function key(string $value, bool $private): \OpenSSLAsymmetricKey
     {
         if ($value === '' || strlen($value) > 16384 || str_contains($value, "\0")) { throw new \InvalidArgumentException('支付宝 RSA 密钥格式无效'); }
         $candidates = [];

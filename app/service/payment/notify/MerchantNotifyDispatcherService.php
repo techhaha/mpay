@@ -236,7 +236,7 @@ final class MerchantNotifyDispatcherService extends BaseService
      * HTML/JSON 原样作为文本保存，后台必须转义展示。片段从不参与 ACK 判断或技术日志。
      * @return array{response_body:?string,response_truncated:bool}
      */
-    private function responseEvidence(#[\SensitiveParameter] ?string $body, bool $incomplete, NotificationClaim $claim): array
+    private function responseEvidence(?string $body, bool $incomplete, NotificationClaim $claim): array
     {
         if ($body === null) { return ['response_body' => null, 'response_truncated' => false]; }
         $text = mb_convert_encoding($body, 'UTF-8', 'UTF-8');

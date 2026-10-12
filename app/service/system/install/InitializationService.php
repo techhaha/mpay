@@ -59,7 +59,7 @@ final class InitializationService extends BaseService
      *
      * @return array{admin_id:string,app_id:string,pid:string,credential_id:string,initialized_at:string} 不输出密码或 API KEY，安装后登录后台受控查看。
      */
-    public function initialize(string $username, #[\SensitiveParameter] string $password, string $appName, ?string $pid = null): array
+    public function initialize(string $username, string $password, string $appName, ?string $pid = null): array
     {
         return $this->withSchemaLock(function (MigrationService $migrations, array $inspection) use ($username, $password, $appName, $pid): array {
             if (!$inspection['installed'] || $inspection['pending_steps'] !== 0) {

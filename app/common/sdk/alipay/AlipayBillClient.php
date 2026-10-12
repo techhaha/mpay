@@ -13,7 +13,6 @@ use DateTimeZone;
 use GuzzleHttp\Psr7\Request;
 use InvalidArgumentException;
 use JsonException;
-use SensitiveParameter;
 use stdClass;
 use UnexpectedValueException;
 
@@ -36,7 +35,7 @@ final class AlipayBillClient
      * @param int $toTimestamp 窗口终点，SDK 请求上海时区时间，插件再按原窗口过滤边界记录。
      * @throws ReceiptCollectionException 网络、验签或响应结构失败，不以空列表替代异常。
      */
-    public function query(#[SensitiveParameter] array $account, int $fromTimestamp, int $toTimestamp,
+    public function query(array $account, int $fromTimestamp, int $toTimestamp,
         DateTimeImmutable $deadline): array
     {
         $now = $this->clock->now();
@@ -92,7 +91,7 @@ final class AlipayBillClient
      *
      * @throws ReceiptCollectionException 结构矛盾；不能把失败伪装成查询成功。
      */
-    private static function decode(#[SensitiveParameter] string $body): array
+    private static function decode(string $body): array
     {
         try {
             if (strlen($body) > 4194304) { throw new UnexpectedValueException(); }

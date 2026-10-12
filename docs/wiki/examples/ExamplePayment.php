@@ -31,7 +31,7 @@ final class ExamplePayment implements PaymentInterface
         ];
     }
 
-    public function init(#[\SensitiveParameter] array $channelConfig): void
+    public function init(array $channelConfig): void
     {
         $this->config = $channelConfig;
     }

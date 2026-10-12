@@ -5,7 +5,6 @@ namespace app\service\payment\receipt;
 
 use DateTimeImmutable;
 use InvalidArgumentException;
-use SensitiveParameter;
 
 /** 服务端在配置/通道/范围锁下生成的来源上下文，不允许从匿名请求反序列化。 */
 final readonly class ChannelNotifyContext
@@ -18,7 +17,7 @@ final readonly class ChannelNotifyContext
      */
     public function __construct(public ?string $channelId, public string $configurationId,
         public int $configurationVersion, public string $pluginCode, public string $pluginVersion,
-        public ReceiptScopeSet $scopes, #[SensitiveParameter] public array $configuration, public DateTimeImmutable $receivedAt)
+        public ReceiptScopeSet $scopes, public array $configuration, public DateTimeImmutable $receivedAt)
     {
         if ($configurationVersion < 1) {
             throw new InvalidArgumentException('来源上下文缺少授权范围或配置版本');

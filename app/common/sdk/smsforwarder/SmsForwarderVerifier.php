@@ -26,7 +26,7 @@ final class SmsForwarderVerifier
      * @throws ReceiptMessageException 非合同请求、来源不符、签名或时效失败；异常无原始敏感值。
      * @throws \InvalidArgumentException 服务器配置/运行时不符合合同，不应当计作客户端认证失败。
      */
-    public function verify(Request $message, #[\SensitiveParameter] string $secret, array $allowedSources,
+    public function verify(Request $message, string $secret, array $allowedSources,
         \DateTimeImmutable $receivedAt, bool $secureTransport, int $toleranceSeconds = 300): SmsForwarderMessage
     {
         $this->assertConfiguration($secret, $allowedSources, $toleranceSeconds);
@@ -74,7 +74,7 @@ final class SmsForwarderVerifier
      *
      * @throws ReceiptMessageException 非规范 Base64、混合/多重编码或错误长度。
      */
-    private function canonicalSignature(#[\SensitiveParameter] string $value): string
+    private function canonicalSignature(string $value): string
     {
         if (str_contains($value, '%')) {
             $decoded = rawurldecode($value);
@@ -95,7 +95,7 @@ final class SmsForwarderVerifier
     }
 
     /** @param list<string> $allowedSources 配置来自服务器配置 schema，不接受请求新增允许来源。 */
-    private function assertConfiguration(#[\SensitiveParameter] string $secret, array $allowedSources, int $toleranceSeconds): void
+    private function assertConfiguration(string $secret, array $allowedSources, int $toleranceSeconds): void
     {
         if (PHP_INT_SIZE < 8 || $secret === '' || strlen($secret) > 1024 || !mb_check_encoding($secret, 'UTF-8')
             || $toleranceSeconds < 1 || $toleranceSeconds > 3600 || !array_is_list($allowedSources)

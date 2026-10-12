@@ -51,7 +51,7 @@ final class PaymentAppController extends BaseAdminController
     }
 
     /** @param array{id:string,version:int,key:string} $data 仅密码复核后的专用动作可以返回此结构。 */
-    private function secret(#[\SensitiveParameter] array $data): Response
+    private function secret(array $data): Response
     {
         return $this->success($data)->header(['Cache-Control' => 'no-store, private', 'Pragma' => 'no-cache', 'Expires' => '0']);
     }

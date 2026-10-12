@@ -35,7 +35,7 @@ class HttpTargetPolicy
      *
      * @throws BusinessException 输入不符合项目的地址合同，错误不回显 URL。
      */
-    public static function uri(#[\SensitiveParameter] string $url, int $maximum = 2048, bool $merchantQuery = true): UriInterface
+    public static function uri(string $url, int $maximum = 2048, bool $merchantQuery = true): UriInterface
     {
         if ($maximum < 1 || $maximum > 16384) { throw new \InvalidArgumentException('URL 长度上限无效'); }
         if ($url === '' || !mb_check_encoding($url, 'UTF-8') || mb_strlen($url, 'UTF-8') > $maximum

@@ -59,7 +59,7 @@ final class PaymentConfigurationCommand extends Command
      * @param array<string,mixed> $data 已核验字段与 JSON 原始类型，嵌套对象已转换为数组。
      * @return array<string,int|string|bool>
      */
-    private function apply(string $operation, #[\SensitiveParameter] array $data, ConfigurationActionContext $actor): array
+    private function apply(string $operation, array $data, ConfigurationActionContext $actor): array
     {
         $service = $this->app->make(\app\service\payment\config\PaymentChannelEditorService::class);
         if ($operation === 'editor-create') { return $service->create($data, $actor); }

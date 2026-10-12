@@ -22,7 +22,6 @@ use DateTimeImmutable;
 use DateTimeZone;
 use LogicException;
 use RuntimeException;
-use SensitiveParameter;
 use think\Cache;
 use think\Config;
 use think\facade\Db;
@@ -70,7 +69,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
     private array $channelConfig = [];
 
-    public function init(#[SensitiveParameter] array $channelConfig): void
+    public function init(array $channelConfig): void
     {
         $this->channelConfig = $channelConfig;
     }

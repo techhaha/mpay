@@ -6,7 +6,6 @@ namespace app\service\payment\config;
 use app\common\constant\ApiResponseConstant;
 use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
-use SensitiveParameter;
 use stdClass;
 use think\Validate;
 
@@ -44,7 +43,7 @@ final class PaymentConfigurationValidator extends Validate
      *     settings/channel 转为关联数组，其余字段不做隐式转换。
      * @throws BusinessException 422 字段错误，固定说明不包含凭证值或未知字段名称。
      */
-    public function validate(string $operation, #[SensitiveParameter] array $input): array
+    public function validate(string $operation, array $input): array
     {
         if (!isset($this->scene[$operation])) { throw new BusinessException('未知配置操作，请查看命令帮助', ApiResponseConstant::VALIDATION_FAILED); }
         $fields = $this->scene[$operation];
@@ -75,7 +74,7 @@ final class PaymentConfigurationValidator extends Validate
      * @param array<string,array> $rules 代码中固定的内层规则，客户端不能定义校验器。
      * @return array<string,mixed> 仅将当前已核验对象转换为数组，不丢失更内层的对象/列表区别。
      */
-    private function nested(#[SensitiveParameter] stdClass $object, array $rules, string $prefix): array
+    private function nested(stdClass $object, array $rules, string $prefix): array
     {
         $values = get_object_vars($object);
         $this->assertFields($values, array_keys($rules), [], $prefix);

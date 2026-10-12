@@ -19,7 +19,6 @@ use app\service\payment\receipt\ReceiptScopeService;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
 use RuntimeException;
-use SensitiveParameter;
 
 /** 通道专属插件参数及不可变版本管理；本服务保存业务关联与快照，不猜平台字段或维护登录态。 */
 final class PaymentPluginConfService extends BaseService
@@ -36,7 +35,7 @@ final class PaymentPluginConfService extends BaseService
      * @param array<string,mixed> $settings
      * @return array{id:string,config_version:int,enabled:bool}
      */
-    public function createInTransaction(string $code, string $name, #[SensitiveParameter] array $settings, ConfigurationActionContext $actor): array
+    public function createInTransaction(string $code, string $name, array $settings, ConfigurationActionContext $actor): array
     {
         $this->requireTransaction();
         $this->management->assertNew($code);
@@ -66,7 +65,7 @@ final class PaymentPluginConfService extends BaseService
         string $id,
         int $expectedVersion,
         string $name,
-        #[SensitiveParameter] array $settings,
+        array $settings,
         ConfigurationActionContext $actor
     ): array {
         $this->requireTransaction();

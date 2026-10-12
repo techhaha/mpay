@@ -43,7 +43,7 @@ final class PayOrderAdminActionService extends BaseService
         string $payNo,
         AdminActionContext $actor,
         ManualReceiptEvidence $evidence,
-        #[\SensitiveParameter] string $currentPassword,
+        string $currentPassword,
         DateTimeImmutable $now,
         bool $notifyMerchant = true,
     ): PayOrder {

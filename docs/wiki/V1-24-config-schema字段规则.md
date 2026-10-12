@@ -2,6 +2,8 @@
 
 本合同用于 `PaymentInterface::getConfigSchema()` 和后台动态配置表单。插件主类直接实现接口，自行声明字段、默认值、校验及说明；服务不根据插件编码补字段或使用说明。元信息经“刷新插件”同步到插件目录表，表单只使用已同步定义。
 
+采集调度选项 `prelogin` 属于插件代码元信息，通过 `isPreloginEnabled(): bool` 读取，默认 false；它不是 schema 字段属性，不会自动生成通道表单，也不作为可编辑参数写入数据库。接口和运行约定见[主动采集](V1-25-主动采集与会话协作.md)。
+
 ## 描述信息
 
 `getDescription(): string` 返回插件的使用说明。可以从主类 `$paymentInfo['description']` 读取；未定义时返回空字符串。空白说明不显示说明区域。支持纯文本和换行，最多 8192 字节，不解析 HTML、Markdown 或脚本。

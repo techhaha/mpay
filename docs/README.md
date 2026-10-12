@@ -17,3 +17,7 @@
 在线文档：[Gitee Wiki](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub Wiki](https://github.com/techhaha/mpay/wiki)。
 
 公开正文的唯一维护源为 docs/wiki；同步方法见 [Wiki 工具说明](wiki/tools/README.md)。设计讨论、实现计划、交接和环境验证记录仍保存在 docs 的维护资料中，与面向用户的手册分开。
+
+当前插件合同统一从[支付插件开发](wiki/V1-23-支付插件开发.md)、[配置字段规则](wiki/V1-24-config-schema字段规则.md)和[主动采集与会话协作](wiki/V1-25-主动采集与会话协作.md)阅读：三个接口，预登录由代码元信息 prelogin 声明，按订单采集，每账号每轮单次查询最新最多 200 条，登录状态永久文件缓存。
+
+本地实施资料位于 `docs/order-driven-collection-2026-10-11.md` 与 `docs/implementation-plan.md`；实际验证、数据库切换和待联调范围以最新交接节点为准。标记为“历史资料/历史节点”的方案与报告仅保留当时事实，旧接口、分页、会话存储及验收结果不作为当前开发合同。在线 Wiki 需要另行发布，本地文档修改不表示远程内容已经同步。

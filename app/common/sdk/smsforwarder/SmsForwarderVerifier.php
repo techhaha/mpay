@@ -3,10 +3,12 @@ declare(strict_types=1);
 
 namespace app\common\sdk\smsforwarder;
 
-use think\Request;
 use app\common\util\UrlEncodedForm;
 use app\exception\BusinessException;
 use app\exception\ReceiptMessageException;
+use DateTimeImmutable;
+use InvalidArgumentException;
+use think\Request;
 
 /**
  * 微信/支付宝安卓入口共享的 SmsForwarder 兼容传输校验，不负责平台文本解析或订单匹配。
@@ -16,19 +18,24 @@ final class SmsForwarderVerifier
 {
     /**
      * 使用服务器时间、服务器允许来源和账号专属 secret 校验原始 POST 表单。
-     * 调用者还须落实接收限流及平台模板校验；本方法不读 Request/Session、数据库或系统时间。
+     * 调用者还须落实接收限流及平台模板校验；只读取传入 Request，不访问全局请求、Session、数据库或系统时间。
      *
      * @param list<string> $allowedSources 服务器配置的精确来源列表，不能来自请求或泛化关键字匹配。
-     * @param \DateTimeImmutable $receivedAt 服务器接收时间；用毫秒比较边界，不先截成秒。
+     * @param DateTimeImmutable $receivedAt 服务器接收时间；用毫秒比较边界，不先截成秒。
      * @param bool $secureTransport 由 HTTP 入口依据真实 TLS/受信反代配置确认，不能读取任意转发头作 true。
-     * @param int $toleranceSeconds 双向传输时间容差，1～3600 秒；默认 300 是工程值。
+     * @param int $toleranceSeconds 由插件配置明确传入的双向时间容差；SDK 保留 1～3600 秒输入边界，不另设业务默认值。
      * @return SmsForwarderMessage 传输校验成功，正文仍未被签名认证。
      * @throws ReceiptMessageException 非合同请求、来源不符、签名或时效失败；异常无原始敏感值。
-     * @throws \InvalidArgumentException 服务器配置/运行时不符合合同，不应当计作客户端认证失败。
+     * @throws InvalidArgumentException 服务器配置/运行时不符合合同，不应当计作客户端认证失败。
      */
-    public function verify(Request $message, string $secret, array $allowedSources,
-        \DateTimeImmutable $receivedAt, bool $secureTransport, int $toleranceSeconds = 300): SmsForwarderMessage
-    {
+    public function verify(
+        Request $message,
+        string $secret,
+        array $allowedSources,
+        DateTimeImmutable $receivedAt,
+        bool $secureTransport,
+        int $toleranceSeconds
+    ): SmsForwarderMessage {
         $this->assertConfiguration($secret, $allowedSources, $toleranceSeconds);
         if (!$secureTransport) {
             throw new ReceiptMessageException('transport_required');
@@ -100,12 +107,12 @@ final class SmsForwarderVerifier
         if (PHP_INT_SIZE < 8 || $secret === '' || strlen($secret) > 1024 || !mb_check_encoding($secret, 'UTF-8')
             || $toleranceSeconds < 1 || $toleranceSeconds > 3600 || !array_is_list($allowedSources)
             || $allowedSources === [] || count($allowedSources) > 16) {
-            throw new \InvalidArgumentException('SmsForwarder 传输校验配置无效');
+            throw new InvalidArgumentException('SmsForwarder 传输校验配置无效');
         }
         foreach ($allowedSources as $source) {
             if (!is_string($source) || $source === '' || strlen($source) > 256
                 || !mb_check_encoding($source, 'UTF-8') || preg_match('/[\x00-\x1f\x7f]/', $source)) {
-                throw new \InvalidArgumentException('SmsForwarder 允许来源配置无效');
+                throw new InvalidArgumentException('SmsForwarder 允许来源配置无效');
             }
         }
     }

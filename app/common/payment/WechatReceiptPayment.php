@@ -52,8 +52,12 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
                 'help' => '填写二维码解码后的文本，或上传收款码图片。'],
             ['type' => 'upload', 'field' => 'receipt_qrcode_image', 'title' => '收款码图片', 'value' => '', 'help' => '支持 PNG、JPEG、WebP 图片，最大 2 MiB。',
                 'validate' => [0 => 'string', 'regex' => '/^(?:[1-9][0-9]{0,19})?$/D', 'requireWithout' => 'receipt_qrcode_content']],
-            ['type' => 'input', 'field' => 'sms_forwarder_secret', 'title' => '通知密钥', 'validate' => [0 => 'require', 1 => 'string', 'length' => [16, 1024]], 'secret' => true],
-            ['type' => 'number', 'field' => 'sms_forwarder_time_tolerance', 'title' => '通知时间容差（秒）', 'validate' => [0 => 'require', 'between' => [30, 3600]], 'value' => 300],
+            ['type' => 'input', 'field' => 'sms_forwarder_secret', 'title' => '通知密钥',
+                'validate' => [0 => 'require', 1 => 'string', 'length' => [6, 32]], 'secret' => true,
+                'help' => '6～32 个字符，建议使用 16～32 位随机文本；与通知工具填写相同的值。'],
+            ['type' => 'number', 'field' => 'sms_forwarder_time_tolerance', 'title' => '通知时间容差（秒）',
+                'validate' => [0 => 'require', 'between' => [5, 30]], 'value' => 30,
+                'help' => '通知请求时间与服务器接收时间允许的最大偏差，默认 30 秒；请保持设备自动校时，不影响付款有效期。'],
         ],
     ];
 

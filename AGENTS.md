@@ -19,6 +19,8 @@
 
 ## 需求和现状
 
+- 2026-10-12 两个手机监听插件统一通知配置：通知密钥 6～32 个字符，通知时间容差 5～30 秒、默认 30；范围和帮助说明由各插件 schema 声明。SmsForwarderVerifier 的容差必须由插件明确传入，不再提供默认 300 秒。付款有效期、主动采集/预登录间隔及其他平台凭证规则分别处理，不一起缩短；刷新目录不自动改写通道密钥或历史配置。
+
 - 2026-10-12 插件接口收敛为三个：PaymentInterface 只含元信息与支付动作；ChannelNotifyInterface 定义 HTTP notify/ACK；ReceiptCollectorInterface 定义 collect、matchReceipts、prelogin 及 isPreloginEnabled。采集插件代码元信息 prelogin 默认为 false，仅 true 才补充无订单启用通道并调度低频保活；账号、间隔和登录状态由插件解释。删除独立匹配/预登录接口，不放入 config_schema、不增加数据库字段；最新合同见公开 Wiki 插件开发与主动采集文档。
 
 - 2026-10-12 用户已明确授权清空并重建专用开发库 mpay_v1 的全部数据，不保留旧管理员、应用、通道及交易。已按最新结构完成重建并验证；本次授权和结果只限这个指定开发库，不引入正式重置接口，不授权清理其他应用。最新运行与新管理员资料位置见实现计划。

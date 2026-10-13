@@ -66,7 +66,7 @@ final class PaymentCatalogService extends BaseService
                 'description' => $row['description'] ?? $definition?->description,
                 'updated_at' => $row['updated_at'] ?? null,
                 'installed' => $present, 'synchronized' => $row !== null && (!$present || ($row['version'] === $definition->version
-                    && \app\common\validation\PluginConfigValidator::sameSchema($definition->configSchema, $row['config_schema'])
+                    && PluginDefinition::sameSchema($definition->configSchema, $row['config_schema'])
                     && $row['description'] === $definition->description && $row['class_name'] === $definition->className && $row['name'] === $definition->name && $row['pay_types'] === $definition->payTypes)),
                 'enabled' => $row !== null && (int) $row['enabled'] === 1,
                 'revision' => $row === null ? 0 : (int) $row['revision'], 'channel_count' => $this->records->channelCount($code)];

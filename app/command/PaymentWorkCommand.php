@@ -43,8 +43,8 @@ final class PaymentWorkCommand extends Command
             $maintenance = $this->app->make(PaymentRuntimeMaintenanceService::class);
             $started = hrtime(true); $round = 0; $idleRounds = 0; $nextPrune = 30;
             $counts = ['acknowledged' => 0, 'retry' => 0, 'exhausted' => 0, 'quarantined' => 0, 'lease_lost' => 0, 'idle' => 0];
-            $maintenanceCounts = ['expired' => 0, 'executions_checked' => 0, 'released' => 0];
-            $phases = ['expire', 'execution', 'release'];
+            $maintenanceCounts = ['expired' => 0, 'executions_checked' => 0];
+            $phases = ['expire', 'execution'];
             while (!$control->stopping() && (!$once || $round < $limit)) {
                 $elapsed = (hrtime(true) - $started) / 1000000000;
                 if ($maximum !== null && $elapsed >= $maximum) { break; }

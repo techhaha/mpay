@@ -5,7 +5,7 @@ namespace app\repository\payment\config;
 
 use app\common\base\BaseRepository;
 use app\common\constant\TradeConstant;
-use app\common\validation\PluginConfigValidator;
+use app\service\payment\plugin\PluginDefinition;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPlugin;
 use app\model\payment\PaymentPluginConf;
@@ -52,7 +52,7 @@ final class PaymentPluginRepository extends BaseRepository
             $changed = false;
             foreach ($values as $field => $value) {
                 $same = is_array($value)
-                    ? PluginConfigValidator::sameSchema($value, $row[$field])
+                    ? PluginDefinition::sameSchema($value, $row[$field])
                     : $row[$field] === $value;
                 if (!$same) { $changed = true; break; }
             }

@@ -5,6 +5,8 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
+use LogicException;
+use stdClass;
 use think\Validate;
 
 /** 应用后台的 JSON 场景和字段白名单；密码与 KEY 保持原字节，不在错误中回显。 */
@@ -34,12 +36,21 @@ final class PaymentAppValidator extends Validate
      */
     public function input(string $scene, array $input): array
     {
-        $fields = $this->scene[$scene] ?? throw new \LogicException('未知应用管理场景');
+        $fields = $this->scene[$scene] ?? throw new LogicException('未知应用管理场景');
         if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) {
             throw new BusinessException('应用参数缺失或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
         }
         $validator = (clone $this)->scene($scene)->failException(false);
-        $validator->must = $fields;
+        // 空 PID/KEY 表示由服务生成；布尔 false 和空域名列表也是合法值。
+        $validator->append(['id' => 'require', 'expected_id' => 'require', 'revision' => 'require']);
+        foreach (['pid', 'key'] as $field) {
+            $validator->rule($field, [static fn (mixed $value): bool => is_string($value), ...$this->rule[$field]]);
+        }
+        foreach (['enabled', 'use_default_route'] as $field) {
+            $validator->rule($field, [static fn (mixed $value): bool => is_bool($value)]);
+        }
+        $validator->rule('allowed_hosts', [static fn (mixed $value): bool => is_array($value)]);
+        $validator->rule('parameters', [static fn (mixed $value): bool => $value instanceof stdClass]);
         if (!$validator->check($input) || (isset($input['reason']) && trim($input['reason']) === '')) {
             throw new BusinessException('应用参数类型或范围无效', ApiResponseConstant::VALIDATION_FAILED);
         }
@@ -59,5 +70,5 @@ final class PaymentAppValidator extends Validate
 
     protected function integerJson(mixed $value): bool { return is_int($value); }
     protected function booleanJson(mixed $value): bool { return is_bool($value); }
-    protected function objectJson(mixed $value): bool { return $value instanceof \stdClass; }
+    protected function objectJson(mixed $value): bool { return $value instanceof stdClass; }
 }

@@ -1,234 +1,195 @@
 /**
- * 收银台展示与原单查询。金额、备注、是否允许付款以及成功状态均来自服务器，页面不另建交易规则。
- * 写请求超时后只查询原订单；隐藏/恢复页面不重新下单，也不自动重放未知的外部请求。
+ * 收银台公共流程：详情只在首屏或状态版本变化时读取，付款和商户确认分阶段轮询。
+ * 仅服务器完成判定可以导航；刷新/恢复不重下单，旧响应不能覆盖新的写操作或已停止的确认轮次。
  */
 layui.use('layer', function () {
     'use strict';
-    const root = document.getElementById('cashier');
-    if (!root) return;
-    const identity = {biz_no: root.dataset.bizNo, token: root.dataset.token};
-    const find = name => document.getElementById('cashier-' + name);
-    const query = new URLSearchParams(identity).toString();
-    let current = null;
-    let generation = 0;
-    let fetching = false;
-    let queued = false;
-    let writing = false;
-    let timer = null;
-    let receivedAt = 0;
-    let qrKey = '';
-    let expiryRefreshRequested = false;
-    let writeFailure = null;
-    let initialPrepareRequested = false;
-
-    function error(message) {
-        find('error').textContent = message;
-        find('error').hidden = !message;
-    }
-
-    /** 直接绘制库产生的模块矩阵，避免把付款内容插入 HTML；完整保留 UTF-8 字节与静区。 */
-    function drawQr(presentation) {
-        const key = JSON.stringify([presentation.qrcode_content, presentation.qrcode_image_url]);
-        if (key === qrKey) return;
-        qrKey = '';
-        find('qr').replaceChildren();
-        if (presentation.qrcode_image_url) {
-            const url = new URL(presentation.qrcode_image_url, location.origin);
-            if (url.origin !== location.origin || !url.pathname.startsWith('/storage/')) throw new Error('二维码图片地址无效');
-            const image = document.createElement('img');
-            image.src = url.href;
-            image.alt = '收款二维码';
-            image.addEventListener('error', () => { qrKey = ''; error('二维码图片暂时无法读取，请查询原订单或联系商户。'); });
-            find('qr').append(image);
-        } else {
-            const encoding = presentation.qrcode_encoding;
-            if (!encoding || encoding.mode !== 'Byte' || encoding.error_correction !== 'M'
-                || !Number.isInteger(encoding.max_text_bytes) || encoding.max_text_bytes < 1
-                || new TextEncoder().encode(presentation.qrcode_content).length > encoding.max_text_bytes) {
-                throw new Error('收款二维码无法生成，请联系商户检查收款配置。');
-            }
-            const matrix = qrcode(0, encoding.error_correction);
-            matrix.addData(presentation.qrcode_content, encoding.mode);
-            matrix.make();
-            const count = matrix.getModuleCount();
-            const cell = Math.max(4, Math.floor(300 / (count + 8)));
-            const canvas = document.createElement('canvas');
-            canvas.width = canvas.height = (count + 8) * cell;
-            const context = canvas.getContext('2d');
-            if (!context) throw new Error('当前浏览器无法显示二维码');
-            context.fillStyle = '#fff'; context.fillRect(0, 0, canvas.width, canvas.height);
-            context.fillStyle = '#000';
-            for (let row = 0; row < count; row++) {
-                for (let column = 0; column < count; column++) {
-                    if (matrix.isDark(row, column)) context.fillRect((column + 4) * cell, (row + 4) * cell, cell, cell);
-                }
-            }
-            find('qr').append(canvas);
+    const root = document.getElementById('cashier'); if (!root) return;
+    const identity = {biz_no:root.dataset.bizNo, token:root.dataset.token};
+    const query = new URLSearchParams(identity).toString(), find = name => document.getElementById('cashier-' + name);
+    let current = null, phase = 'payment', page = null, timer = null, deadline = null;
+    let fetching = false, writing = false, pending = null, generation = 0, failures = 0, initialPrepareRequested = false;
+    let writeFailure = null, leaving = false;
+    const error = message => { find('error').textContent = message || ''; find('error').hidden = !message; };
+    const notice = message => { find('notice').textContent = message; find('notice').hidden = !message; };
+    const stoppedViews = {
+        expired:{label:'付款已超时',icon:'time',title:'付款时间已结束',message:'请勿继续向此收款码付款。',
+            detail:'如果已经付款，请检查支付结果，或联系商户核对。'},
+        closed:{label:'已关闭',icon:'close',title:'订单已关闭',message:'此订单已停止收款，请勿继续付款。',
+            detail:'如果已经付款，请检查支付结果，或联系商户核对。'},
+        failed:{label:'支付未完成',icon:'about',title:'支付未完成',message:'本次支付未能完成。',
+            detail:'如果已经扣款，请检查支付结果，或联系商户核对，切勿重复付款。'}
+    };
+    /** 页面状态与持久交易状态分开：超时只表示停止付款，不推断未到账，也不停止原单查询。 */
+    function showResult(view, content) {
+        root.dataset.view = view; notice('');
+        find('status').textContent = (current?.test_mode ? '测试：' : '') + content.label;
+        find('result-icon').className = 'layui-icon layui-icon-' + content.icon;
+        for (const key of ['title','message','detail']) {
+            // 稳定的确认轮询不重复更新播报区域。
+            if (find('result-' + key).textContent !== content[key]) find('result-' + key).textContent = content[key];
         }
-        qrKey = key;
+        find('result').hidden = false;
     }
-
+    function showConfirmation() {
+        showResult('paid', {label:'已支付',icon:'ok-circle',title:'已支付，等待商户确认',
+            message:'付款已完成，请勿重复付款。',detail:'商户确认后将自动显示支付结果或返回商户页面。'});
+    }
+    function disposePage() { page?.destroy(); page = null; find('payment').hidden = true; }
+    function timeout() {
+        phase = 'attention'; clearTimeout(timer); deadline = null; generation++;
+        showResult('paid', {label:'已支付',icon:'ok-circle',title:'已支付，商户尚未确认',
+            message:'付款已完成，请勿重复付款。',detail:'暂未收到商户确认，请重新检查通知或联系商户。'});
+        find('refresh').textContent = '重新检查通知';
+    }
+    function enterConfirmation() {
+        if (phase !== 'notification') { phase = 'notification'; deadline = performance.now() + 60000; generation++; }
+        disposePage(); find('selection').hidden = true; find('prepare').hidden = true;
+        find('amount-label').textContent = '已支付金额';
+        find('refresh').textContent = '检查商户确认';
+        showConfirmation();
+        find('footer').textContent = '如需帮助，请联系商户并提供订单号。';
+    }
     function apply(data) {
-        if (!data || typeof data.status !== 'number' || typeof data.order_money !== 'string' || data.biz_no !== identity.biz_no) {
-            throw new Error('订单响应格式异常，请稍后查询');
-        }
-        // 成功查询不等于此前选择/恢复成功。状态未变时保留操作拒绝，避免错误闪退后像按钮无反应。
-        // 丢失写响应但已读到新尝试、状态或付款材料时，则以已核验的原单状态解除不确定提示。
-        if (writeFailure && (data.pay_no !== writeFailure.payNo || data.status !== writeFailure.status || data.can_pay || data.expired)) {
-            writeFailure = null;
-        }
-        error(writeFailure?.message || '');
-        current = data;
-        if (data.status === 2) {
-            clearTimeout(timer);
-            location.replace('/cashier/success?' + query);
-            return;
-        }
-        receivedAt = Date.now();
-        expiryRefreshRequested = false;
+        if (!data || data.biz_no !== identity.biz_no || typeof data.status !== 'number' || typeof data.revision !== 'string') throw new Error('订单响应格式异常');
+        if (writeFailure && (data.pay_no !== writeFailure.payNo || data.status !== writeFailure.status || data.can_pay || data.expired)) writeFailure = null;
+        current = data; error(writeFailure?.message || ''); disposePage();
         root.dataset.status = String(data.status);
+        root.dataset.view = 'payment'; find('result').hidden = true;
         find('test').hidden = !data.test_mode;
-        find('status').textContent = data.test_mode ? '测试：' + data.status_label : data.status_label;
-        find('subject').textContent = data.subject;
-        find('order-no').textContent = data.pay_no || data.biz_no;
-        find('business-money').textContent = '¥ ' + data.order_money;
-        // 已成功、关闭或过期后不再显示付款指令，避免用户把历史识别金额当成仍需付款。
-        find('receipt-block').hidden = data.receipt_money === null || !data.can_pay;
-        find('receipt-money').textContent = data.receipt_money === null ? '—' : '¥ ' + data.receipt_money;
-        find('offset').hidden = !data.can_pay || data.offset_money === null || data.offset_money === '0.00';
-        find('offset').textContent = '为识别本次付款，支付金额增加了 ¥ ' + data.offset_money + '。请按“请准确支付”显示的金额付款。';
-        find('selection').hidden = !data.can_select;
-        find('methods').replaceChildren();
+        find('subject').textContent = data.subject; find('order-no').textContent = data.pay_no || data.biz_no;
+        find('amount-block').hidden = data.amount == null;
+        find('amount').textContent = data.amount == null ? '—' : data.amount;
+        find('amount-label').textContent = data.status === 2 ? '已支付金额' : '应付金额';
+        if (data.status === 2) { enterConfirmation(); pending = 'completion'; return; }
+        phase = 'payment'; deadline = null;
+        find('status').textContent = (data.test_mode ? '测试：' : '') + data.status_label;
+        find('refresh').textContent = '刷新支付结果';
+        if (Array.isArray(data.payment_brands)) MpayBrand.setPayments(data.payment_brands);
+        find('selection').hidden = !data.can_select; find('methods').replaceChildren();
         for (const method of data.payment_methods) {
-            const button = document.createElement('button');
-            button.type = 'button'; button.className = 'layui-btn layui-btn-primary'; button.dataset.type = method.code;
-            const methodIcon = MpayBrand.paymentImage(method.code); if (methodIcon) { methodIcon.alt = ''; button.append(methodIcon); }
-            button.append(document.createTextNode(method.name));
-            button.disabled = writing;
-            button.addEventListener('click', () => write('/api/cashier/select', {type: method.code}));
-            find('methods').append(button);
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'layui-btn layui-btn-primary';
+            const icon = MpayBrand.paymentImage(method.code); if (icon) { icon.alt = ''; button.append(icon); }
+            button.append(document.createTextNode(method.name)); button.disabled = writing;
+            button.addEventListener('click', () => write('/api/cashier/select', {type:method.code})); find('methods').append(button);
         }
-        find('payment').hidden = !data.can_pay;
+        find('prepare').hidden = !data.can_prepare; find('prepare').disabled = writing;
         if (data.can_pay) {
             try {
-                if (data.presentation.pay_page !== 'page' || data.presentation.pay_params?._page !== 'receiptQrcode') {
-                    throw new Error('付款页面类型不受支持，请查询原订单');
-                }
-                drawQr(data.presentation.pay_params);
-            } catch (failure) { find('payment').hidden = true; error(failure.message); }
-        } else {
-            find('qr').replaceChildren(); qrKey = '';
+                page = MpayCashierPages.mount(find('payment'), data, {error, expired:() => request('status')});
+                find('payment').hidden = false; page.tick?.();
+            } catch (failure) { disposePage(); error(failure.message); }
         }
-        if (Array.isArray(data.payment_brands)) MpayBrand.setPayments(data.payment_brands);
-        find('method-brand').replaceChildren();
-        const paymentBrand = MpayBrand.paymentImage(data.pay_type, true); if (paymentBrand) find('method-brand').append(paymentBrand);
-        const paymentName = MpayBrand.paymentAsset(data.pay_type)?.name || '对应付款应用';
-        find('pay-hint').textContent = '请使用' + paymentName + '扫码，并填写页面要求的准确金额。';
-        find('remark-block').hidden = data.match_mode !== 'remark';
-        find('remark').textContent = data.remark || '';
-        find('prepare').hidden = !data.can_prepare;
-        find('prepare').disabled = writing;
-        find('return').hidden = !data.return_allowed;
-        find('return').href = '/cashier/return?' + query;
-        let notice;
-        if (data.status === 2) {
-            notice = data.test_mode ? '测试订单已模拟收款 ¥ ' + data.received_money + '，不代表实际收款结果。' : '已核实收款 ¥ ' + data.received_money + '。';
-            notice += data.notification_status === 'success' ? '商户已确认接收付款通知。'
-                : data.notification_status === 'held' ? '收款方暂未发送商户通知，如需处理请联系商户。'
-                : data.notification_status === 'exhausted' ? '商户通知需要核对，请保存订单号并联系商户。' : '正在向商户发送付款通知，请勿重复支付。';
-            if (!data.return_allowed) notice += '商户未设置返回页面，请保存订单号。';
-        } else if (data.status === 3) {
-            notice = '支付未能完成，请联系商户。若已付款，请提供订单号核对。';
-        } else if (data.expired || data.status === 4 || data.status === 5) {
-            notice = '此订单已停止收款，请勿继续付款。若已付款，请刷新支付结果或联系商户核对。';
-        } else if (data.can_select) {
-            notice = data.payment_methods.length ? '请选择支付方式，选定后此订单的支付方式不可更改。' : '暂时没有可用的支付方式，请联系商户。';
-        } else if (data.processing) {
-            notice = '正在准备付款信息，请稍候。若已付款，请勿重复支付。';
-        } else {
-            notice = '等待系统核实到账。请勿自行修改金额或遗漏付款备注。';
+        // 明确关闭/失败优先于截止时间；已支付已在上方进入确认，不能被 expired 覆盖。
+        const stopped = data.status === 3 ? 'failed' : data.status === 4 ? 'closed' : data.status === 5 || data.expired ? 'expired' : null;
+        if (stopped) {
+            disposePage(); find('selection').hidden = true; find('prepare').hidden = true; find('amount-block').hidden = true;
+            showResult(stopped, stoppedViews[stopped]); find('refresh').textContent = '检查支付结果';
         }
-        find('notice').textContent = notice;
-        find('footer').textContent = data.status === 2 ? '付款已完成。如需帮助，请联系商户并提供订单号。'
-            : data.expired || [3, 4, 5].includes(data.status) ? '请勿继续付款。若已付款，请联系商户并提供订单号核对。'
-            : '付款后请等待支付结果，切勿重复付款。如需帮助，请联系商户并提供订单号。';
-        tick(); schedule();
-        // 后台只创建原单，首次付款准备仍走同源写接口。未知结果不在本页自动重复发起。
+        else if (data.can_select) notice(data.payment_methods.length ? '请选择支付方式，选定后此订单的支付方式不可更改。' : '暂时没有可用的支付方式，请联系商户。');
+        else if (data.processing) notice('正在准备付款信息，请稍候。若已付款，请勿重复支付。');
+        // 付款要求由展示模块呈现；公共提示区只保留准备、异常和完成状态，避免重复指引。
+        else notice('');
+        find('footer').textContent = data.can_pay
+            ? '付款后请等待系统确认，切勿重复付款。\n如需帮助，请联系商户并提供订单号。'
+            : '如需帮助，请联系商户并提供订单号。';
         if (data.needs_initial_prepare && !initialPrepareRequested) {
-            initialPrepareRequested = true;
-            setTimeout(() => write('/api/cashier/prepare', {}), 0);
+            initialPrepareRequested = true; setTimeout(() => write('/api/cashier/prepare', {}), 0);
         }
     }
-
-    /** 写请求前后各推进一次代次，避免较早的轮询响应覆盖已经返回的新执行状态。 */
-    async function write(path, extra) {
-        if (writing) return;
-        const before = {payNo: current?.pay_no ?? null, status: current?.status ?? null};
-        writeFailure = null;
-        writing = true; generation++;
-        for (const button of find('methods').querySelectorAll('button')) button.disabled = true;
-        find('prepare').disabled = true; error('');
-        try {
-            const response = await MpayHttp.request(path, {method: 'POST', data: {...identity, ...extra}});
-            generation++; apply(response.data);
-        } catch (failure) {
-            writeFailure = {...before, message: failure.message || '操作尚未完成，请查询原订单。'};
-            generation++; error(writeFailure.message);
-            await refresh();
-        } finally {
-            writing = false;
-            for (const button of find('methods').querySelectorAll('button')) button.disabled = false;
-            find('prepare').disabled = false;
+    function complete(data) {
+        if (!data || data.biz_no !== identity.biz_no || typeof data.status !== 'number') throw new Error('商户确认响应异常');
+        if (data.action === 'payment') { phase = 'payment'; deadline = null; pending = 'order'; return; }
+        if (data.status !== 2) throw new Error('订单尚未确认支付成功');
+        if (['return','success'].includes(data.action)) {
+            if (data.required && data.confirmed !== true) throw new Error('商户尚未确认');
+            if (data.action === 'return' && data.confirmed !== true) throw new Error('商户尚未确认');
+            const target = new URL(data.next_url, location.origin);
+            if (target.origin !== location.origin || target.pathname !== '/cashier/' + data.action
+                || target.searchParams.get('biz_no') !== identity.biz_no || target.searchParams.get('token') !== identity.token) throw new Error('完成页面地址无效');
+            phase = 'done'; clearTimeout(timer); disposePage();
+            showResult('paid', {label:'已支付',icon:'ok-circle',title:'支付已完成',message:'付款已完成，请勿重复付款。',
+                detail:data.action === 'return' ? '商户已确认，正在返回商户页面。' : '正在查看支付结果。'});
+            location.replace(target.href); return;
         }
-    }
-
-    async function refresh() {
-        if (fetching) { queued = true; return; }
-        fetching = true;
-        const requestGeneration = generation;
-        try {
-            const response = await MpayHttp.request('/api/cashier/order?' + query);
-            if (requestGeneration === generation) {
-                // apply 区分可清除的读取故障和仍未解决的写拒绝，付款材料还可报告自己的渲染失败。
-                apply(response.data);
-            }
-        } catch (failure) {
-            // 写动作已推进代次时，旧轮询失败也不能覆盖新执行的展示状态。
-            if (requestGeneration === generation) error(failure.message || '暂时无法读取订单，请稍后查询。');
-        } finally {
-            fetching = false;
-            if (queued && !document.hidden) { queued = false; refresh(); } else schedule();
+        if (data.action === 'attention') {
+            phase = 'attention'; deadline = null;
+            showResult('paid', {label:'已支付',icon:'ok-circle',
+                title:data.notification_status === 'held' ? '已支付，商户确认暂缓' : '已支付，商户尚未确认',
+                message:'付款已完成，请勿重复付款。',
+                detail:data.notification_status === 'held' ? '商户通知暂缓处理，请联系商户。' : '请重新检查通知，或联系商户核对。'});
+            find('refresh').textContent = '重新检查通知'; return;
         }
+        if (data.action !== 'wait') throw new Error('商户确认状态异常');
+        showConfirmation();
     }
-
     function schedule() {
         clearTimeout(timer);
-        if (document.hidden || !current || (current.status === 2 && ['success','held'].includes(current.notification_status))) return;
-        timer = setTimeout(refresh, current.expired || [3, 4, 5].includes(current.status) ? 15000 : 3000);
+        if (leaving || document.hidden || writing || fetching || phase === 'done' || phase === 'attention') return;
+        if (pending) { const next = pending; pending = null; timer = setTimeout(() => request(next), 0); return; }
+        if (phase === 'notification' && deadline !== null && performance.now() >= deadline) { timeout(); return; }
+        const base = phase === 'notification' ? 2000 : current?.expired || [3,4,5].includes(current?.status) ? 15000 : 3000;
+        const delay = Math.min(base * (2 ** Math.min(failures, 3)), 15000);
+        timer = setTimeout(() => request(phase === 'notification' ? 'completion' : current ? 'status' : 'order'),
+            phase === 'notification' ? Math.min(delay, Math.max(0, deadline - performance.now())) : delay);
     }
-
-    /** 倒计时只影响展示；到零后查询服务器，不自行把订单写成失败、超时或成功。 */
-    function tick() {
-        if (!current) return;
-        const elapsed = Math.floor((Date.now() - receivedAt) / 1000);
-        const remaining = Math.max(0, current.expires_at - current.server_time - elapsed);
-        find('countdown').textContent = Math.floor(remaining / 60) + ':' + String(remaining % 60).padStart(2, '0');
-        if (remaining === 0 && current.can_pay) {
-            find('payment').hidden = true;
-            if (!expiryRefreshRequested) { expiryRefreshRequested = true; refresh(); }
+    async function request(kind) {
+        if (leaving || phase === 'done') return;
+        if (fetching || writing) { if (pending !== 'order') pending = kind; return; }
+        if (phase === 'notification' && deadline !== null && performance.now() >= deadline) { timeout(); return; }
+        fetching = true; clearTimeout(timer); const revision = generation;
+        try {
+            const response = await MpayHttp.request('/api/cashier/' + kind + '?' + query);
+            if (revision !== generation || leaving) return;
+            if (phase === 'notification' && deadline !== null && performance.now() >= deadline) { timeout(); return; }
+            failures = 0;
+            if (kind === 'order') apply(response.data);
+            else if (kind === 'completion') { error(''); complete(response.data); }
+            else {
+                const data = response.data;
+                if (data.biz_no !== identity.biz_no || typeof data.revision !== 'string') throw new Error('订单状态响应异常');
+                if (data.revision !== current?.revision) {
+                    if (data.status === 2) enterConfirmation();
+                    pending = 'order';
+                }
+            }
+        } catch (failure) {
+            if (revision === generation && !leaving) { failures++; error(failure.message || '暂时无法查询，请稍后重试。'); }
+        } finally { fetching = false; schedule(); }
+    }
+    async function write(path, extra) {
+        if (writing || leaving || phase !== 'payment') return;
+        const before = {payNo:current?.pay_no ?? null, status:current?.status ?? null};
+        writing = true; generation++; pending = null; writeFailure = null; clearTimeout(timer); error('');
+        find('methods').querySelectorAll('button').forEach(button => button.disabled = true); find('prepare').disabled = true;
+        try {
+            const response = await MpayHttp.request(path, {method:'POST', data:{...identity, ...extra}});
+            generation++; if (!leaving) apply(response.data);
+        } catch (failure) {
+            generation++; writeFailure = {...before, message:failure.message || '操作尚未完成，请查询原订单。'};
+            error(writeFailure.message); pending = 'order';
+        } finally {
+            writing = false; find('methods').querySelectorAll('button').forEach(button => button.disabled = false);
+            find('prepare').disabled = false; schedule();
         }
     }
-
-    find('refresh').addEventListener('click', () => { error(''); refresh(); });
-    find('prepare').addEventListener('click', () => write('/api/cashier/prepare', {}));
-    find('copy').addEventListener('click', async () => {
-        if (!current?.remark) return;
-        try { await navigator.clipboard.writeText(current.remark); layui.layer.msg('备注已复制'); }
-        catch (_) { layui.layer.msg('请长按或选中备注手动复制'); }
+    find('refresh').addEventListener('click', () => {
+        if (phase === 'done' || writing) return;
+        error(''); failures = 0;
+        if (phase === 'attention') { generation++; enterConfirmation(); pending = null; }
+        request(phase === 'notification' ? 'completion' : 'order');
     });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else refresh(); });
-    window.addEventListener('pageshow', event => { if (event.persisted) refresh(); });
-    setInterval(tick, 1000);
+    find('prepare').addEventListener('click', () => write('/api/cashier/prepare', {}));
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearTimeout(timer);
+        else if (!leaving && !['done','attention'].includes(phase)) {
+            page?.tick?.(); request(phase === 'notification' ? (pending || 'completion') : 'status');
+        }
+    });
+    window.addEventListener('pagehide', () => { leaving = true; generation++; clearTimeout(timer); disposePage(); });
+    window.addEventListener('pageshow', event => { if (event.persisted) { leaving = false; phase = 'payment'; deadline = null; pending = null; generation++; request('order'); } });
+    setInterval(() => { if (!leaving) { if (!document.hidden) page?.tick?.(); if (phase === 'notification' && deadline !== null && performance.now() >= deadline) timeout(); } }, 1000);
     try { apply(JSON.parse(document.getElementById('cashier-initial').textContent)); }
-    catch (failure) { error(failure.message || '页面数据无法读取'); refresh(); }
+    catch (failure) { error(failure.message || '页面数据无法读取'); pending = 'order'; }
+    schedule();
 });

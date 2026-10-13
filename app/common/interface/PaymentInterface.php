@@ -26,7 +26,11 @@ interface PaymentInterface
     /** @return list<string> 支付方式编码。 */
     public function getEnabledPayTypes(): array;
 
-    /** @return list<array{type:string,field:string,title:string,validate:array,value?:mixed,options?:array,secret?:bool,help?:string,placeholder?:string,rows?:int,visible_when?:array{field:string,value:mixed}}> 详见 docs/plugin-config-schema.md。 */
+    /**
+     * @return list<array{type:string,field:string,title:string,validate:array,value?:mixed,options?:array,
+     *     secret?:bool,help?:string,placeholder?:string,rows?:int,
+     *     visible_when?:array{field:string,value:mixed}|array{field:string,in:list<mixed>}}> 详见公开 schema 文档。
+     */
     public function getConfigSchema(): array;
 
     /** pay 请求是否可安全重放；只有无外部副作用或平台以原单号严格幂等时才能返回 true。 */
@@ -34,7 +38,8 @@ interface PaymentInterface
 
     /**
      * @param array{pay_no:string,biz_no:string,pay_type_code:string,amount:int,expire_at:string,extra:array<string,mixed>} $order
-     * pending 必须包含 pay_type/pay_product/pay_action 和 presentation；当前支持静态码 receiptQrcode 页面。
+     * pending 必须包含 pay_type/pay_product/pay_action 和 presentation；公开 pay_params 由插件生成并冻结。
+     * 平台地址/材料由插件校验，前端按 pay_page/_page 选择已交付组件；核心不注册平台专用展示类。
      * paid_amount 为通知业务的原金额（分），实收证据在 receipt 中保存；pending 为 null。
      *
      * @return array{status:string,pay_no:string,paid_amount:?int,chan_order_no:?string,chan_trade_no:?string,

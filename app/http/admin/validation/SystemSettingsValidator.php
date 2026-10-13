@@ -31,7 +31,8 @@ final class SystemSettingsValidator extends Validate
         if (array_diff(array_keys($input), array_keys($this->rule)) !== [] || array_diff(array_keys($this->rule), array_keys($input)) !== []) {
             throw new BusinessException('系统设置正文缺少字段或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
         }
-        $validator = clone $this; $validator->must = array_keys($this->rule);
+        $validator = clone $this;
+        $validator->append(['expected_version' => 'require', 'values' => 'require']);
         if (!$validator->failException(false)->check($input)) { throw new BusinessException('系统设置正文类型或范围无效', ApiResponseConstant::VALIDATION_FAILED); }
         $input['values'] = get_object_vars($input['values']);
         return $input;

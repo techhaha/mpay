@@ -72,6 +72,16 @@ final class BizOrderRepository extends BaseRepository
         return $this->model->where('biz_no', $bizNo)->find();
     }
 
+    /** 收银台高频读取只取身份、状态和导航事实，不加载商品、金额及完整扩展配置。 */
+    public function cashierState(string $bizNo, bool $completion = false): ?BizOrder
+    {
+        $query = $this->model->where('biz_no', $bizNo)->field('biz_no,access_token_hash,status,active_pay_no,expire_at');
+        if ($completion) {
+            $query->fieldRaw('notify_url IS NOT NULL AS cashier_notify_required, return_url IS NOT NULL AS cashier_has_return');
+        }
+        return $query->find();
+    }
+
     /** @return list<BizOrder> 按已认证应用分页；page/limit 由协议校验器限定，不读取整表后切片。 */
     public function pageForApp(string $appId, int $page, int $limit): array
     {

@@ -35,7 +35,7 @@ final class ConfigurationQueryValidator extends Validate
         $this->known($input, [...$fields, 'page', 'limit']);
         $filters = array_filter(array_intersect_key($input, array_flip($fields)), static fn (mixed $value): bool => $value !== '');
         $validator = (clone $this)->scene($kind)->failException(false);
-        $validator->must = array_keys($filters);
+        $validator->append(array_fill_keys(array_keys($filters), 'require'));
         if (!$validator->check($filters)) { throw new BusinessException('配置筛选无效', ApiResponseConstant::VALIDATION_FAILED); }
         if (array_key_exists('enabled', $filters)) { $filters['enabled'] = (int) $filters['enabled']; }
         return ['filters' => $filters] + $this->pagination->validate($input);

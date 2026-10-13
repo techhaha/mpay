@@ -11,15 +11,18 @@ use PDOException;
 use RuntimeException;
 
 /**
- * 按版本顺序执行建表、受限追加/退役列、指定关联可空及注释更新，保存 pending/complete 并支持中断续跑。
+ * 按版本顺序执行建表、受限列/索引调整及注释更新，保存 pending/complete 并支持中断续跑。
  *
  * 数据库负责执行字段、索引和外键定义；本服务核对步骤摘要、表归属、基本表类型及本次注释结果。
- * 不比对完整元数据，不检测安装后人工修改的字段/索引，也不执行自动修表或回滚。
+ * 只核对明确步骤涉及的结构，不比对全库元数据，也不执行自动修表或回滚。
  */
 final class MigrationService
 {
     private const RETIRED_COLLECTION_TABLES = ['ma_payment_plugin_conf_scope', 'ma_receipt_runtime_state', 'ma_receipt_session'];
     private const COLLECTION_CLEANUP_ID = '202610110300_order_driven_collection:ma_payment_plugin_conf_collection_cleanup';
+
+    private const CHANNEL_MATCHING_ID = '202610130100_channel_matching:ma_pay_order_channel_matching';
+    private const RESERVATION_TABLE = 'ma_receipt_match_reservation';
 
     public const MINIMUM_MYSQL = '5.7.9';
 
@@ -93,7 +96,11 @@ final class MigrationService
                 }
                 // 同摘要 pending 且表已存在，表示建表完成但确认中断；不重复 CREATE，也不清空该表。
                 // 只有 state 已确认属于本次迁移的表可走此分支；同名未知表在执行前即被拒绝。
-                if ($step->collectionCleanup) {
+                if ($step->receiptPaidIndex) {
+                    $this->applyReceiptPaidIndex();
+                } elseif ($step->channelMatching) {
+                    $this->applyChannelMatching();
+                } elseif ($step->collectionCleanup) {
                     $this->cleanupCollection();
                 } elseif ($step->removedColumns !== null) {
                     $present = $this->removalColumnsPresent($step);
@@ -144,7 +151,8 @@ final class MigrationService
         $tables = array_values(array_unique(array_map(static fn (MigrationStep $step): string => $step->table,
             array_filter($steps, static fn (MigrationStep $step): bool => $step->comments === null))));
         foreach ($steps as $step) {
-            if ($step->collectionCleanup) { return array_values(array_diff($tables, self::RETIRED_COLLECTION_TABLES)); }
+            if ($step->collectionCleanup) { $tables = array_values(array_diff($tables, self::RETIRED_COLLECTION_TABLES)); }
+            if ($step->channelMatching) { $tables = array_values(array_diff($tables, [self::RESERVATION_TABLE])); }
         }
         return $tables;
     }
@@ -173,8 +181,8 @@ final class MigrationService
             foreach ($definitions as $name => $definition) {
                 if (!is_string($name)) { throw new RuntimeException('迁移步骤缺少表名'); }
                 $step = MigrationStep::fromDefinition(pathinfo($file, PATHINFO_FILENAME), $name, $definition);
-                if ($step->collectionCleanup || $step->nullableColumns !== null || $step->removedColumns !== null) {
-                    if (!isset($tables[$step->table])) { throw new RuntimeException('可空迁移缺少前置建表定义'); }
+                if ($step->receiptPaidIndex || $step->channelMatching || $step->collectionCleanup || $step->nullableColumns !== null || $step->removedColumns !== null) {
+                    if (!isset($tables[$step->table])) { throw new RuntimeException('结构调整缺少前置建表定义'); }
                     $steps[] = $step;
                     continue;
                 }
@@ -214,7 +222,7 @@ final class MigrationService
         $removals = [];
         foreach ($steps as $step) {
             $expected[$step->identity()] = $step;
-            if ($step->comments === null && $step->addedColumn === null && $step->nullableColumns === null && $step->removedColumns === null && !$step->collectionCleanup) { $byTable[$step->table] = $step->identity(); }
+            if ($step->comments === null && $step->addedColumn === null && $step->nullableColumns === null && $step->removedColumns === null && !$step->collectionCleanup && !$step->channelMatching && !$step->receiptPaidIndex) { $byTable[$step->table] = $step->identity(); }
             foreach ($step->removedColumns ?? [] as $column) { $removals[$step->table . '.' . $column] = $step->identity(); }
         }
         if (array_diff(array_keys($tables), [...array_keys($byTable), '_mpay_migration_step']) !== []) {
@@ -229,7 +237,7 @@ final class MigrationService
             }
             $step = $expected[$identity];
             if (!hash_equals($step->checksum, $record['checksum'])
-                && ($step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->addedColumn !== null || $record['state'] !== 'pending' || isset($tables[$step->table]))) {
+                && ($step->receiptPaidIndex || $step->channelMatching || $step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->addedColumn !== null || $record['state'] !== 'pending' || isset($tables[$step->table]))) {
                 throw new RuntimeException('已创建表的迁移 SQL 摘要已改变，拒绝覆盖');
             }
             $records[$identity] = $record;
@@ -238,6 +246,21 @@ final class MigrationService
         foreach ($steps as $step) {
             $record = $records[$step->identity()] ?? null;
             if ($record !== null && $unfinished) { throw new RuntimeException('迁移进度不连续，需先核对中断步骤'); }
+            if ($step->receiptPaidIndex) {
+                if (($record['state'] ?? null) === 'complete') { $this->assertReceiptPaidIndex(); }
+                $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
+                continue;
+            }
+            if ($step->channelMatching) {
+                if (($record['state'] ?? null) === 'complete') { $this->assertChannelMatching(); }
+                $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
+                continue;
+            }
+            if ($step->table === self::RESERVATION_TABLE && !isset($tables[$step->table])
+                && isset($records[self::CHANNEL_MATCHING_ID])) {
+                if (($record['state'] ?? null) !== 'complete') { throw new RuntimeException('预约退役缺少完整前置迁移'); }
+                continue;
+            }
             if ($step->collectionCleanup) {
                 if (($record['state'] ?? null) === 'complete') { $this->assertCollectionCleanup(); }
                 $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
@@ -465,7 +488,7 @@ final class MigrationService
         try {
             foreach ($steps as $step) {
                 // 注释 SQL 依赖服务器当前列声明，执行该步时生成；声明校验已在 loadPlan 完成。
-                if ($step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->removedColumns !== null) { continue; }
+                if ($step->receiptPaidIndex || $step->channelMatching || $step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->removedColumns !== null) { continue; }
                 if ($step->addedColumn === null && isset($tables[$step->table])) { continue; }
                 // 空库时 ALTER 依赖尚未执行的 CREATE；所属表建成后由 MySQL 执行该固定追加语句。
                 if ($step->addedColumn !== null && (!isset($tables[$step->table]) || $this->addedColumnExists($step))) { continue; }
@@ -538,6 +561,88 @@ final class MigrationService
             || !$this->collectionIndex('ma_receipt_flow', 'uk_flow_event')
             || !$this->collectionIndex('ma_pay_order', 'uk_pay_plugin_trade') || !$this->collectionIndex('ma_pay_order', 'idx_pay_collection')) {
             throw new RuntimeException('订单驱动监听结构未完成');
+        }
+    }
+
+    /**
+     * 只执行已声明的通道查询索引和预约退役；不清空订单、不回填快照、不修改历史迁移摘要。
+     * 升级应在停止接单和工作者后执行；DDL 分步续跑，不能由业务事务回滚。
+     */
+    private function applyChannelMatching(): void
+    {
+        if (isset($this->tables()[self::RESERVATION_TABLE])) {
+            // 成功后的 pay_amount 已恢复原值，须与保留的识别快照比较，不能据此误判丢失。
+            $missing = $this->pdo->query("SELECT r.id FROM ma_receipt_match_reservation r LEFT JOIN ma_pay_order p ON p.pay_no=r.pay_no
+                WHERE p.id IS NULL OR p.request_at IS NULL OR p.request_at<>r.valid_from OR p.expire_at<>r.expire_at
+                OR COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.receipt_amount')),'')<>CAST(r.receipt_amount AS CHAR)
+                OR COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.match_mode')),'')<>r.match_mode
+                OR COALESCE(JSON_TYPE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.original_amount')),'')<>'INTEGER'
+                OR CAST(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.original_amount')) AS SIGNED)<1
+                OR (r.match_mode='remark' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.remark')),'')<>r.match_value)
+                LIMIT 1")->fetchColumn();
+            if ($missing !== false) { throw new RuntimeException('预约历史与订单快照不一致，拒绝退役；不会自动回填或清空数据'); }
+        }
+        $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
+        $this->pdo->exec('SET SESSION lock_wait_timeout=10');
+        try {
+            foreach (['idx_pay_channel_active' => 'channel_id,status,expire_at,id',
+                'idx_pay_channel_receipt' => 'channel_id,pay_amount,expire_at,id'] as $name => $columns) {
+                if (!$this->collectionIndex('ma_pay_order', $name)) {
+                    $this->pdo->exec('ALTER TABLE ma_pay_order ADD KEY `' . $name . '` (' . $columns . ')');
+                }
+            }
+            // 同名索引可能结构不同；必须先核对，再退役旧表。
+            $this->assertChannelMatchingIndexes();
+            $this->pdo->exec('DROP TABLE IF EXISTS ma_receipt_match_reservation');
+        } finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
+        $this->assertChannelMatching();
+    }
+
+    /** 仅核对本版本的固定表与索引，不恢复通用结构差异框架。 */
+    private function assertChannelMatching(): void
+    {
+        if (isset($this->tables()[self::RESERVATION_TABLE])) { throw new RuntimeException('预约表尚未退役'); }
+        $this->assertChannelMatchingIndexes();
+    }
+
+    /** 固定索引核对也用于删除旧表前的保护检查。 */
+    private function assertChannelMatchingIndexes(): void
+    {
+        $query = $this->pdo->prepare("SELECT COLUMN_NAME FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ma_pay_order' AND INDEX_NAME=? ORDER BY SEQ_IN_INDEX");
+        foreach (['idx_pay_channel_active' => ['channel_id','status','expire_at','id'],
+            'idx_pay_channel_receipt' => ['channel_id','pay_amount','expire_at','id']] as $name => $columns) {
+            $query->execute([$name]);
+            if ($query->fetchAll(PDO::FETCH_COLUMN) !== $columns) { throw new RuntimeException('通道识别索引不符合已声明结构'); }
+        }
+    }
+
+    /** 新增固定统计索引，在线 DDL 不回写流水；中断后按真实索引结构续跑。 */
+    private function applyReceiptPaidIndex(): void
+    {
+        if (!$this->collectionIndex('ma_receipt_flow', 'idx_receipt_paid')) {
+            $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
+            $this->pdo->exec('SET SESSION lock_wait_timeout=10');
+            try {
+                $this->pdo->exec('ALTER TABLE ma_receipt_flow ADD INDEX idx_receipt_paid (paid_at,pay_no), ALGORITHM=INPLACE, LOCK=NONE');
+            } finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
+        }
+        $this->assertReceiptPaidIndex();
+    }
+
+    /** 同名、错顺序、前缀或唯一索引均不能冒充本版本已经完成。 */
+    private function assertReceiptPaidIndex(): void
+    {
+        $rows = $this->pdo->query("SELECT COLUMN_NAME,NON_UNIQUE,SUB_PART,INDEX_TYPE FROM information_schema.STATISTICS
+            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ma_receipt_flow' AND INDEX_NAME='idx_receipt_paid' ORDER BY SEQ_IN_INDEX")
+            ->fetchAll(PDO::FETCH_ASSOC);
+        if (array_column($rows, 'COLUMN_NAME') !== ['paid_at', 'pay_no']) {
+            throw new RuntimeException('到账日期索引不符合已声明结构');
+        }
+        foreach ($rows as $row) {
+            if ((int) $row['NON_UNIQUE'] !== 1 || $row['SUB_PART'] !== null || $row['INDEX_TYPE'] !== 'BTREE') {
+                throw new RuntimeException('到账日期索引属性不符合已声明结构');
+            }
         }
     }
 

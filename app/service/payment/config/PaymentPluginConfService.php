@@ -85,7 +85,7 @@ final class PaymentPluginConfService extends BaseService
         $revision = $this->configurations->revision($id, $expectedVersion)
             ?? throw new RuntimeException('插件配置版本缺失');
         // 原配置快照保留；普通保存不触发登录，也不比较平台账号或凭证。
-        if ($name === $configuration['name'] && PluginConfigValidator::sameSchema($settings, $old)
+        if ($name === $configuration['name'] && $this->sameSettings($settings, $old)
             && $revision['plugin_version'] === $definition->version) {
             return ['id' => $id, 'config_version' => $expectedVersion, 'enabled' => (int) $configuration['enabled'] === 1];
         }
@@ -150,6 +150,13 @@ final class PaymentPluginConfService extends BaseService
     private function assertVersion(int $current, int $expected): void
     {
         if ($current !== $expected) { throw new BusinessException('插件配置已修改，请刷新', ApiResponseConstant::CONFLICT); }
+    }
+
+    /** 配置对象键顺序不构成修改；字段值严格比较，列表的顺序仍有意义。 */
+    private function sameSettings(array $expected, array $stored): bool
+    {
+        ksort($expected); ksort($stored);
+        return $expected === $stored;
     }
 
 }

@@ -11,12 +11,12 @@ use app\common\interface\ReceiptCollectorInterface;
 use app\common\sdk\alipay\AlipayBillClient;
 use app\common\util\Clock;
 use app\common\util\Money;
+use app\common\util\SafeLogger;
 use app\exception\BusinessException;
 use app\exception\ReceiptCollectionException;
 use app\exception\UnsupportedPaymentOperationException;
 use app\model\payment\PayOrder;
-use app\repository\payment\receipt\ReceiptMatchReservationRepository;
-use app\repository\payment\receipt\ReceiptScopeRepository;
+use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use DateTimeImmutable;
@@ -41,8 +41,8 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
                 'type' => 'select',
                 'field' => 'receipt_match_mode',
                 'title' => '匹配方式',
-                'options' => [['value' => 'amount', 'label' => '按金额识别'], ['value' => 'remark', 'label' => '按备注识别']],
-                'validate' => [0 => 'require', 'in' => ['amount', 'remark']],
+                'options' => [['value' => 'amount', 'label' => '按金额识别'], ['value' => 'remark', 'label' => '手动填写备注'], ['value' => 'alipay_transfer', 'label' => '自动填写金额和备注']],
+                'validate' => [0 => 'require', 'in' => ['amount', 'remark', 'alipay_transfer']],
                 'value' => 'amount'
             ],
             [
@@ -59,11 +59,12 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
                 'validate' => [0 => 'require', 'between' => [0, 99]],
                 'value' => 99,
                 'visible_when' => ['field' => 'receipt_match_mode', 'value' => 'amount'],
-                'help' => '用于区分同一收款范围的待付订单；0 表示不增加金额。'
+                'help' => '用于区分本通道内的待付订单；0 表示不增加金额。'
             ],
             [
                 'type' => 'textarea',
                 'field' => 'receipt_qrcode_content',
+                'visible_when' => ['field' => 'receipt_match_mode', 'in' => ['amount', 'remark']],
                 'title' => '收款码内容',
                 'value' => '',
                 'validate' => [0 => 'string', 'regex' => '/^[\s\S]{0,2331}$/D', 'requireWithout' => 'receipt_qrcode_image'],
@@ -72,6 +73,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
             [
                 'type' => 'upload',
                 'field' => 'receipt_qrcode_image',
+                'visible_when' => ['field' => 'receipt_match_mode', 'in' => ['amount', 'remark']],
                 'title' => '收款码图片',
                 'value' => '',
                 'help' => '支持 PNG、JPEG、WebP 图片，最大 2 MiB。',
@@ -115,12 +117,12 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     public function __construct(
         private readonly PayOrderRepository $orders,
         private readonly BizOrderRepository $businessOrders,
-        private readonly ReceiptScopeRepository $scopes,
-        private readonly ReceiptMatchReservationRepository $reservations,
+        private readonly PaymentChannelRepository $channels,
         private readonly Clock $clock,
         private readonly AlipayBillClient $client,
         private readonly Cache $cache,
         private readonly Config $config,
+        private readonly SafeLogger $logger,
     ) {}
 
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
@@ -174,28 +176,44 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     /** 按当前通道准备识别值并生成静态码材料；事务提交后返回 pending，不推进交易成功。 */
     public function pay(array $order): array
     {
-        $pay = $this->prepareReceipt($order['pay_no']);
-        return [
-            'status' => 'pending',
-            'pay_no' => $order['pay_no'],
-            'paid_amount' => null,
-            'chan_order_no' => null,
-            'chan_trade_no' => null,
-            'pay_type' => $order['pay_type_code'],
-            'pay_product' => 'receipt',
-            'pay_action' => 'qrcode',
-            'presentation' => [
-                'pay_page' => 'page',
-                'pay_params' => [
-                    '_page' => 'receiptQrcode',
-                    'qrcode_content' => $this->getConfig('receipt_qrcode_content') ?: null,
-                    'qrcode_image_url' => $this->getConfig('receipt_qrcode_image_url'),
-                    'order_money' => Money::format($pay->originalAmount()),
-                    'receipt_money' => Money::format($pay->receiptAmount()),
-                    'remark' => $pay['ext_json']['personal_receipt']['remark'] ?? null
-                ],
-            ]
-        ];
+        $prepared = $this->prepareReceipt($order['pay_no']);
+        $meta = $this->receiptMeta($prepared['ext_json']);
+        $params = $this->getConfig('receipt_match_mode') === 'alipay_transfer'
+            ? $this->transferParams($meta['receipt_amount'], $meta['remark'])
+            : ['_page' => 'receiptQrcode', 'qrcode_content' => $this->getConfig('receipt_qrcode_content') ?: null,
+                'qrcode_image_url' => $this->getConfig('receipt_qrcode_image_url'),
+                'instruction' => $meta['match_mode'] === 'remark' ? 'manual_remark' : 'scan', 'remark' => $meta['remark']];
+        return ['status' => 'pending', 'pay_no' => $order['pay_no'], 'paid_amount' => null,
+            'chan_order_no' => null, 'chan_trade_no' => null,
+            'pay_type' => $order['pay_type_code'], 'pay_product' => 'receipt', 'pay_action' => 'qrcode',
+            'presentation' => ['pay_page' => 'page', 'pay_params' => $params]];
+    }
+
+    /**
+     * 沿用 V2 支付宝客户端入口格式，分别生成扫码与手机链接；平台规则留在本插件。
+     * 参数只包含本单已准备的公开付款事实，不向页面传递账单 API 凭证。
+     * @return array{_page:string,qrcode_content:string,transfer_url:string}
+     */
+    private function transferParams(int $cents, string $remark): array
+    {
+        $user = (string) $this->getConfig('bill_user_id');
+        if (!preg_match('/^[0-9]{16,32}$/D', $user)) {
+            throw new BusinessException('自动备注付款需要有效的支付宝用户 ID', ApiResponseConstant::VALIDATION_FAILED);
+        }
+        $amount = Money::format($cents);
+        $scheme = 'alipays://platformapi/startapp?' . http_build_query([
+            'appId' => '20000116', 'actionType' => 'toAccount', 'goBack' => 'NO',
+            'amount' => $amount, 'userId' => $user, 'memo' => $remark,
+        ], '', '&', PHP_QUERY_RFC3986);
+        $render = 'https://render.alipay.com/p/s/i?' . http_build_query(['scheme' => $scheme], '', '&', PHP_QUERY_RFC3986);
+        $middle = 'alipays://platformapi/startapp?' . http_build_query(['appId' => '20000218', 'url' => $render], '', '&', PHP_QUERY_RFC3986);
+        $target = 'https://render.alipay.com/p/s/i?' . http_build_query(['scheme' => $middle], '', '&', PHP_QUERY_RFC3986);
+        $mobile = 'https://render.alipay.com/p/c/mdeduct-landing?' . http_build_query(['scheme' => $target], '', '&', PHP_QUERY_RFC3986);
+        $qr = 'alipays://platformapi/startapp?' . http_build_query([
+            'appId' => '20000123', 'actionType' => 'scan',
+            'biz_data' => json_encode(['a' => $amount, 'm' => $remark, 's' => 'money', 'u' => $user], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+        ], '', '&', PHP_QUERY_RFC3986);
+        return ['_page' => 'alipayTransfer', 'qrcode_content' => $qr, 'transfer_url' => $mobile];
     }
 
     /**
@@ -208,72 +226,53 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
         return Db::transaction(function () use ($observed, $payNo): PayOrder {
             $biz = $this->businessOrders->lock($observed['biz_no']);
             $pay = $this->orders->lock($payNo);
-            $this->scopes->lock($pay['receipt_scope_key']);
+            // 同一通道跨应用、跨配置版本使用同一行锁；不反向锁其他订单。
+            $this->channels->lock($pay['channel_id']);
             if ($pay['channel_id'] !== $this->getConfig('channel_id') || $pay['biz_no'] !== $biz['biz_no']) {
                 throw new LogicException('插件与支付单通道不一致');
             }
             $ext = $pay['ext_json'] ?? [];
-            if (isset($ext['personal_receipt']['original_amount'])) {
-                return $pay;
-            }
+            if ($this->receiptMeta($ext) !== null) { return $pay; }
             $now = $this->clock->now()->format('Y-m-d H:i:s');
-            if (
-                !in_array((int) $pay['status'], [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)
-                || $pay['expire_at'] <= $now
-            ) {
+            if (!in_array((int) $pay['status'], [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)
+                || $pay['expire_at'] <= $now) {
                 throw new BusinessException('支付单不能继续准备收款', ApiResponseConstant::CONFLICT);
             }
-            // 付款窗口属于本插件；不超过原业务截止，重放时复用已准备的窗口。
             $expiresAt = min($pay['expire_at'], $this->clock->now()->modify('+' . $this->getConfig('receipt_valid_seconds', 300) . ' seconds')->format('Y-m-d H:i:s'));
             $original = (int) $biz['order_amount'];
             Money::assertRange($original);
-            // 通用运营限额由选路服务校验；指定通道测试跳过选路，插件仍核验自身金额边界。
-            if ($original < 1) {
-                throw new BusinessException('付款金额必须大于零', ApiResponseConstant::VALIDATION_FAILED);
+            $mode = ($this->getConfig('receipt_match_mode', 'amount') === 'alipay_transfer' ? 'remark' : $this->getConfig('receipt_match_mode', 'amount'));
+            if ($original < 1 || !in_array($mode, ['amount', 'remark'], true)) {
+                throw new BusinessException('收款金额或匹配方式无效', ApiResponseConstant::VALIDATION_FAILED);
             }
-            $mode = $this->getConfig('receipt_match_mode', 'amount');
-            $remark = null;
-            $this->reservations->releaseExpired($pay['receipt_scope_key'], $now);
-            $amount = $original;
+            $amounts = []; $amountMode = []; $remarks = [];
+            foreach ($this->orders->channelPending($pay['channel_id'], $payNo, $now) as $other) {
+                $meta = $this->receiptMeta($other['ext_json'] ?? []);
+                if ($meta === null) { continue; }
+                $amounts[$meta['receipt_amount']] = true;
+                if ($meta['match_mode'] === 'amount') { $amountMode[$meta['receipt_amount']] = true; }
+                else { $remarks[$meta['remark']] = true; }
+            }
+            $amount = $original; $remark = null;
             if ($mode === 'remark') {
-                for ($attempt = 0; $attempt < 100; $attempt++) {
-                    $remark = (string) random_int(1000, 9999);
-                    if (!$this->reservations->hasRemark($pay['receipt_scope_key'], $remark)) {
-                        break;
-                    }
-                    $remark = null;
+                // 切换模式后仍尊重旧单：金额识别单不能与新备注单同额产生歧义。
+                if (isset($amountMode[$original])) {
+                    throw new BusinessException('该金额仍有待付款的金额识别订单，请稍后重试', ApiResponseConstant::CONFLICT);
                 }
-                if ($remark === null) {
-                    throw new BusinessException('收款备注暂时无法分配', ApiResponseConstant::SERVICE_UNAVAILABLE);
+                $start = random_int(1000, 9999);
+                for ($offset = 0; $offset < 9000; $offset++) {
+                    $candidate = (string) (1000 + ($start - 1000 + $offset) % 9000);
+                    if (!isset($remarks[$candidate])) { $remark = $candidate; break; }
                 }
+                if ($remark === null) { throw new BusinessException('当前通道付款备注已用尽', ApiResponseConstant::SERVICE_UNAVAILABLE); }
             } else {
-                $used = array_flip($this->orders->usedReceiptAmounts($pay['receipt_scope_key'], $payNo, $now));
-                $upper = min(
-                    Money::MAX_CENTS,
-                    $original + (int) $this->getConfig('amount_offset_max', 99)
-                );
-                while ($amount <= $upper && isset($used[$amount])) {
-                    $amount++;
-                }
-                if ($amount > $upper) {
-                    throw new BusinessException('当前收款账号识别金额已用尽', ApiResponseConstant::SERVICE_UNAVAILABLE);
-                }
+                $upper = min(Money::MAX_CENTS, $original + (int) $this->getConfig('amount_offset_max', 99));
+                while ($amount <= $upper && isset($amounts[$amount])) { $amount++; }
+                if ($amount > $upper) { throw new BusinessException('当前通道识别金额已用尽', ApiResponseConstant::SERVICE_UNAVAILABLE); }
             }
-            $this->reservations->create([
-                'receipt_scope_key' => $pay['receipt_scope_key'],
-                'pay_no' => $payNo,
-                'match_mode' => $mode,
-                'match_value' => $remark ?? (string) $amount,
-                'receipt_amount' => $amount,
-                'valid_from' => $pay['request_at'] ?? $now,
-                'expire_at' => $expiresAt
-            ]);
             $ext['personal_receipt'] = array_replace($ext['personal_receipt'] ?? [], [
-                'original_amount' => $original,
-                'receipt_amount' => $amount,
-                'offset_amount' => $amount - $original,
-                'match_mode' => $mode,
-                'remark' => $remark,
+                'original_amount' => $original, 'receipt_amount' => $amount, 'offset_amount' => $amount - $original,
+                'match_mode' => $mode, 'remark' => $remark,
             ]);
             $this->orders->saveReceiptContext($payNo, $amount, $ext, $expiresAt, $now);
             $this->businessOrders->shortenExpiry($biz['biz_no'], $expiresAt);
@@ -282,46 +281,71 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     }
 
     /**
+     * 本插件自己的准备快照；无识别字段表示尚未准备，部分字段缺失不能重新分配。
+     * @param array<string,mixed> $extension 已按订单定位取得的扩展数据。
+     * @return array{original_amount:int,receipt_amount:int,match_mode:string,remark:?string}|null
+     */
+    private function receiptMeta(array $extension): ?array
+    {
+        $meta = $extension['personal_receipt'] ?? [];
+        if (!is_array($meta)) { throw new RuntimeException('收款准备快照无效'); }
+        if (array_intersect(['original_amount', 'receipt_amount', 'match_mode', 'remark'], array_keys($meta)) === []) { return null; }
+        if (!is_int($meta['original_amount'] ?? null) || !is_int($meta['receipt_amount'] ?? null)
+            || $meta['original_amount'] < 1 || $meta['receipt_amount'] < $meta['original_amount']
+            || !in_array($meta['match_mode'] ?? null, ['amount', 'remark'], true)
+            || !array_key_exists('remark', $meta)
+            || ($meta['match_mode'] === 'remark' && (!is_string($meta['remark']) || !preg_match('/^[0-9]{4}$/D', $meta['remark'])
+                || $meta['receipt_amount'] !== $meta['original_amount']))
+            || ($meta['match_mode'] === 'amount' && $meta['remark'] !== null)) {
+            throw new RuntimeException('收款准备快照不完整');
+        }
+        Money::assertRange($meta['receipt_amount']);
+        return $meta;
+    }
+
+    /**
      * 一次匹配本响应全部记录，只使用服务提供的原单集合；已消费记录不重新分配。
      * 付款在原窗口内但响应迟到仍可定位；最终状态和幂等由生命周期锁内复核。
      */
     public function matchReceipts(array $receipts, array $orders, array $channels): array
     {
-        usort($receipts, static fn(array $a, array $b): int =>
-        strcmp($a['record']['paid_at'] ?? '', $b['record']['paid_at'] ?? '')
+        usort($receipts, static fn (array $a, array $b): int =>
+            strcmp($a['record']['paid_at'] ?? '', $b['record']['paid_at'] ?? '')
             ?: strcmp($a['record']['event_key'], $b['record']['event_key']));
-        $results = [];
-        $used = [];
-        $seen = [];
+        $results = []; $used = []; $seen = [];
         foreach ($receipts as $entry) {
             $record = $entry['record'];
-            if ($entry['consumed_pay_no'] !== null || isset($seen[$record['event_key']]) || $record['paid_at'] === null) {
-                continue;
-            }
+            if ($entry['consumed_pay_no'] !== null || isset($seen[$record['event_key']]) || $record['paid_at'] === null) { continue; }
             $seen[$record['event_key']] = true;
-            $candidates = array_filter($orders, static function (array $pay) use ($record, $used, $channels): bool {
-                return !isset($used[$pay['pay_no']]) && isset($channels[$pay['channel_revision_id']])
-                    && $pay['pay_type'] === $record['pay_type'] && $pay['receipt_amount'] === $record['amount']
-                    && $pay['request_at'] <= $record['paid_at'] && $record['paid_at'] < $pay['expire_at']
-                    && ($pay['match_mode'] === 'amount' || ($pay['match_mode'] === 'remark' && $pay['remark'] === $record['remark']));
-            });
-            if ($candidates === []) {
+            $byChannel = [];
+            foreach ($orders as $pay) {
+                $channel = $channels[$pay['channel_revision_id']] ?? null;
+                if ($channel === null || $channel['channel_id'] !== $pay['channel_id']
+                    || $pay['pay_type'] !== $record['pay_type']) { continue; }
+                $meta = $this->receiptMeta($pay['ext_json'] ?? []);
+                if ($meta === null || $meta['receipt_amount'] !== $record['amount']
+                    || $pay['request_at'] > $record['paid_at'] || $record['paid_at'] >= $pay['expire_at']
+                    || ($meta['match_mode'] === 'remark' && $meta['remark'] !== $record['remark'])) { continue; }
+                $byChannel[$pay['channel_id']][] = $pay;
+            }
+            // 同账号请求可合并，订单范围不能合并；无通道证据时绝不靠遍历顺序抢单。
+            // 已被本批选中的订单也参与归属判断，避免后续流水假装只剩一个通道。
+            if (count($byChannel) > 1) {
+                $this->logger->record('receipt.match', ['plugin_code' => $this->getCode(), 'reason_code' => 'ambiguous_channel'], 'warning');
                 continue;
             }
+            $candidates = array_values(array_filter($byChannel === [] ? [] : reset($byChannel),
+                static fn (array $pay): bool => !isset($used[$pay['pay_no']])));
+            if ($candidates === []) { continue; }
             $paid = strtotime($record['paid_at']);
-            usort($candidates, static fn(array $a, array $b): int => (abs(strtotime($a['request_at']) - $paid) <=> abs(strtotime($b['request_at']) - $paid))
+            usort($candidates, static fn (array $a, array $b): int =>
+                (abs(strtotime($a['request_at']) - $paid) <=> abs(strtotime($b['request_at']) - $paid))
                 ?: strcmp($a['created_at'], $b['created_at']) ?: (strlen($a['id']) <=> strlen($b['id'])) ?: strcmp($a['id'], $b['id']));
-            $pay = $candidates[0];
+            $pay = $candidates[0]; $meta = $this->receiptMeta($pay['ext_json']);
             $used[$pay['pay_no']] = true;
-            $results[] = [
-                'status' => 'success',
-                'pay_no' => $pay['pay_no'],
-                'paid_amount' => $pay['amount'],
-                'chan_order_no' => $record['trade_no'],
-                'chan_trade_no' => $record['trade_no'],
-                'paid_at' => $record['paid_at'],
-                'receipt' => $record
-            ];
+            $results[] = ['status' => 'success', 'pay_no' => $pay['pay_no'], 'paid_amount' => $meta['original_amount'],
+                'chan_order_no' => $record['trade_no'], 'chan_trade_no' => $record['trade_no'],
+                'paid_at' => $record['paid_at'], 'receipt' => $record];
         }
         return $results;
     }
@@ -359,6 +383,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     /** 同账单主体的通道合并一次查询，凭证解释和查询间隔留在本插件。 */
     public function collect(array $orders, array $channels, DateTimeImmutable $deadline): iterable
     {
+        $orders = array_filter($orders, fn (array $pay): bool => $this->receiptMeta($pay['ext_json'] ?? []) !== null);
         $active = array_fill_keys(array_column($orders, 'channel_revision_id'), true);
         $groups = [];
         foreach ($channels as $id => $channel) {

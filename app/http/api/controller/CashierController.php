@@ -20,6 +20,18 @@ final class CashierController extends BaseController
         return $this->success($cashier->view($identity['biz_no'], $identity['token'], $clock->now()), '查询成功');
     }
 
+    public function status(CashierValidator $validator, CashierService $cashier, Clock $clock): Response
+    {
+        $identity = $validator->identity($this->request->get());
+        return $this->success($cashier->status($identity['biz_no'], $identity['token'], $clock->now()), '查询成功');
+    }
+
+    public function completion(CashierValidator $validator, CashierService $cashier): Response
+    {
+        $identity = $validator->identity($this->request->get());
+        return $this->success($cashier->completion($identity['biz_no'], $identity['token']), '查询成功');
+    }
+
     public function selectType(CashierValidator $validator, CashierService $cashier): Response
     {
         $input = $validator->action($this->jsonBody(), true);

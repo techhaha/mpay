@@ -50,7 +50,12 @@ final class PaymentConfigurationValidator extends Validate
         $optional = match ($operation) { 'editor-create' => ['enabled', 'participates_default_route'], 'editor-save' => ['participates_default_route'], default => [] };
         $this->assertFields($input, $fields, $optional);
         $validator = clone $this;
-        $validator->must = array_keys($input);
+        $validator->append(array_fill_keys(array_diff(array_keys($input), ['enabled', 'participates_default_route']), 'require'));
+        foreach (['enabled', 'participates_default_route'] as $field) {
+            if (array_key_exists($field, $input)) {
+                $validator->rule($field, [static fn (mixed $value): bool => is_bool($value)]);
+            }
+        }
         $validator->message(array_fill_keys($fields, '字段类型或范围无效'));
         if (!$validator->scene($operation)->batch()->failException(false)->check($input)) { $this->reject($validator); }
         $result = $input;
@@ -79,7 +84,8 @@ final class PaymentConfigurationValidator extends Validate
         $values = get_object_vars($object);
         $this->assertFields($values, array_keys($rules), [], $prefix);
         $validator = clone $this;
-        $validator->must = array_keys($rules);
+        // 时段允许 null，已有闭包会始终执行；名称与金额必须提供有效非空值。
+        $validator->append(array_fill_keys(array_diff(array_keys($rules), ['available_from', 'available_to']), 'require'));
         $validator->message(array_fill_keys(array_keys($rules), '字段类型或范围无效'));
         if (!$validator->batch()->failException(false)->check($values, $rules)) { $this->reject($validator, $prefix); }
         return $values;

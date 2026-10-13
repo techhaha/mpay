@@ -125,15 +125,13 @@ final class ReceiptWatcherService
             foreach ($rows as $pay) {
                 $after = $pay['id'];
                 if (++$scanned > $maximum) { throw new ReceiptCollectionException('capacity_exceeded'); }
-                $receipt = $pay['ext_json']['personal_receipt'] ?? [];
-                // 已分配收款材料才具有稳定金额/备注，准备中的订单下一轮再读。
-                if (!isset($receipt['original_amount'], $receipt['receipt_amount'], $receipt['match_mode'])) { continue; }
+                // 原单扩展原样交插件解释；采集器不推断任何插件的准备字段或匹配方式。
                 $revision = $pay->channelRevision;
                 if (!$revision || $revision['channel_id'] !== $pay['channel_id']) { throw new RuntimeException('订单通道快照缺失'); }
                 $versions[$revision['id']] = $revision;
-                $orders[$pay['pay_no']] = ['id' => $pay['id'], 'pay_no' => $pay['pay_no'], 'channel_revision_id' => $revision['id'],
-                    'pay_type' => $pay['ext_json']['payment_context']['pay_type'], 'amount' => $pay->originalAmount(),
-                    'receipt_amount' => $pay->receiptAmount(), 'match_mode' => $receipt['match_mode'], 'remark' => $receipt['remark'] ?? null,
+                $orders[$pay['pay_no']] = ['id' => $pay['id'], 'pay_no' => $pay['pay_no'], 'channel_id' => $pay['channel_id'], 'channel_revision_id' => $revision['id'],
+                    'pay_type' => $pay['ext_json']['payment_context']['pay_type'], 'pay_amount' => (int) $pay['pay_amount'],
+                    'ext_json' => $pay['ext_json'] ?? [],
                     'request_at' => $pay['request_at'], 'expire_at' => $pay['expire_at'], 'created_at' => $pay['created_at']];
             }
         } while (count($rows) === $size);

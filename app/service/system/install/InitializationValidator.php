@@ -29,7 +29,6 @@ final class InitializationValidator extends Validate
             throw new BusinessException('初始化输入字段不完整或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
         }
         $validator = (clone $this)->only(array_keys($input))->failException(false);
-        $validator->must = array_keys($input);
         if (!$validator->check($input)) {
             throw new BusinessException('初始化参数无效；密码至少 12 个字符且最多 72 字节，确认值须一致', ApiResponseConstant::VALIDATION_FAILED);
         }

@@ -76,7 +76,9 @@ final class RefundService extends BaseService
             $snapshot = $this->revisions->snapshot($pay['channel_id'], $pay['channel_revision_id']);
             if (($snapshot['channel']['plugin_code'] ?? null) !== $pay['plugin_code']) { throw new \RuntimeException('原退款插件快照不一致'); }
             $plugin = $this->plugins->initialize($pay['plugin_code'], $snapshot['configuration'],
-                $snapshot['channel'] + ['channel_id' => $pay['channel_id']]);
+                ['channel_id' => $pay['channel_id'], 'api_config_id' => $snapshot['channel']['api_config_id'],
+                    'receipt_scope_key' => $pay['receipt_scope_key'],
+                    'pay_type_code' => $pay['ext_json']['payment_context']['pay_type']]);
             $result = $plugin->refund(['refund_no' => $refund['refund_no'], 'pay_no' => $pay['pay_no'],
                 'refund_amount' => $amount, 'chan_order_no' => $pay['channel_order_no'],
                 'chan_trade_no' => $pay['channel_trade_no'], 'extra' => $pay['ext_json']]);

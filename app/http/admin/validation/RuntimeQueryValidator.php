@@ -30,7 +30,8 @@ final class RuntimeQueryValidator extends Validate
             throw new BusinessException('运行筛选包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
         }
         $filters = array_filter(array_intersect_key($input, $this->rule), static fn (mixed $value): bool => $value !== '');
-        $validator = clone $this; $validator->must = array_keys($filters);
+        $validator = clone $this;
+        $validator->append(array_fill_keys(array_keys($filters), 'require'));
         if (!$validator->failException(false)->check($filters)) { throw new BusinessException('运行筛选格式无效', ApiResponseConstant::VALIDATION_FAILED); }
         return ['filters' => $filters] + $this->pagination->validate($input);
     }

@@ -33,7 +33,7 @@ final class SystemConfigValidator extends Validate
             throw new BusinessException('请提交该设置组的完整字段，不能包含额外配置', ApiResponseConstant::VALIDATION_FAILED);
         }
         $validator = (clone $this)->scene($group)->batch()->failException(false);
-        $validator->must = $fields;
+        $validator->append(array_fill_keys($fields, 'require'));
         $validator->message(array_fill_keys($fields, '字段类型或范围无效'));
         if (!$validator->check($values)) {
             $errors = [];

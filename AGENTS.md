@@ -19,6 +19,10 @@
 
 ## 需求和现状
 
+- 2026-10-13 后续边界收敛：schema 检查归 PluginDefinition，配置值用原生 Validate 动态规则及闭包类型规则；不操作框架内部 must，不把配置比较放在校验器。展示入口只验证通用结构和有界 JSON，平台地址由插件生成，前端消费快照；公共时间为 expires_at/server_time，删除后端 Presentation 类及 CashierPageInterface。此调整不改表、不回填快照，实际验证见实现计划。
+
+- 2026-10-13 最新匹配规则：按 channel_id 分配和匹配；金额模式通道内金额唯一，备注模式通道内备注唯一且金额一致。插件在 Biz→Pay→Channel 锁内读取有效订单快照并分配，服务只校验标准交易事实和统一确认。预约表及专用释放由 202610130100_channel_matching 退役；Scope 仍保留归属/确认锁，不做匹配算法。相同真实账号只合并登录/查单，多通道候选不明确时插件跳过并记日志。保留 ext_json 快照与现有金额语义，不新建 payload 表；JSON 查询以普通索引限定范围。四插件保留金额/备注，支付宝账单补 alipay_transfer；展示由插件返回公开参数、生命周期保存快照、前端注册组件；公共后端不保留专用展示类或 CashierPageInterface。此条覆盖下文历史配置范围占用描述，实际数据库应用/验收范围见实现计划。
+
 - 2026-10-12 两个手机监听插件统一通知配置：通知密钥 6～32 个字符，通知时间容差 5～30 秒、默认 30；范围和帮助说明由各插件 schema 声明。SmsForwarderVerifier 的容差必须由插件明确传入，不再提供默认 300 秒。付款有效期、主动采集/预登录间隔及其他平台凭证规则分别处理，不一起缩短；刷新目录不自动改写通道密钥或历史配置。
 
 - 2026-10-12 插件接口收敛为三个：PaymentInterface 只含元信息与支付动作；ChannelNotifyInterface 定义 HTTP notify/ACK；ReceiptCollectorInterface 定义 collect、matchReceipts、prelogin 及 isPreloginEnabled。采集插件代码元信息 prelogin 默认为 false，仅 true 才补充无订单启用通道并调度低频保活；账号、间隔和登录状态由插件解释。删除独立匹配/预登录接口，不放入 config_schema、不增加数据库字段；最新合同见公开 Wiki 插件开发与主动采集文档。

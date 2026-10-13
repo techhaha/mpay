@@ -15,14 +15,12 @@ use app\model\payment\PayOrder;
 use app\model\payment\ReceiptFlow;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\repository\payment\receipt\ReceiptFlowRepository;
-use app\repository\payment\receipt\ReceiptMatchReservationRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayCallbackLogRepository;
 use app\repository\payment\trade\PayOrderOperationLogRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\repository\system\AdminUserRepository;
-use app\service\payment\cashier\PaymentPresentation;
 use app\service\payment\notify\NotifyService;
 use app\service\payment\receipt\ReceiptEvent;
 use DateTimeImmutable;
@@ -41,7 +39,6 @@ final class PayOrderLifecycleService extends BaseService
         private readonly PayOrderRepository $payOrders,
         private readonly ReceiptScopeRepository $scopes,
         private readonly ReceiptFlowRepository $flows,
-        private readonly ReceiptMatchReservationRepository $reservations,
         private readonly NotifyService $notifications,
         private readonly NotifyTaskRepository $tasks,
         private readonly PayCallbackLogRepository $logs,
@@ -103,7 +100,6 @@ final class PayOrderLifecycleService extends BaseService
             $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'], [
                 'status' => TradeConstant::ORDER_STATUS_SUCCESS, 'paid_amount' => (int) $biz['order_amount'], 'paid_at' => $proof['paid_at'],
             ], $time);
-            $this->releaseReceipt($pay, $now);
             $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ?? throw new RuntimeException('确认业务单不可读取');
             $confirmedPay = $this->payOrders->find($payNo) ?? throw new RuntimeException('确认支付单不可读取');
             $this->notifications->createPaySuccess($confirmedBiz, $confirmedPay, $time, $notifyMerchant);
@@ -135,7 +131,6 @@ final class PayOrderLifecycleService extends BaseService
             $time = $now->format('Y-m-d H:i:s');
             $this->payOrders->saveLifecycle($payNo, $before, ['status' => TradeConstant::ORDER_STATUS_CLOSED, 'closed_at' => $time], $time);
             $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'], ['status' => TradeConstant::ORDER_STATUS_CLOSED, 'closed_at' => $time], $time);
-            $this->releaseReceipt($pay, $now);
             $this->operations->record($payNo, $actor->adminId, $actor->requestId, $actor->reason,
                 'local_close', $before, TradeConstant::ORDER_STATUS_CLOSED, ['close_semantics' => 'local_only']);
             return $this->payOrders->find($payNo) ?? throw new RuntimeException('关闭后的支付单不可读取');
@@ -222,14 +217,14 @@ final class PayOrderLifecycleService extends BaseService
      * uncertain 保持 PAYING；rejected 仅由派发边界捕获确定拒绝后传入，异常文案不进入快照。
      *
      * @param string $outcome presented/uncertain/rejected 三种已分类的执行结果。
-     * @param PaymentPresentation|null $presentation 只有 presented 允许并要求公开材料。
+     * @param array{pay_page:string,pay_type:string,pay_product:string,pay_action:string,pay_params:array<string,mixed>}|null $presentation 派发入口已完成通用结构校验；只有 presented 允许并要求公开材料。
      * @return PayOrder 当前持久状态；不能直接用插件结果构造 HTTP 支付成功。
      */
     public function finishExecution(
         string $payNo,
         string $token,
         string $outcome,
-        ?PaymentPresentation $presentation,
+        ?array $presentation,
         string $requestId,
         ?string $channelOrderNo = null,
     ): PayOrder {
@@ -267,7 +262,7 @@ final class PayOrderLifecycleService extends BaseService
             }
             $extension['payment_context']['execution']['phase'] = $outcome;
             if ($presentation !== null) {
-                $extension['presentation'] = $presentation->toArray();
+                $extension['presentation'] = $presentation;
             }
             $changes = ['ext_json' => json_encode($extension, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)];
             if ($channelOrderNo !== null) {
@@ -281,7 +276,6 @@ final class PayOrderLifecycleService extends BaseService
                 $changes += ['status' => TradeConstant::ORDER_STATUS_FAILED, 'failed_at' => $time];
                 $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'],
                     ['status' => TradeConstant::ORDER_STATUS_FAILED, 'failed_at' => $time], $time);
-                $this->releaseReceipt($pay, $now);
             }
             $this->payOrders->saveLifecycle($payNo, $before, $changes, $time);
             $this->logs->recordExecution($payNo, $requestId, $token, match ($outcome) { 'presented' => Result::EXECUTION_PRESENTED, 'uncertain' => Result::EXECUTION_UNCERTAIN, 'rejected' => Result::EXECUTION_REJECTED }, $before);
@@ -351,17 +345,11 @@ final class PayOrderLifecycleService extends BaseService
                 if ($pay['confirmation_source'] !== TradeConstant::CONFIRMATION_MANUAL) { throw new RuntimeException('自动成功缺少主流水'); }
                 $reason = Result::MANUAL_EVIDENCE_SUPPLEMENTED;
             } else {
-                $reservation = $this->reservations->findForPay($payNo);
-                if ($reservation === null || $reservation['receipt_scope_key'] !== $event->scopeKey) {
-                    return $ignore('receipt_context_mismatch');
-                }
-                if ($event->amount !== $pay->receiptAmount() || (int) $reservation['receipt_amount'] !== $event->amount
-                    || ($reservation['match_mode'] === 'remark' && $event->remark !== $reservation['match_value'])
-                    || $event->amount < $pay->originalAmount() || $event->paymentTime() < $reservation['valid_from']
-                    || $event->paymentTime() >= $reservation['expire_at']) { return $ignore('receipt_value_mismatch'); }
+                // 插件已按本单快照完成匹配；核心只核对标准应付事实，不解释备注或偏移策略。
+                if ($event->amount !== (int) $pay['pay_amount']) { return $ignore('receipt_value_mismatch'); }
                 if (!in_array($before, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING,
                     TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT], true)) { return $ignore('receipt_after_definitive_failure'); }
-                if ($pay['request_at'] === null || $event->paymentTime() < $pay['request_at']) { return $ignore('execution_not_started'); }
+                if ($pay['request_at'] === null) { return $ignore('execution_not_started'); }
                 if ($pay['channel_trade_no'] !== null && $pay['channel_trade_no'] !== $event->platformTradeNo) { return $ignore('channel_reference_conflict'); }
                 $reason = in_array($before, [TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT], true)
                     || $received > $pay['expire_at'] ? Result::LATE_DELIVERY_CONFIRMED : Result::RECEIPT_CONFIRMED;
@@ -383,7 +371,6 @@ final class PayOrderLifecycleService extends BaseService
                         $event->paymentTime(), $event->platformTradeNo, $event->eventKey), $time);
                 $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'], ['status'=>TradeConstant::ORDER_STATUS_SUCCESS,
                     'paid_amount'=>(int) $biz['order_amount'],'paid_at'=>$event->paymentTime()], $time);
-                $this->releaseReceipt($pay, $receivedAt);
                 $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ?? throw new RuntimeException('成功业务单不可读取');
                 $confirmedPay = $this->payOrders->find($payNo) ?? throw new RuntimeException('成功支付单不可读取');
                 $this->notifications->createPaySuccess($confirmedBiz, $confirmedPay, $time);
@@ -394,7 +381,7 @@ final class PayOrderLifecycleService extends BaseService
 
     /**
      * 到期扫描只结束本地等待；成功及其他终态不降级，未建立支付单的业务需求也能到期。
-     * 仍保留原 paid_at 匹配窗口和占用历史，可信窗口内的迟到事件可随后补正确认。
+     * 仍保留原付款窗口和准备快照，可信窗口内的迟到事件可随后补正确认。
      *
      * @return bool 本次是否实际推进了 TIMEOUT。
      */
@@ -408,7 +395,7 @@ final class PayOrderLifecycleService extends BaseService
 
     /**
      * 调用方已在本事务锁定 BizOrder；认领/回写和定时扫描共用到期转换，不在事务中嵌套 expire。
-     * 已持有 PayOrder 时可重入当前读，随后仍按 Scope → Reservation 方向取锁。
+     * 已持有 PayOrder 时可重入当前读，后续仍按既有范围锁顺序推进状态。
      */
     private function expireWaiting(BizOrder $biz, DateTimeImmutable $now): bool
     {
@@ -423,7 +410,6 @@ final class PayOrderLifecycleService extends BaseService
             $this->scopes->lock($pay['receipt_scope_key']);
             $this->payOrders->saveLifecycle($pay['pay_no'], (int) $pay['status'],
                 ['status' => TradeConstant::ORDER_STATUS_TIMEOUT, 'timeout_at' => $time], $time);
-            $this->releaseReceipt($pay, $now);
         }
         $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'],
             ['status' => TradeConstant::ORDER_STATUS_TIMEOUT, 'timeout_at' => $time], $time);
@@ -479,12 +465,6 @@ final class PayOrderLifecycleService extends BaseService
             || $task['credential_version_id'] !== $biz['credential_version_id']) {
             throw new RuntimeException('已成功订单的原通知责任缺失或不一致');
         }
-    }
-
-    /** V2 收款识别在终态释放；历史记录继续支撑重复流水核对，不再延长金额保护期。 */
-    private function releaseReceipt(PayOrder $pay, DateTimeImmutable $now): void
-    {
-        $this->reservations->releaseForPay($pay['pay_no'], $now->format('Y-m-d H:i:s'));
     }
 
     /** 最终流水的处理历史与成功事务提交；重复回调只追加历史，不新增流水。 */

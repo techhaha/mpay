@@ -21,6 +21,7 @@ use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\config\PaymentCatalogService;
 use app\service\payment\order\PayOrderService;
 use app\service\payment\plugin\PayOrderChannelDispatchService;
+use app\service\payment\plugin\PaymentPluginPayResultValidator;
 use app\service\payment\routing\PaymentRouteService;
 use DateTimeImmutable;
 use RuntimeException;
@@ -30,15 +31,13 @@ use think\Config;
  * 持有随机订单凭证的付款页用例及公开数据白名单，不确认收款、不在页面请求中执行后台扫描。
  * GET 读取使用一致性事务，避免并发成功提交时把旧业务状态与新支付状态拼成一次响应。
  *
- * @phpstan-import-type CashierPresentation from PaymentPresentation
- * @phpstan-type CashierView array{biz_no:string,pay_no:?string,subject:string,status:int,status_label:string,
- *     order_money:string,receipt_money:?string,received_money:?string,offset_money:?string,
- *     pay_type:?string,match_mode:?string,remark:?string,server_time:int,expires_at:int,expired:bool,
- *     can_select:bool,can_pay:bool,can_prepare:bool,needs_initial_prepare:bool,processing:bool,
- *     payment_methods:list<array{code:string,name:string}>,
- *     presentation:CashierPresentation|null,
- *     notification_status:?string,return_allowed:bool,test_mode:bool,
- *     payment_brands:array<string,mixed>}
+ * @phpstan-type CashierState array{biz_no:string,pay_no:?string,status:int,status_label:string,expires_at:int,
+ *     expired:bool,can_select:bool,can_pay:bool,can_prepare:bool,processing:bool,needs_initial_prepare:bool,
+ *     revision:string,server_time:int}
+ * @phpstan-type CashierView array{biz_no:string,pay_no:?string,status:int,status_label:string,expires_at:int,
+ *     expired:bool,can_select:bool,can_pay:bool,can_prepare:bool,processing:bool,needs_initial_prepare:bool,
+ *     revision:string,server_time:int,subject:string,amount:?string,pay_type:?string,presentation:?array,
+ *     payment_methods:list<array{code:string,name:string}>,payment_brands:array,test_mode:bool}
  */
 final class CashierService extends BaseService
 {
@@ -58,95 +57,133 @@ final class CashierService extends BaseService
     }
 
     /**
-     * 只返回公开付款字段；金额文本由整数分格式化，时间戳均为 Unix 秒。
-     * expired 是服务端判断的付款窗口信息，不伪造一个尚未落库的 TIMEOUT 状态。
-     *
-     * @return CashierView
+     * 首屏/材料变化才读取完整信息；付款金额唯一，通知确认走 completion，不在详情加载通知表。
+     * @return CashierView 公开数据，不暴露配置、凭证摘要或完整 ext_json。
      */
     public function view(string $bizNo, string $accessToken, DateTimeImmutable $now): array
     {
         return $this->transaction(function () use ($bizNo, $accessToken, $now): array {
             [$biz, $pay] = $this->authorisedOrders($bizNo, $accessToken);
-            $status = (int) $biz['status'];
-            $expires = new DateTimeImmutable($pay === null ? $biz['expire_at'] : $pay['expire_at']);
-            $expired = $expires <= $now;
-            $waiting = in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true);
-            $receipt = $pay === null ? [] : ($pay['ext_json']['personal_receipt'] ?? []);
-            $payment = $pay === null ? [] : ($pay['ext_json']['payment_context'] ?? []);
-            $type = $payment['pay_type'] ?? null;
-            $mode = $receipt['match_mode'] ?? null;
-            $remark = $receipt['remark'] ?? null;
-            // 建单提交与插件准备之间、以及平台结果未知时可以尚无识别材料；仍应展示处理中。
-            if ($pay !== null && (!PaymentTypeCode::valid($type)
-                || ($mode !== null && !in_array($mode, ['amount', 'remark'], true))
-                || ($mode === 'remark' && (!is_string($remark) || $remark === '')))) {
-                throw new RuntimeException('收银台支付识别快照缺失');
-            }
-            $execution = $payment['execution'] ?? null;
-            $presentation = null;
+            $context = $pay === null ? [] : ($pay['ext_json']['payment_context'] ?? []);
             $material = $pay === null ? null : ($pay['ext_json']['presentation'] ?? null);
-            if ($waiting && !$expired && is_array($material)) {
-                if (!in_array($mode, ['amount', 'remark'], true) || $pay === null || $status !== TradeConstant::ORDER_STATUS_PAYING || $pay['request_at'] === null
-                    || !is_array($execution) || ($execution['phase'] ?? null) !== 'presented') {
-                    throw new RuntimeException('付款材料缺少已执行的准备上下文');
-                }
-                // 再经标准公开合同读取，不把 ext_json 的任意额外键交给模板或浏览器。
-                $presentation = (new PaymentPresentation($material['qrcode_content'] ?? null, $material['qrcode_image_url'] ?? null))
-                    ->forCashier($type, $mode, (int) $biz['order_amount'], (int) $pay->receiptAmount(), $remark, $expires, $now);
+            $state = $this->state($biz, $pay, $context['execution'] ?? null, is_array($material), $now);
+            $type = $context['pay_type'] ?? null;
+            if ($pay !== null && !PaymentTypeCode::valid($type)) { throw new RuntimeException('支付方式快照缺失'); }
+            $presentation = null;
+            if ($state['can_pay']) {
+                // 直接读取插件公开快照；公共状态已有 expires_at/server_time，不为页面重算材料。
+                $presentation = PaymentPluginPayResultValidator::presentation($material);
+                if ($presentation['pay_type'] !== $type) { throw new RuntimeException('支付展示与原单方式不一致'); }
             }
-            $canPrepare = $pay !== null && $waiting && !$expired && $execution === null;
-            if (is_array($execution) && $waiting && !$expired && $presentation === null) {
-                $canPrepare = ($execution['replay_safe'] ?? null) === true
-                    && in_array($execution['phase'] ?? null, ['claimed', 'uncertain'], true)
-                    && is_string($execution['lease_until'] ?? null)
-                    && $execution['lease_until'] <= $now->format('Y-m-d H:i:s');
-            }
-            $notification = null;
-            if ($status === TradeConstant::ORDER_STATUS_SUCCESS && $biz['notify_url'] !== null) {
-                if ($pay === null) {
-                    throw new RuntimeException('成功业务单缺少支付单');
-                }
-                $task = $this->notifications->findByEvent(NotifyConstant::EVENT_PAY_SUCCESS, $pay['pay_no']);
-                if ($task === null || $task['biz_no'] !== $bizNo) {
-                    throw new RuntimeException('成功订单缺少原通知责任');
-                }
-                $notification = $task['first_ack_at'] !== null ? 'success' : match ((int) $task['status']) {
-                    NotifyConstant::STATUS_PENDING => 'pending',
-                    NotifyConstant::STATUS_SENDING => 'sending',
-                    NotifyConstant::STATUS_SUCCESS => 'success',
-                    NotifyConstant::STATUS_EXHAUSTED => 'exhausted',
-                    NotifyConstant::STATUS_HELD => 'held',
-                    default => throw new RuntimeException('未知通知状态'),
-                };
-            }
-            $canSelect = $pay === null && $status === TradeConstant::ORDER_STATUS_CREATED && !$expired;
-            return [
-                'biz_no' => $biz['biz_no'], 'pay_no' => $pay === null ? null : $pay['pay_no'], 'subject' => $biz['subject'],
-                'status' => $status, 'status_label' => TradeConstant::label($status),
-                'order_money' => Money::format((int) $biz['order_amount']),
-                'receipt_money' => $pay === null ? null : Money::format((int) $pay->receiptAmount()),
-                'received_money' => $pay === null || $pay->receivedAmount() === null ? null : Money::format((int) $pay->receivedAmount()),
-                'offset_money' => $pay === null ? null : Money::format((int) $pay->receiptAmount() - $pay->originalAmount()),
-                'payment_brands' => $this->management->brands(), 'pay_type' => $type, 'match_mode' => $mode, 'remark' => $mode === 'remark' ? $remark : null,
-                'server_time' => $now->getTimestamp(), 'expires_at' => $expires->getTimestamp(), 'expired' => $expired,
-                'can_select' => $canSelect, 'can_pay' => $presentation !== null,
-                'can_prepare' => $canPrepare, 'processing' => $pay !== null && $waiting && !$expired && $presentation === null,
-                'needs_initial_prepare' => $canPrepare && $execution === null,
-                'payment_methods' => $canSelect ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount']) : [], 'presentation' => $presentation,
-                'notification_status' => $notification,
-                // 只表示可发起受保护的回跳请求；签名地址由易支付适配器在再次核验成功后构造。
-                'return_allowed' => $status === TradeConstant::ORDER_STATUS_SUCCESS && $biz['return_url'] !== null,
-                // 模拟身份随订单冻结，即使以后读取环境变化，也不能把模拟确认展示成真实到账。
-                'test_mode' => ($receipt['test_only'] ?? false) === true || $this->config->get('mpay.environment') === 'testing',
-            ];
+            $amount = $state['status'] === TradeConstant::ORDER_STATUS_SUCCESS ? $pay?->receivedAmount()
+                : ($state['can_pay'] ? $pay->receiptAmount() : null);
+            return $state + ['subject' => $biz['subject'], 'amount' => $amount === null ? null : Money::format($amount),
+                'pay_type' => $type, 'presentation' => $presentation,
+                'payment_methods' => $state['can_select'] ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount']) : [],
+                'payment_brands' => $this->management->brands(),
+                'test_mode' => ($pay['ext_json']['personal_receipt']['test_only'] ?? false) === true
+                    || $this->config->get('mpay.environment') === 'testing'];
         });
+    }
+
+    /** @return CashierState 最多两次定点投影查询；不查路由、品牌、流水或通知。 */
+    public function status(string $bizNo, string $accessToken, DateTimeImmutable $now): array
+    {
+        return $this->transaction(function () use ($bizNo, $accessToken, $now): array {
+            $biz = $this->bizOrders->cashierState($bizNo);
+            $this->orders->assertAccess($biz, $accessToken);
+            $pay = $biz['active_pay_no'] === null ? null : $this->payOrders->cashierState($biz['active_pay_no']);
+            $this->assertLink($biz, $pay);
+            $phase = $pay['cashier_phase'] ?? null;
+            $execution = $phase === null ? null : ['phase' => $phase,
+                'replay_safe' => $pay['cashier_replay_safe'] === 'true', 'lease_until' => $pay['cashier_lease_until']];
+            return $this->state($biz, $pay, $execution, (int) ($pay['cashier_has_presentation'] ?? 0) === 1, $now);
+        });
+    }
+
+    /**
+     * 支付成功后单独读取通知摘要；访问校验每次保留，不以客户端状态或通知号作为权限依据。
+     * 首次 ACK 是不可撤销的接收事实，后续补发失败不阻止回跳。缺失应有任务属于故障。
+     * @return array{biz_no:string,status:int,required:bool,confirmed:bool,notification_status:?string,action:string,next_url:?string}
+     */
+    public function completion(string $bizNo, string $accessToken): array
+    {
+        return $this->transaction(function () use ($bizNo, $accessToken): array {
+            $biz = $this->bizOrders->cashierState($bizNo, true);
+            $this->orders->assertAccess($biz, $accessToken);
+            $result = ['biz_no' => $bizNo, 'status' => (int) $biz['status'], 'required' => (int) $biz['cashier_notify_required'] === 1,
+                'confirmed' => false, 'notification_status' => null, 'action' => 'payment', 'next_url' => null];
+            if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) { return $result; }
+            if ($biz['active_pay_no'] === null) { throw new RuntimeException('成功订单缺少支付单'); }
+            if ($result['required']) {
+                $task = $this->notifications->cashierConfirmation(NotifyConstant::EVENT_PAY_SUCCESS, $biz['active_pay_no']);
+                if ($task === null || $task['biz_no'] !== $bizNo || $task['pay_no'] !== $biz['active_pay_no']) {
+                    throw new RuntimeException('成功订单缺少原商户通知');
+                }
+                $result['confirmed'] = $task['first_ack_at'] !== null;
+                $result['notification_status'] = $result['confirmed'] ? 'success' : match ((int) $task['status']) {
+                    NotifyConstant::STATUS_PENDING => 'pending', NotifyConstant::STATUS_SENDING => 'sending',
+                    NotifyConstant::STATUS_HELD => 'held', NotifyConstant::STATUS_EXHAUSTED => 'exhausted',
+                    default => throw new RuntimeException('商户通知状态与确认事实不一致'),
+                };
+                if (!$result['confirmed']) {
+                    $result['action'] = in_array($result['notification_status'], ['held', 'exhausted'], true) ? 'attention' : 'wait';
+                    return $result;
+                }
+            } elseif ((int) $biz['cashier_has_return'] === 1) {
+                // 正式回跳必须具备商户确认；无通知地址的通道测试只允许本地成功页。
+                throw new RuntimeException('订单返回地址缺少通知责任');
+            }
+            $result['action'] = (int) $biz['cashier_has_return'] === 0 ? 'success' : 'return';
+            $result['next_url'] = '/cashier/' . $result['action'] . '?' . http_build_query(['biz_no' => $bizNo, 'token' => $accessToken]);
+            return $result;
+        });
+    }
+
+    /**
+     * 完整详情和轻量轮询共用状态映射；revision 只反映展示相关事实，不依赖更新时间精度或新数据库字段。
+     * @param array<string,mixed>|null $execution
+     * @return array<string,mixed>
+     */
+    private function state(BizOrder $biz, ?PayOrder $pay, ?array $execution, bool $hasMaterial, DateTimeImmutable $now): array
+    {
+        $status = (int) $biz['status'];
+        $expires = new DateTimeImmutable($pay === null ? $biz['expire_at'] : $pay['expire_at']);
+        $expired = $expires <= $now;
+        $waiting = in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true) && !$expired;
+        $canPay = $pay !== null && $waiting && $hasMaterial;
+        if ($canPay && ($status !== TradeConstant::ORDER_STATUS_PAYING || $pay['request_at'] === null || ($execution['phase'] ?? null) !== 'presented')) {
+            throw new RuntimeException('付款材料缺少已执行的准备上下文');
+        }
+        $canPrepare = $pay !== null && $waiting && $execution === null;
+        if ($pay !== null && $waiting && !$canPay && $execution !== null) {
+            $canPrepare = ($execution['replay_safe'] ?? null) === true
+                && in_array($execution['phase'] ?? null, ['claimed', 'uncertain'], true)
+                && is_string($execution['lease_until'] ?? null) && $execution['lease_until'] <= $now->format('Y-m-d H:i:s');
+        }
+        $data = ['biz_no' => $biz['biz_no'], 'pay_no' => $pay === null ? null : $pay['pay_no'],
+            'status' => $status, 'status_label' => TradeConstant::label($status),
+            'expires_at' => $expires->getTimestamp(), 'expired' => $expired,
+            'can_select' => $pay === null && $status === TradeConstant::ORDER_STATUS_CREATED && !$expired,
+            'can_pay' => $canPay, 'can_prepare' => $canPrepare, 'processing' => $pay !== null && $waiting && !$canPay,
+            'needs_initial_prepare' => $canPrepare && $execution === null];
+        $data['revision'] = hash('sha256', json_encode([$data, $execution['phase'] ?? null], JSON_THROW_ON_ERROR));
+        return $data + ['server_time' => $now->getTimestamp()];
+    }
+
+    /** 两张订单必须指向同一尝试并拥有同一持久状态；不允许缺失支付单被误当成尚未选择。 */
+    private function assertLink(BizOrder $biz, ?PayOrder $pay): void
+    {
+        if ($biz['active_pay_no'] !== null && ($pay === null || $pay['biz_no'] !== $biz['biz_no'] || (int) $pay['status'] !== (int) $biz['status'])) {
+            throw new RuntimeException('收银台业务与支付状态不一致');
+        }
     }
 
     /**
      * POST 用例：验证访问凭证后选择一次方式并准备材料；HTTP 边界另行检查同源及 CSRF。
      * 相同选择复用原尝试，不能把新的客户端金额、备注或通道号传入核心。
      *
-     * @return CashierView 与 view 完全相同的公开白名单结构。
+     * @return CashierView 与 view 相同的公开白名单结构。
      */
     public function selectType(string $bizNo, string $accessToken, string $payType, string $requestId): array
     {
@@ -158,7 +195,7 @@ final class CashierService extends BaseService
     /**
      * POST 用例：恢复已有支付执行的材料，是否可重放仍由派发/生命周期按原能力与 token 决定。
      *
-     * @return CashierView 与 view 完全相同的公开白名单结构。
+     * @return CashierView 与 view 相同的公开白名单结构。
      */
     public function prepare(string $bizNo, string $accessToken, string $requestId): array
     {

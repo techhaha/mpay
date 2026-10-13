@@ -5,104 +5,75 @@ namespace app\common\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
-use LogicException;
 use think\Validate;
 
-/** V2 字段列表到 ThinkPHP Validate 的轻量适配；规则来自插件代码，HTTP 只能提交字段值。 */
-final class PluginConfigValidator extends Validate
+/** 将已核验的插件字段声明转换为原生动态规则；只校验配置值，不解释平台账号或交易策略。 */
+final class PluginConfigValidator
 {
-    /** 服务运行参数不属于插件设置，防止声明相同字段后被运行值悄悄覆盖。 */
-    private const RESERVED = ['channel_id', 'receipt_scope_key', 'receipt_qrcode_image_url', 'pay_type_code', 'configuration_id', 'api_config_id', 'collection_configuration_ids'];
-
-    /** @param list<array<string,mixed>> $schema 检查代码声明，不执行来自数据库或请求的动态规则。 */
-    public static function assertSchema(array $schema): void
-    {
-        if (!array_is_list($schema) || count($schema) > 128) { throw new LogicException('插件配置须为字段列表'); }
-        $seen = [];
-        foreach ($schema as $field) {
-            if (!is_array($field) || !is_string($field['field'] ?? null) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $field['field'])
-                || isset($seen[$field['field']]) || in_array($field['field'], self::RESERVED, true)
-                || !is_string($field['title'] ?? null) || trim($field['title']) === ''
-                || !in_array($field['type'] ?? null, ['input', 'textarea', 'number', 'select', 'list', 'switch', 'upload'], true)
-                || !is_array($field['validate'] ?? null) || !is_bool($field['secret'] ?? false)
-                || (($field['secret'] ?? false) && !in_array($field['type'], ['input', 'textarea'], true))) {
-                throw new LogicException('插件字段声明无效');
-            }
-            if (array_diff(array_keys($field), ['type','field','title','validate','value','options','secret','help','visible_when','placeholder','rows']) !== []) {
-                throw new LogicException('插件字段包含未支持的声明属性');
-            }
-            foreach (['help', 'placeholder'] as $text) {
-                if (isset($field[$text]) && (!is_string($field[$text]) || !mb_check_encoding($field[$text], 'UTF-8') || strlen($field[$text]) > 4096)) {
-                    throw new LogicException('插件字段说明必须为有界纯文本');
-                }
-            }
-            if (isset($field['rows']) && (!in_array($field['type'], ['textarea','list'], true) || !is_int($field['rows']) || $field['rows'] < 2 || $field['rows'] > 20)) {
-                throw new LogicException('插件文本域行数无效');
-            }
-            if ($field['type'] === 'select') {
-                $options = $field['options'] ?? null; $optionValues = [];
-                if (!is_array($options) || !array_is_list($options) || $options === [] || count($options) > 100) { throw new LogicException('插件选项须为非空列表'); }
-                foreach ($options as $option) {
-                    if (!is_array($option) || count($option) !== 2 || !is_string($option['value'] ?? null) || !is_string($option['label'] ?? null)
-                        || in_array($option['value'], $optionValues, true)) { throw new LogicException('插件选项值须为唯一字符串'); }
-                    $optionValues[] = $option['value'];
-                }
-            } elseif (isset($field['options'])) { throw new LogicException('只有选择框允许声明选项'); }
-            $seen[$field['field']] = true;
-            if (array_key_exists('value', $field) && (!self::typedValue($field['type'], $field['value'])
-                || ($field['type'] === 'select' && !in_array($field['value'], $optionValues, true)))) {
-                throw new LogicException('插件默认值类型或选项无效');
-            }
-        }
-        $fields = array_column($schema, null, 'field');
-        foreach ($fields as $name => $field) {
-            if (!isset($field['visible_when'])) { continue; }
-            $condition = $field['visible_when']; $source = is_array($condition) ? ($fields[$condition['field'] ?? ''] ?? null) : null;
-            if (!is_array($condition) || count($condition) !== 2 || !array_key_exists('value', $condition) || $source === null
-                || $condition['field'] === $name || ($source['secret'] ?? false) || isset($source['visible_when'])
-                || !self::typedValue($source['type'], $condition['value'])) { throw new LogicException('插件显示条件必须引用无条件、非秘密字段，比较值类型须一致'); }
-        }
-    }
-
     /**
-     * @param list<array<string,mixed>> $schema
-     * @param array<string,mixed> $values
-     * @return array<string,mixed> 严格 JSON 类型，默认值仅在新建/保存时应用；历史快照不补新默认值。
+     * 声明合法性由 PluginDefinition 在发现代码时检查；此处处理保存/读取的参数值。
+     * 每次创建独立 Validate，避免常驻进程累积规则、错误或场景，不修改框架内部属性。
+     *
+     * @param list<array<string,mixed>> $schema 已通过插件定义检查的字段列表。
+     * @param array<string,mixed> $values 配置 JSON 原生值，不隐式转换字符串、整数或布尔值。
+     * @return array<string,mixed> 验证后的值；默认值仅在调用方明确要求时补齐。
+     * @throws BusinessException 未声明字段、类型或插件规则不符；错误按字段返回。
      */
     public function validate(array $schema, array $values, bool $applyDefaults = false): array
     {
-        self::assertSchema($schema);
         $fields = array_column($schema, null, 'field');
-        if (array_diff_key($values, $fields)) { throw new BusinessException('配置包含未声明字段', ApiResponseConstant::VALIDATION_FAILED); }
-        $rules = []; $errors = [];
+        if (array_diff_key($values, $fields)) {
+            throw new BusinessException('配置包含未声明字段', ApiResponseConstant::VALIDATION_FAILED);
+        }
+        // 所有默认值先就绪，条件判断不依赖 schema 中字段排列顺序。
         foreach ($fields as $name => $field) {
-            if (!array_key_exists($name, $values) && $applyDefaults && array_key_exists('value', $field)) { $values[$name] = $field['value']; }
-            $rules[$name] = $field['validate'];
-            if (!array_key_exists($name, $values)) {
-                continue;
-            }
-            $value = $values[$name];
-            $typed = self::typedValue($field['type'], $value);
-            if (!$typed) { $errors['configuration.' . $name] = ['配置类型不符合声明']; }
-            $rules[$name] = $field['validate'];
-            if ($field['type'] === 'select' && !in_array($value, array_column($field['options'] ?? [], 'value'), true)) {
-                $errors['configuration.' . $name] = ['请选择声明的选项'];
+            if ($applyDefaults && !array_key_exists($name, $values) && array_key_exists('value', $field)) {
+                $values[$name] = $field['value'];
             }
         }
-        // 已提供的 0/false/空字符串也执行规则，避免框架可选字段跳过范围检查。
-        if ($errors === []) {
-            $check = clone $this; $check->must = array_keys($values);
-            if (!$check->batch()->failException(false)->check($values, $rules)) {
-                foreach (array_keys($check->getError(true)) as $name) { $errors['configuration.' . $name] = ['配置范围不符合声明']; }
+        $rules = []; $titles = [];
+        foreach ($fields as $name => $field) {
+            $titles[$name] = $field['title'];
+            $declared = $field['validate'];
+            $condition = $field['visible_when'] ?? null;
+            if ($condition !== null && !in_array($values[$condition['field']] ?? null,
+                array_key_exists('value', $condition) ? [$condition['value']] : $condition['in'], true)) {
+                // 隐藏只取消必填；保留原值与其余原生规则，不裁剪配置。
+                $declared = array_filter($declared, static fn ($rule, $key): bool =>
+                    !str_starts_with(is_string($key) ? $key : (string) $rule, 'require'), ARRAY_FILTER_USE_BOTH);
             }
+            // 原生闭包规则也会检查 null/空字符串；仅缺失字段交给 require* 决定是否允许。
+            $rules[$name] = array_merge([static function (mixed $value, array $data) use ($name, $field): bool|string {
+                if (!array_key_exists($name, $data)) { return true; }
+                if (!self::typedValue($field['type'], $value)) {
+                    return $field['title'] . match ($field['type']) {
+                        'number' => '必须是整数', 'switch' => '必须是布尔值',
+                        'list' => '必须是最多 100 项的文本列表，每项为 1～128 字节',
+                        default => '必须是有效的文本',
+                    };
+                }
+                if ($field['type'] === 'select' && !in_array($value, array_column($field['options'], 'value'), true)) {
+                    return $field['title'] . '请选择声明的选项';
+                }
+                return true;
+            }], $declared);
         }
-        if ($errors !== []) { throw new BusinessException('插件配置校验失败', ApiResponseConstant::VALIDATION_FAILED, $errors); }
-        if (strlen(json_encode($values, JSON_THROW_ON_ERROR)) > 65536) { throw new BusinessException('插件配置超过 64 KiB', ApiResponseConstant::VALIDATION_FAILED); }
+        $validator = (new Validate())->useZh()->rule($rules, $titles)->batch()->failException(false);
+        if (!$validator->check($values)) {
+            $errors = [];
+            foreach ($validator->getError(true) as $name => $message) {
+                $errors['configuration.' . $name] = [(string) $message];
+            }
+            throw new BusinessException('插件配置校验失败', ApiResponseConstant::VALIDATION_FAILED, $errors);
+        }
+        if (strlen(json_encode($values, JSON_THROW_ON_ERROR)) > 65536) {
+            throw new BusinessException('插件配置超过 64 KiB', ApiResponseConstant::VALIDATION_FAILED);
+        }
         return $values;
     }
 
-    /** JSON null 不隐式转为空值；数字和开关保留原生类型，0/false 是有效的已提供值。 */
-    private static function typedValue(string $type, mixed $value): bool
+    /** schema 默认值与提交值共用的 JSON 类型约定；缺失由必填规则处理，不把 null 转成空字符串。 */
+    public static function typedValue(string $type, mixed $value): bool
     {
         return match ($type) {
             'number' => is_int($value), 'switch' => is_bool($value),
@@ -110,17 +81,5 @@ final class PluginConfigValidator extends Validate
                 && count(array_filter($value, static fn ($item): bool => !is_string($item) || $item === '' || strlen($item) > 128 || !mb_check_encoding($item, 'UTF-8'))) === 0,
             default => is_string($value) && mb_check_encoding($value, 'UTF-8'),
         };
-    }
-
-    /** 配置对象比较忽略键顺序，列表保持顺序；用于识别无变化保存，不决定插件启用。 */
-    public static function sameSchema(array $expected, mixed $stored): bool
-    {
-        if (!is_array($stored)) { return false; }
-        $sort = static function (array $value) use (&$sort): array {
-            if (!array_is_list($value)) { ksort($value); }
-            foreach ($value as &$item) { if (is_array($item)) { $item = $sort($item); } }
-            return $value;
-        };
-        return $sort($expected) === $sort($stored);
     }
 }

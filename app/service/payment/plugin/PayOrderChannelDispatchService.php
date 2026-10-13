@@ -12,7 +12,6 @@ use app\exception\PaymentUncertainException;
 use app\model\payment\PayOrder;
 use app\repository\payment\trade\PayOrderRepository;
 use app\service\file\FileAssetService;
-use app\service\payment\cashier\PaymentPresentation;
 use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\receipt\ChannelNotifyContext;
@@ -92,7 +91,13 @@ final class PayOrderChannelDispatchService
         $token = $claim['token'];
         try {
             // 生命周期的认领事务已经提交；任何 SDK 网络请求均发生在此边界之外。
-            $runtime = $context->channel + ['channel_id' => $context->channel['id']];
+            // 只注入接口约定的运行参数；通道名称、金额策略等内部列不能覆盖插件同名设置。
+            $runtime = [
+                'channel_id' => $context->channel['id'],
+                'api_config_id' => $context->channel['api_config_id'],
+                'receipt_scope_key' => $context->scopeKey,
+                'pay_type_code' => $context->payType,
+            ];
             // 图片字段由 schema 决定；服务只把受控资产 ID 转成同源地址，不猜测插件的字段名称。
             foreach ($definition->configSchema as $field) {
                 if ($field['type'] === 'upload') {
@@ -110,8 +115,7 @@ final class PayOrderChannelDispatchService
             $presentation = null;
             if ($result['status'] === 'pending') {
                 if ($result['pay_type'] !== $context->payType) { throw new UnexpectedValueException('插件支付方式不一致'); }
-                $params = $result['presentation']['pay_params'];
-                $presentation = new PaymentPresentation($params['qrcode_content'] ?? null, $params['qrcode_image_url'] ?? null);
+                $presentation = $result['presentation'];
             }
         } catch (PaymentDefinitiveException) {
             return $this->lifecycle->finishExecution($payNo, $token, 'rejected', null, $requestId);

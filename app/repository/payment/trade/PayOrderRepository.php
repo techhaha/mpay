@@ -78,6 +78,20 @@ final class PayOrderRepository extends BaseRepository
     }
 
     /**
+     * 付款状态投影不传输完整 JSON、二维码或收款证据；JSON 路径为代码常量，兼容 MySQL 5.7.9。
+     * 这些别名仅用于只读收银台，不交给模型保存。
+     */
+    public function cashierState(string $payNo): ?PayOrder
+    {
+        return $this->model->where('pay_no', $payNo)->field('pay_no,biz_no,status,expire_at,request_at')
+            ->fieldRaw("JSON_UNQUOTE(JSON_EXTRACT(ext_json, '$.payment_context.execution.phase')) AS cashier_phase,
+                JSON_UNQUOTE(JSON_EXTRACT(ext_json, '$.payment_context.execution.replay_safe')) AS cashier_replay_safe,
+                JSON_UNQUOTE(JSON_EXTRACT(ext_json, '$.payment_context.execution.lease_until')) AS cashier_lease_until,
+                JSON_CONTAINS_PATH(ext_json, 'one', '$.presentation') AS cashier_has_presentation")
+            ->find();
+    }
+
+    /**
      * 调用方已锁定通道，查询当天发起且成功/有效待付款的原订单金额与笔数。
      * 主事务的通道锁串行化检查与新尝试插入；独立只读连接取得刚提交的记录，避免 RR 旧快照。
      * 不锁已有业务单/支付单，避免和支付准备、状态推进反向取锁；查询不写入或提交主事务。
@@ -102,56 +116,60 @@ final class PayOrderRepository extends BaseRepository
     }
 
     /**
-     * 插件在范围锁内读取仍等待付款的占用金额；过期订单不再占用当前金额池。
-     *
-     * @return list<int> 当前 pay_amount，包含其他订单的识别偏移。
+     * 插件在同一通道锁内分页读取有效待付订单；只提供候选，不解释快照中的识别策略。
+     * 调用方须在取得通道锁后再开始一致性读取，不对其他订单加锁，避免反向锁序。
+     * @return iterable<PayOrder> 初始化金额是否构成占用，由插件核对准备快照后决定。
      */
-    public function usedReceiptAmounts(string $scopeKey, string $exceptPayNo, string $now): array
+    public function channelPending(string $channelId, string $exceptPayNo, string $now): iterable
     {
         $this->requireTransaction();
-        $orders = $this->model->where('receipt_scope_key', $scopeKey)
-            ->where('pay_no', '<>', $exceptPayNo)->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING])
-            ->where('expire_at', '>', $now)->where(function (Query $prepared): void {
-                $prepared->whereNotNull('request_at')->whereOr(function (Query $metadata): void {
-                    $metadata->whereNotNull('ext_json->personal_receipt->original_amount');
-                });
-            })->select();
-        return array_map(static fn (PayOrder $pay): int => $pay->receiptAmount(), $orders->all());
+        $after = '0';
+        do {
+            $rows = $this->model->where('channel_id', $channelId)->where('pay_no', '<>', $exceptPayNo)
+                ->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING])
+                ->where('expire_at', '>', $now)->where('id', '>', $after)
+                ->field('id,pay_no,pay_amount,ext_json')->order('id')->limit(500)->select();
+            foreach ($rows as $row) { $after = $row['id']; yield $row; }
+        } while (count($rows) === 500);
     }
 
     /**
-     * 按 V2 识别规则提供当前候选，选择最近或要求单候选由具体插件决定。
-     * 不在查询内猜支付方式、调整金额或回退到其他账号。
-     * 每单按已保存的匹配模式读取：金额单忽略附言，备注单必须同时命中金额和原备注。
-     *
-     * @return list<PayOrder> 稳定按创建顺序排序，供插件处理等距候选。
+     * 按明确通道、插件、金额及调用插件给出的时间条件提供候选；备注和模式只由插件解释。
+     * 本地关闭/超时保留原付款窗口。分页取齐候选，不能截断后宣称唯一。
+     * @return iterable<PayOrder>
      */
-    public function receiptCandidates(string $scopeKey, int $amount, ?string $remark, ?string $paidAt, string $now, ?string $channelId = null): array
+    public function receiptCandidates(string $channelId, string $plugin, int $amount, ?string $paidAt, string $now): iterable
     {
-        $query = $this->model->where('receipt_scope_key', $scopeKey)->where('pay_amount', $amount)
-            ->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING, TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT]);
-        if ($paidAt === null) { $query->where('expire_at', '>', $now); }
-        if ($channelId !== null) { $query->where('channel_id', $channelId); }
-        $query->where(function (Query $mode) use ($remark): void {
-            $mode->where('ext_json->personal_receipt->match_mode', 'amount');
-            if ($remark !== null && $remark !== '') {
-                $mode->whereOr(function (Query $code) use ($remark): void {
-                    $code->where('ext_json->personal_receipt->match_mode', 'remark')
-                        ->where('ext_json->personal_receipt->remark', $remark);
-                });
-            }
-        });
-        if ($paidAt !== null) { $query->where('request_at', '<=', $paidAt)->where('expire_at', '>', $paidAt); }
-        return $query->order('created_at,id')->select()->all();
+        $after = '0';
+        do {
+            $query = $this->model->where('channel_id', $channelId)->where('plugin_code', $plugin)->where('pay_amount', $amount)
+                ->whereIn('status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING,
+                    TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT])
+                ->whereNotNull('request_at')->where('id', '>', $after);
+            if ($paidAt === null) { $query->where('expire_at', '>', $now); }
+            else { $query->where('request_at', '<=', $paidAt)->where('expire_at', '>', $paidAt); }
+            $rows = $query->order('id')->limit(500)->select();
+            foreach ($rows as $row) { $after = $row['id']; yield $row; }
+        } while (count($rows) === 500);
     }
 
-    /** 按稳定事件键定位已成功订单；同一到账不能因缺少平台交易号重新分配给待付单。 */
-    public function successfulForEvent(string $scopeKey, string $eventKey): ?PayOrder
+    /** 事件唯一键先定位已匹配流水，再核对通道；不遍历成功订单的 JSON 事件字段。 */
+    public function successfulForEvent(string $channelId, string $plugin, string $eventKey): ?PayOrder
     {
-        return $this->model->where('receipt_scope_key', $scopeKey)->where('status', TradeConstant::ORDER_STATUS_SUCCESS)->where('ext_json->personal_receipt->event_key', $eventKey)->find();
+        return $this->model->alias('p')->join('ma_receipt_flow f', 'f.pay_no=p.pay_no')
+            ->where('f.plugin_code', $plugin)->where('f.event_key', $eventKey)
+            ->where('p.channel_id', $channelId)->where('p.plugin_code', $plugin)
+            ->where('p.status', TradeConstant::ORDER_STATUS_SUCCESS)->field('p.*')->find();
     }
 
-    /** 调用插件已持有业务单、支付单及范围锁；只持久化其准备结果，不决定分配策略。 */
+    /** 平台引用定位包含人工确认的原订单，后续真实流水可以补证据但不能换绑。 */
+    public function successfulForChannelTrade(string $channelId, string $plugin, string $tradeNo): ?PayOrder
+    {
+        return $this->model->where('plugin_code', $plugin)->where('channel_trade_no', $tradeNo)
+            ->where('channel_id', $channelId)->where('status', TradeConstant::ORDER_STATUS_SUCCESS)->find();
+    }
+
+    /** 调用插件已持有业务单、支付单及通道锁；只持久化其准备结果，不决定分配策略。 */
     public function saveReceiptContext(string $payNo, int $amount, array $extension, string $expiresAt, string $now): void
     {
         $this->requireTransaction();
@@ -215,16 +233,6 @@ final class PayOrderRepository extends BaseRepository
         $this->requireTransaction();
         return $this->model->where('plugin_code', $pluginCode)->where('channel_trade_no', $tradeNo)
             ->where('status', TradeConstant::ORDER_STATUS_SUCCESS)->where('pay_no', '<>', $exceptPayNo)->find() !== null;
-    }
-
-    /**
-     * 用真实范围/交易号定位已经成功的原单，仅供重复或人工补证据，不能据此确认新的订单。
-     * 不反向取支付锁；在范围锁事务内调用时须是首次一致性读取，生命周期随后只处理已锁定的同一原单。
-     */
-    public function successfulForTrade(string $scopeKey, string $tradeNo): ?PayOrder
-    {
-        return $this->model->where('receipt_scope_key', $scopeKey)->where('channel_trade_no', $tradeNo)
-            ->where('status', TradeConstant::ORDER_STATUS_SUCCESS)->find();
     }
 
     /**

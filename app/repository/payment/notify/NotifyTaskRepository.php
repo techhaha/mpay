@@ -39,6 +39,13 @@ final class NotifyTaskRepository extends BaseRepository
         return $this->model->where('event_type', $eventType)->where('ref_no', $refNo)->find();
     }
 
+    /** 按唯一事件索引读取首次 ACK，不加载通知正文、商户响应或尝试历史。 */
+    public function cashierConfirmation(string $eventType, string $payNo): ?NotifyTask
+    {
+        return $this->model->where('event_type', $eventType)->where('ref_no', $payNo)
+            ->field('biz_no,pay_no,status,first_ack_at')->find();
+    }
+
     public function find(string $notifyNo): ?NotifyTask
     {
         return $this->model->where('notify_no', $notifyNo)->find();

@@ -58,12 +58,17 @@ final class PaymentPluginFactoryService
 
     /**
      * @param array<string,mixed> $settings
-     * @param array<string,mixed> $runtime 服务生成的通道参数优先，外部配置不能覆盖订单范围。
+     * @param array<string,mixed> $runtime 服务生成的约定通道参数；与插件配置冲突属于程序错误。
      */
     public function initialize(string $code, array $settings, array $runtime): PaymentInterface
     {
         $plugin = $this->make($code);
-        $plugin->init(array_replace($this->validator->validate($plugin->getConfigSchema(), $settings), $runtime));
+        $definition = $this->describe($plugin);
+        $settings = $this->validator->validate($definition->configSchema, $settings);
+        if (array_intersect_key($settings, $runtime) !== []) {
+            throw new LogicException('插件配置与系统运行参数冲突');
+        }
+        $plugin->init($settings + $runtime);
         return $plugin;
     }
 

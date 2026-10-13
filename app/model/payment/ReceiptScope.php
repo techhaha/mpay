@@ -6,7 +6,7 @@ namespace app\model\payment;
 use app\common\base\BaseModel;
 
 /**
- * 通道配置与支付方式的内部关联，也是识别值占用的行锁目标。
+ * 通道配置与支付方式的内部关联及交易确认锁；识别值由插件按通道锁分配。
  * 不保存或比较平台账号；实际账号合并和平台登录由插件自行处理。
  *
  * @property string $receipt_scope_key

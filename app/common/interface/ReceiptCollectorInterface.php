@@ -17,7 +17,7 @@ interface ReceiptCollectorInterface extends PaymentInterface
     /**
      * 每账号每轮最多一次带时间的流水请求，取最新最多 200 条，不翻页。
      * 输入只读，不依赖单通道 init 的残留状态，也不确认本系统订单。
-     * @param array<string,array<string,mixed>> $orders 按支付号索引，金额为整数分。
+     * @param array<string,array{id:string,pay_no:string,channel_id:string,channel_revision_id:string,pay_type:string,pay_amount:int,ext_json:array<string,mixed>,request_at:?string,expire_at:string,created_at:string}> $orders 按支付号索引；插件检查自己的准备快照后查询，金额为整数分。
      * @param array<string,array<string,mixed>> $channels 按通道版本 ID 索引，含冻结配置和有版本的当前配置。
      * @return iterable<array{channel_revision_ids:list<string>,records:list<array<string,mixed>>,limit_reached:bool,error:?array{code:int,reason:string,retry_after:int}}>
      */
@@ -27,7 +27,7 @@ interface ReceiptCollectorInterface extends PaymentInterface
      * 整批逐笔匹配，不合单、不拆单、不写成功状态；消费标记由服务附加，旧流水不得换绑。
      *
      * @param list<array{record:array<string,mixed>,consumed_pay_no:?string}> $receipts 本次有效记录，最多 200 条。
-     * @param array<string,array<string,mixed>> $orders 本批允许匹配的原单快照。
+     * @param array<string,array<string,mixed>> $orders 本批允许匹配的原单快照，形状同 collect；按 channel_id 区分候选，不能用真实账号代替通道。
      * @param array<string,array<string,mixed>> $channels 本批覆盖的通道版本。
      * @return list<array<string,mixed>> 标准通知结果；未匹配不返回，每笔订单/流水最多出现一次。
      */

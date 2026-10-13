@@ -19,7 +19,7 @@ final class ReceiptScopeRepository extends BaseRepository
             ['receipt_scope_key', 'pay_type_id', 'api_config_id']);
     }
 
-    /** 在业务单/支付单之后取锁，串行分配本配置的金额或备注。 */
+    /** 在业务单/支付单之后取锁，核对归属并串行提交本范围的到账事实；不分配金额或备注。 */
     public function lock(string $scopeKey): ReceiptScope
     {
         $this->requireTransaction();

@@ -24,7 +24,9 @@ final class InstallValidator extends Validate
     {
         $fields = array_keys($this->rule);
         if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) { $this->invalid(); }
-        $check = clone $this; $check->must = $fields;
+        $check = clone $this;
+        // 数据库允许空密码，但 null 不能被框架按可选空值跳过类型检查。
+        $check->rule('pass', [static fn (mixed $value): bool => is_string($value), ...$this->rule['pass']]);
         if (!$check->failException(false)->check($input)) { $this->invalid(); }
         return $input;
     }

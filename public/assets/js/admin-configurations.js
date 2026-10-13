@@ -7,6 +7,7 @@ MpayAdmin.ready(function () {
     const UI=MpayAdmin,E=UI.escape,filters=document.getElementById('configuration-filters');if(!filters)return;
     const api='/adminapi/configuration/',feedback=document.getElementById('admin-feedback'),query=new URLSearchParams(location.search);
     let plugins=[],channels=[],loading=false;
+    const matchesCondition=(condition,value)=>Array.isArray(condition.in)?condition.in.includes(value):value===condition.value;
     const get=(path,values={})=>MpayHttp.request(api+path+'?'+new URLSearchParams(values)).then(result=>result.data);
     const post=(path,data)=>MpayHttp.request(api+path,{method:'POST',data});
     const versions=detail=>({id:detail.id,expected_revision:detail.revision_id,expected_configuration_version:detail.configuration_version});
@@ -88,15 +89,21 @@ MpayAdmin.ready(function () {
             }
             fields.push({field,input,present,required,node});
         }
-        const visibility=()=>fields.forEach(item=>{const condition=item.field.visible_when;if(!condition)return;const source=fields.find(other=>other.field.field===condition.field);item.node.hidden=!source||(source.field.type==='switch'?source.input.checked:source.field.type==='number'?Number(source.input.value):source.input.value)!==condition.value;});
+        const visibility=()=>fields.forEach(item=>{
+            const condition=item.field.visible_when;if(!condition)return;
+            const source=fields.find(other=>other.field.field===condition.field);
+            item.node.hidden=!source||!matchesCondition(condition,source.field.type==='switch'?source.input.checked:source.field.type==='number'?Number(source.input.value):source.input.value);
+            // 显示条件同时限定必填范围；隐藏字段仍保留原值及类型/格式约束。
+            item.input.required=item.required&&!item.node.hidden;
+        });
         target.addEventListener('change',visibility);visibility();UI.render(form);
         return {
             async values(){
                 for(const [field,file] of pending){const data=new FormData();data.set('image',file);const result=await MpayHttp.request(api+'image-upload',{method:'POST',data,timeout:30000});fields.find(item=>item.field.field===field).input.value=result.data.id;pending.delete(field);}
                 const settings={};
-                fields.forEach(({field,input,present,required})=>{
+                fields.forEach(({field,input,present,required,node})=>{
                     // 未填写的可选数字保持缺失，不能被 Number('') 静默改成 0；列表只分行，不修剪插件的文本。
-                    if(input.value===''&&!required&&(field.type==='number'||(!Object.hasOwn(field,'value')&&!present)))return;
+                    if(input.value===''&&(!required||node.hidden)&&(field.type==='number'||(!Object.hasOwn(field,'value')&&!present)))return;
                     settings[field.field]=field.type==='number'?(input.value===''?'':Number(input.value)):field.type==='switch'?input.checked:field.type==='list'?input.value.split(/\r?\n/).filter(line=>line!==''):input.value;
                 });
                 return {settings};
@@ -210,7 +217,7 @@ MpayAdmin.ready(function () {
             // 详情沿用 schema 顺序与严格类型的显示条件；说明/帮助仅用于配置表单。
             // 每个字段保留独立行，避免同名标题相互覆盖；图片原位留入口，预览集中放在下方。
             const rows=[],images=[];configuration.plugin.schema.forEach(field=>{
-                if(field.visible_when&&configuration.settings[field.visible_when.field]!==field.visible_when.value)return;
+                if(field.visible_when&&!matchesCondition(field.visible_when,configuration.settings[field.visible_when.field]))return;
                 const value=configuration.settings[field.field];
                 const empty=value==null||value===''||(Array.isArray(value)&&value.length===0);
                 let content;

@@ -4,8 +4,10 @@ declare(strict_types=1);
 namespace app\http\page;
 
 use app\common\base\BaseController;
+use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
+use app\exception\BusinessException;
 use app\http\api\validation\CashierValidator;
 use app\service\payment\cashier\CashierService;
 use app\service\payment\epay\EpayV1ProtocolService;
@@ -19,6 +21,9 @@ final class CashierController extends BaseController
     public function completed(CashierValidator $validator, CashierService $cashier, Clock $clock): Response
     {
         $identity = $validator->identity($this->request->get());
+        $completion = $cashier->completion($identity['biz_no'], $identity['token']);
+        if ($completion['action'] === 'return') { return redirect($completion['next_url'], 303); }
+        if ($completion['action'] !== 'success') { return redirect('/cashier/pay?' . http_build_query($identity), 303); }
         $data = $cashier->view($identity['biz_no'], $identity['token'], $clock->now());
         if ($data['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) {
             return redirect('/cashier/pay?' . http_build_query($identity), 303);
@@ -27,8 +32,7 @@ final class CashierController extends BaseController
         return view('cashier/success', [
             'title' => '支付成功 · MPAY',
             'csrf_token' => '',
-            'payment' => $data,
-            'return_path' => '/cashier/return?' . http_build_query($identity)
+            'payment' => $data
         ]);
     }
 
@@ -44,10 +48,14 @@ final class CashierController extends BaseController
         ]);
     }
 
-    /** 回跳始终重新读取原单并核验本地成功，只签名跳转，不接受外部 success 参数确认收款。 */
+    /** 回跳重读原单并核验收款和商户确认，只签名跳转，不接受外部 success 参数确认收款。 */
     public function back(CashierValidator $validator, EpayV1ProtocolService $protocol): Response
     {
         $identity = $validator->identity($this->request->get());
-        return redirect($protocol->returnUrl($identity['biz_no'], $identity['token']), 303);
+        try { return redirect($protocol->returnUrl($identity['biz_no'], $identity['token']), 303); }
+        catch (BusinessException $exception) {
+            if ($exception->getCode() !== ApiResponseConstant::CONFLICT) { throw $exception; }
+            return redirect('/cashier/pay?' . http_build_query($identity), 303);
+        }
     }
 }

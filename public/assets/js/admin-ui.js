@@ -71,7 +71,7 @@
             const input = scope.querySelector('[name="' + CSS.escape(field) + '"]');
             const label = input?.closest('.admin-field')?.querySelector('label')?.textContent.replace('ⓘ','').trim();
             const text = (Array.isArray(messages) ? messages : [messages]).filter(value => typeof value === 'string').join('，');
-            return text ? (label ? label + '：' : '') + text : '';
+            return text ? (label && !text.startsWith(label) ? label + '：' : '') + text : '';
         }).filter(Boolean).join('；') : '';
         const message = exception instanceof TypeError ? '连接中断，请检查网络后重新读取；如刚提交过修改，请先核对保存结果' : exception.message || '操作未完成，请稍后重试';
         feedback(target, message + (detail ? '：' + detail : ''));

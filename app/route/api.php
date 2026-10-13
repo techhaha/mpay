@@ -16,6 +16,8 @@ Route::group(function (): void {
 Route::group('api/cashier', function (): void {
     // 高频订单查询不读写 Session；订单随机凭证由入口及服务校验。
     Route::rule('order', [CashierController::class, 'order'], 'GET|HEAD')->name('cashier.order');
+    Route::rule('status', [CashierController::class, 'status'], 'GET|HEAD')->name('cashier.status');
+    Route::rule('completion', [CashierController::class, 'completion'], 'GET|HEAD')->name('cashier.completion');
     Route::group(function (): void {
         Route::post('select', [CashierController::class, 'selectType'])->name('cashier.select');
         Route::post('prepare', [CashierController::class, 'prepare'])->name('cashier.prepare');

@@ -7,7 +7,7 @@ use RuntimeException;
 
 /**
  * 一条受控建表定义及其摘要；SQL 是唯一结构来源，不另存完整元数据。
- * 除建表外，接受固定追加列、指定关联列可空、明确退役列及纯注释步骤；不接受任意 ALTER 或升级回调。
+ * 除建表外，接受固定列调整、受控索引和纯注释步骤；不接受任意 ALTER 或升级回调。
  */
 final readonly class MigrationStep
 {
@@ -27,6 +27,10 @@ final readonly class MigrationStep
         public ?array $removedColumns = null,
         /** 仅对应已确认的订单驱动监听结构清理，不接受外部 SQL 或任意升级回调。 */
         public bool $collectionCleanup = false,
+        /** 固定通道识别迁移：校验历史快照后退役预约表并建立通道查询索引。 */
+        public bool $channelMatching = false,
+        /** 固定到账日期统计索引；只增加索引，不改字段、数据或历史摘要。 */
+        public bool $receiptPaidIndex = false,
     ) {
     }
 
@@ -37,6 +41,22 @@ final readonly class MigrationStep
     public static function fromDefinition(string $version, string $name, mixed $definition): self
     {
         if (is_array($definition)) {
+            if (array_key_exists('receipt_paid_index', $definition)) {
+                if ($version !== '202610130200_receipt_paid_index' || $name !== 'ma_receipt_flow_paid_index'
+                    || $definition !== ['table' => 'ma_receipt_flow', 'receipt_paid_index' => true]) {
+                    throw new RuntimeException('未声明的到账日期索引调整');
+                }
+                return new self($version, $name, 'ma_receipt_flow', '',
+                    hash('sha256', json_encode($definition, JSON_THROW_ON_ERROR)), receiptPaidIndex: true);
+            }
+            if (array_key_exists('channel_matching', $definition)) {
+                if ($version !== '202610130100_channel_matching' || $name !== 'ma_pay_order_channel_matching'
+                    || $definition !== ['table' => 'ma_pay_order', 'channel_matching' => true]) {
+                    throw new RuntimeException('未声明的通道识别结构调整');
+                }
+                return new self($version, $name, 'ma_pay_order', '',
+                    hash('sha256', json_encode($definition, JSON_THROW_ON_ERROR)), channelMatching: true);
+            }
             if (array_key_exists('collection_cleanup', $definition)) {
                 if ($version !== '202610110300_order_driven_collection'
                     || $name !== 'ma_payment_plugin_conf_collection_cleanup'

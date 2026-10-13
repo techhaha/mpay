@@ -17,6 +17,7 @@ use app\model\payment\PayOrder;
 use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
+use app\service\payment\cashier\CashierService;
 use app\service\payment\config\PaymentAppCredentialService;
 use app\service\payment\order\PayOrderService;
 use app\service\payment\plugin\PayOrderChannelDispatchService;
@@ -41,6 +42,7 @@ final class EpayV1ProtocolService extends BaseService
         private readonly HttpTargetPolicy $targets,
         private readonly SiteUrl $site,
         private readonly Clock $clock,
+        private readonly CashierService $cashier,
     ) {
     }
 
@@ -140,11 +142,15 @@ final class EpayV1ProtocolService extends BaseService
     }
 
     /**
-     * 只对持有访问凭证且本地已经成功的订单生成签名回跳；此调用不修改任何支付状态。
+     * 只对持有访问凭证、已收款且商户已确认的订单生成签名回跳；此调用不修改任何支付状态。
      * return_url 的 query 可能与 notify_url 不同，必须用原版本 KEY 独立合并签名。
      */
     public function returnUrl(string $bizNo, string $accessToken): string
     {
+        // 首次 ACK 不会因后续补发失败撤销；先完成独立读取，避免嵌套事务，签名前仍重核订单与冻结目标。
+        if ($this->cashier->completion($bizNo, $accessToken)['action'] !== 'return') {
+            throw new BusinessException('订单尚未完成商户确认或未设置返回地址', ApiResponseConstant::CONFLICT);
+        }
         return $this->transaction(function () use ($bizNo, $accessToken): string {
             $biz = $this->bizOrders->find($bizNo);
             $this->orders->assertAccess($biz, $accessToken);

@@ -1,40 +1,85 @@
-/* 收银台共用全站色板；付款金额、备注和二维码独立分区，状态仅展示服务端交易结果。 */
-.cashier-page {max-width:580px;margin:24px auto;padding:28px;background:var(--mpay-surface);border:1px solid var(--mpay-border);border-radius:12px;box-shadow:var(--mpay-shadow)}
-.cashier-header {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px;padding-bottom:20px;border-bottom:1px solid var(--mpay-border)}
-.cashier-brand {font-weight:800;letter-spacing:2px;color:var(--mpay-heading);font-size:19px}
-.cashier-status {font-weight:600;padding:5px 10px;background:var(--mpay-info-soft);color:var(--mpay-link);border-radius:20px;font-size:13px}
+/* 收银台共用全站色板；金额唯一，识别要求来自原单，展示样式不决定支付状态。 */
+.cashier-page {box-sizing:border-box;width:100%;max-width:640px;margin:0 auto;padding:28px;background:var(--mpay-surface);border:1px solid var(--mpay-border);border-radius:12px;box-shadow:var(--mpay-shadow)}
+.cashier-header {display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--mpay-border)}
+.cashier-status {flex-shrink:0;font-weight:600;padding:5px 10px;background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);border-radius:20px;font-size:13px}
 .cashier-test {padding:12px;margin-bottom:18px;border:1px solid var(--mpay-warning-border);background:var(--mpay-warning-soft);color:var(--mpay-warning-text);border-radius:8px;line-height:1.7;font-weight:600}
-.cashier-page h1 {font-size:22px;line-height:1.5;margin-bottom:10px;overflow-wrap:anywhere;text-align:center;font-weight:500}
+.cashier-page h1 {font-size:20px;line-height:1.5;margin:0 0 20px;overflow-wrap:anywhere;text-align:center;font-weight:600}
 .cashier-page h2 {font-size:16px;margin:22px 0 12px}
-.cashier-order {text-align:center;color:var(--mpay-muted);font-size:12px;overflow-wrap:anywhere}
-.cashier-amounts {display:flex;flex-wrap:wrap;gap:24px;margin:24px 0 12px;padding:20px;background:var(--mpay-surface-muted);border-radius:8px}
-.cashier-amounts>div {flex:1;min-width:170px}
-.cashier-amounts span,.cashier-remark>span {display:block;color:var(--mpay-muted);font-size:13px;margin-bottom:8px}
-.cashier-amounts strong {font-size:32px;font-weight:700;letter-spacing:.3px;font-variant-numeric:tabular-nums;color:var(--mpay-heading)}
-#cashier-receipt-money {color:var(--mpay-primary-dark)}
-.cashier-hint {color:var(--mpay-muted);line-height:1.7;font-size:13px}
+.cashier-amount {text-align:center;margin:0 0 24px;padding:18px 16px;background:var(--mpay-surface-muted);border-radius:8px}
+.cashier-amount>span {display:block;font-size:13px;color:var(--mpay-muted);margin-bottom:8px}
+.cashier-amount>strong {font-size:40px;line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums;color:var(--mpay-primary-dark)}
+.cashier-currency {font-size:.65em;font-weight:600}
 .cashier-methods {display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
 .cashier-methods .layui-btn {display:inline-flex;align-items:center;justify-content:center;gap:9px;margin:0;height:44px;min-width:150px;background:var(--mpay-surface);color:var(--mpay-text);border:1px solid var(--mpay-input-border)}
-.cashier-methods .layui-btn:hover{border-color:var(--mpay-primary);background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
-.cashier-payment-brand{text-align:center;padding-top:20px}
-.cashier-qr {text-align:center;margin:18px auto 14px;background:var(--mpay-surface);max-width:300px;min-height:120px}
-.cashier-qr canvas,.cashier-qr img {display:block;width:100%;height:auto;max-width:300px;margin:auto;image-rendering:pixelated}
-.cashier-remark {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;background:var(--mpay-warning-soft);border:1px solid var(--mpay-warning-border);border-radius:8px;padding:14px;margin-top:16px}
-.cashier-remark>span {width:100%;text-align:center;margin-bottom:0;color:var(--mpay-warning-text)}
-.cashier-remark strong {font:700 22px monospace;letter-spacing:1px;color:var(--mpay-warning-text);overflow-wrap:anywhere}
-.cashier-countdown {text-align:center;font-size:13px;color:var(--mpay-muted);margin:16px 0}
-.cashier-countdown strong {font-variant-numeric:tabular-nums;color:var(--mpay-heading)}
+.cashier-methods .layui-btn:hover {border-color:var(--mpay-primary);background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
+
+/* 付款内容区无外框；生成码保留编码器的静区，图片码按原比例显示。 */
+.cashier-payment-brand {display:flex;align-items:center;justify-content:center;min-height:34px;margin-bottom:18px}
+.cashier-qr {box-sizing:border-box;width:min(276px,100%);margin:0 auto;padding:10px;border:1px solid var(--mpay-border);border-radius:8px;background:#fff}
+.cashier-qr img {display:block;width:100%;height:auto;margin:auto;image-rendering:pixelated}
+.cashier-qr-upload {width:fit-content;max-width:100%}
+.cashier-qr-upload img {width:auto;height:auto;max-width:min(276px,100%);max-height:340px;object-fit:contain;image-rendering:auto}
+.cashier-scan-guide {text-align:center;margin:16px 0 20px}
+.cashier-scan-title {margin:0;color:var(--mpay-heading);font-size:16px;font-weight:600;line-height:1.6}
+.cashier-hint {margin:6px 0 0;color:var(--mpay-muted);line-height:1.7;font-size:13px;overflow-wrap:anywhere}
+.cashier-receipt-guide {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:16px;padding:16px;background:var(--mpay-surface-muted);border-radius:8px;text-align:center}
+.cashier-payment-tip,.cashier-remark,.cashier-countdown {min-width:0}
+.cashier-payment-tip {align-self:center}
+.cashier-payment-tip>span,.cashier-remark>span,.cashier-countdown>span {display:block;color:var(--mpay-muted);font-size:13px;line-height:1.6}
+.cashier-payment-tip p {margin:8px 0 0;font-size:14px;line-height:1.6;color:var(--mpay-text)}
+.cashier-remark-value {display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;margin-top:6px}
+.cashier-remark-value strong {font:600 28px/1.2 ui-monospace,SFMono-Regular,Consolas,monospace;letter-spacing:1px;color:var(--mpay-heading);overflow-wrap:anywhere;min-width:0;max-width:100%;user-select:all}
+.cashier-remark-value .layui-btn {margin:0}
+.cashier-remark p {margin:6px 0 0;font-size:13px;color:var(--mpay-muted);line-height:1.6}
+.cashier-countdown {display:flex;flex-direction:column;justify-content:center;gap:6px;padding-left:16px;border-left:1px solid var(--mpay-border)}
+.cashier-countdown strong {font-size:28px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums;color:var(--mpay-primary-dark)}
+
+/* 提示区仅显示准备、异常及商户确认；详情和刷新归入同一辅助区。 */
 .cashier-notice {margin-top:20px;padding:14px 16px;border-radius:8px;background:var(--mpay-info-soft);color:var(--mpay-link);line-height:1.8;overflow-wrap:anywhere}
-.cashier-page[data-status="2"] .cashier-notice {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
-.cashier-page[data-status="2"] .cashier-status {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
 .cashier-error {margin-top:12px;color:var(--mpay-danger-text);background:var(--mpay-danger-soft);border-radius:8px;padding:12px;line-height:1.7;overflow-wrap:anywhere}
-.cashier-actions {justify-content:center;display:flex;flex-wrap:wrap;gap:10px;margin-top:20px}
+.cashier-auxiliary {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:12px;margin-top:22px}
+.cashier-order-details {min-width:0;color:var(--mpay-muted);font-size:13px}
+.cashier-order-details summary {cursor:pointer;padding:10px 0;width:fit-content;line-height:18px}
+.cashier-order {color:var(--mpay-muted);font-size:12px;overflow-wrap:anywhere;line-height:1.7}
+.cashier-order-details .cashier-order {padding:8px 0;user-select:text}
+.cashier-actions {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
 .cashier-actions .layui-btn {margin:0}
-.cashier-page footer {text-align:center;font-size:12px;line-height:1.7;color:var(--mpay-muted);margin-top:24px}
+.cashier-page footer {text-align:center;font-size:12px;line-height:1.9;color:var(--mpay-muted);margin-top:20px;white-space:pre-line}
+.cashier-page :is(button,summary):focus-visible {outline:2px solid var(--mpay-primary);outline-offset:3px}
 .cashier-page [hidden] {display:none!important}
-@media(max-width:600px){.cashier-page{margin:0;padding:20px 16px;border-radius:10px}.cashier-amounts{gap:16px;padding:16px}.cashier-amounts>div{min-width:120px}.cashier-amounts strong{font-size:28px}.cashier-order{font-size:11px}}
-
-
-.cashier-page[data-status="3"] .cashier-status{background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
-.cashier-page[data-status="4"] .cashier-status,.cashier-page[data-status="5"] .cashier-status{background:var(--mpay-neutral-soft);color:var(--mpay-muted)}
-.cashier-success{text-align:center}.cashier-success-icon{display:grid;place-items:center;width:64px;height:64px;margin:28px auto 18px;border-radius:50%;background:var(--mpay-success-soft);color:var(--mpay-primary);font-size:36px}.cashier-success .cashier-amounts{justify-content:center}.cashier-success-details{margin:24px 0;color:var(--mpay-muted)}.cashier-success-details summary{cursor:pointer}.cashier-success-details .cashier-order{margin-top:14px}
+.cashier-page[data-status="2"] .cashier-notice,.cashier-page[data-status="2"] .cashier-status {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
+.cashier-page[data-status="3"] .cashier-status {background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
+.cashier-page[data-status="4"] .cashier-status,.cashier-page[data-status="5"] .cashier-status {background:var(--mpay-neutral-soft);color:var(--mpay-muted)}
+/* 已停止付款与商户确认共用结果区；徽章按展示语义着色，不能用过期标签覆盖已到账事实。 */
+.cashier-page[data-view]:not([data-view="payment"]) #cashier-subject {font-size:14px;font-weight:400;color:var(--mpay-muted);margin-bottom:18px}
+.cashier-result {text-align:center;margin:0 0 24px;padding:4px 0 8px}
+.cashier-result-icon {display:grid;place-items:center;width:60px;height:60px;margin:0 auto 16px;border-radius:50%;background:var(--mpay-neutral-soft);color:var(--mpay-muted)}
+.cashier-result-icon .layui-icon {font-size:30px}
+.cashier-result h2 {margin:0 0 12px;font-size:22px;font-weight:600;line-height:1.4;color:var(--mpay-heading)}
+.cashier-result-message {margin:0;font-size:14px;line-height:1.8;color:var(--mpay-text)}
+.cashier-result-detail {max-width:440px;margin:8px auto 0;font-size:13px;line-height:1.8;color:var(--mpay-muted);overflow-wrap:anywhere}
+.cashier-page:is([data-view="expired"],[data-view="closed"]) .cashier-status {background:var(--mpay-neutral-soft);color:var(--mpay-muted)}
+.cashier-page[data-view="failed"] :is(.cashier-status,.cashier-result-icon) {background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}
+.cashier-page[data-view="paid"] :is(.cashier-status,.cashier-result-icon) {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
+.cashier-success {text-align:center}
+.cashier-success-icon {display:grid;place-items:center;width:64px;height:64px;margin:28px auto 18px;border-radius:50%;background:var(--mpay-success-soft);color:var(--mpay-primary);font-size:36px}
+.cashier-success .cashier-amount {margin-top:24px}
+.cashier-success-details {margin:24px 0;color:var(--mpay-muted)}
+.cashier-success-details summary {cursor:pointer}
+.cashier-success-details .cashier-order {margin-top:14px}
+@media(max-width:600px) {
+    .cashier-page {padding:20px 16px;border-radius:10px}
+    .cashier-header {margin-bottom:20px;padding-bottom:16px}
+    .cashier-amount>strong {font-size:36px}
+    .cashier-receipt-guide {gap:12px;padding:14px 12px}
+    .cashier-countdown {padding-left:12px}
+    .cashier-remark-value {gap:6px}
+    .cashier-remark-value strong,.cashier-countdown strong {font-size:24px}
+    .cashier-auxiliary {grid-template-columns:minmax(0,1fr) minmax(0,auto)}
+}
+@media(max-width:360px) {
+    .cashier-receipt-guide {grid-template-columns:1fr}
+    .cashier-countdown {flex-direction:row;align-items:center;justify-content:space-between;border-left:0;border-top:1px solid var(--mpay-border);padding:12px 0 0}
+    .cashier-countdown strong {font-size:24px}
+    .cashier-actions {flex-direction:column}
+}

@@ -26,9 +26,13 @@ schema 是有序字段列表，最多 128 项；顺序决定显示顺序。字�
 | `help` | 否 | 最多 4096 字节 UTF-8 纯文本，空白不显示 |
 | `placeholder` | 否 | 最多 4096 字节 UTF-8 纯文本输入提示 |
 | `rows` | 否 | textarea/list 的高度，整数 2～20 |
-| `visible_when` | 否 | `{field: '其他字段', value: 类型一致的值}`；只控制显示 |
+| `visible_when` | 否 | `{field: '其他字段', value: 类型一致的值}` 或 `{field: '其他字段', in: [值1, 值2]}`；条件控制显示和必填生效范围 |
 
-保留字段：`channel_id`、`receipt_scope_key`、`receipt_qrcode_image_url`、`pay_type_code`、`configuration_id`、`api_config_id`、`collection_configuration_ids`。这些属于服务运行上下文，不能声明为用户设置。
+保留字段：`channel_id`、`receipt_scope_key`、`pay_type_code`、`configuration_id`、`api_config_id`、`collection_configuration_ids`。这些属于服务运行上下文，不能声明为用户设置。
+
+每个 `upload` 字段还会在付款初始化时派生同名加 `_url` 的同源图片地址。例如 `proof` 保存资产 ID，`proof_url` 提供图片地址；同一 schema 不能再声明 `proof_url`，无论声明顺序如何。`receipt_qrcode_image_url` 同样是 `receipt_qrcode_image` 的派生字段，不是系统猜测的固定二维码参数。冲突在插件发现/刷新时直接报错。
+
+付款和退款初始化只补充 `channel_id`、`api_config_id`、`receipt_scope_key`、`pay_type_code` 等明确约定的运行参数，不把整行通道记录合入插件设置。插件自定义的 `name`、`id` 等字段保持原值；通道通知只补充其所需的通道、配置和范围标识。配置与运行参数同名时拒绝执行，不以覆盖方式解决冲突。
 
 | type | 保存的 JSON 类型 | 控件与限制 |
 | --- | --- | --- |
@@ -45,16 +49,19 @@ schema 是有序字段列表，最多 128 项；顺序决定显示顺序。字�
 ## 校验、默认值和隐藏字段
 
 - 未声明字段拒绝保存，配置 JSON 总体最多 64 KiB。
-- 缺失、null、空字符串、0、false 不等价。null 不符合当前任何字段类型。0/false/已提供的空字符串仍执行规则。
+- 缺失、null、空字符串、0、false 不等价。null 不符合当前任何字段类型。0/false 继续执行规则；已提供的值先检查 JSON 类型。可选文本的空字符串沿用 ThinkPHP 原生空值语义，需要非空时明确声明 require 或条件必填规则。
 - `value` 仅对缺失键补值，不覆盖已提供的空字符串、0 或 false。读取旧订单不可变快照不补当前代码的新默认值。
-- `require` 无条件必填；`requireWithout` 等条件规则由 ThinkPHP Validate 执行，不改写为无条件必填。
-- `visible_when` 只能引用存在、非秘密且自身无显示条件的字段，避免循环。比较值保持原生类型：number 用整数、switch 用布尔值、select 用字符串。
+- `require` 在字段可见时必填；`requireWithout` 等条件规则由 ThinkPHP Validate 执行，不改写为无条件必填。
+- `visible_when` 只能引用存在、非秘密且自身无显示条件的字段，避免循环。value 与 in 二选一；in 为 1～100 个类型一致的候选值，不能是空列表。比较值保持原生类型：number 用整数、switch 用布尔值、select 用字符串。先补齐所有字段默认值，再判断条件。
+- 条件不满足时，服务端只停用该字段的 require/requireWithout 等必填规则；提交值仍检查类型，非空值继续执行长度、格式等原生规则。隐藏不删除已有值，不允许通过隐藏绕过输入校验。
 - 隐藏字段保留输入、随表单提交，服务端照常校验；隐藏不是删除、免校验或权限控制。插件若需要“隐藏时无效”，在动作逻辑中解释，而不能依赖前端隐藏。
 - 改变插件重新生成该插件字段；返回向导上一步不清空字段。新建通道只在最后一步保存数据库。
 
+schema 声明在插件发现/定义阶段由 PluginDefinition 检查；配置值由 PluginConfigValidator 组装动态规则，调用原生 Validate::rule/check。范围、长度、正则及条件必填使用框架规则；严格 JSON 类型通过原生闭包规则补充。每次校验创建独立验证器，错误保留字段标题与具体约束，不回显提交的秘密值。配置比较不属于验证器职责。
+
 ## 只读详情展示
 
-通道详情按 schema 顺序展示参数，遵循 `visible_when`，不显示插件 `description` 或字段 `help`。条件只影响展示，不删除配置值。
+通道详情按 schema 顺序展示参数，遵循 `visible_when`，不显示插件 `description` 或字段 `help`。详情条件只影响展示，不删除配置值；保存时的必填规则按上文执行。
 
 - select 显示选项标签，switch 显示“是／否”，list 逐项显示；文本保持换行。
 - 缺失值、空字符串、空列表统一显示“未设置”；0 和 false 是有效值。秘密字段有值时只显示“已配置”。

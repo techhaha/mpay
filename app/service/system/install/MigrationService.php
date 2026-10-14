@@ -11,19 +11,13 @@ use PDOException;
 use RuntimeException;
 
 /**
- * 按版本顺序执行建表、受限列/索引调整及注释更新，保存 pending/complete 并支持中断续跑。
+ * 执行新装基线中的最终建表定义，保存 pending/complete 并支持中断续跑。
  *
- * 数据库负责执行字段、索引和外键定义；本服务核对步骤摘要、表归属、基本表类型及本次注释结果。
- * 只核对明确步骤涉及的结构，不比对全库元数据，也不执行自动修表或回滚。
+ * 数据库负责执行字段、索引和外键定义；本服务核对步骤摘要、表归属、基本表类型。
+ * 只用于空库新装与同一基线续装，不接管历史开发库，也不执行自动修表或回滚。
  */
 final class MigrationService
 {
-    private const RETIRED_COLLECTION_TABLES = ['ma_payment_plugin_conf_scope', 'ma_receipt_runtime_state', 'ma_receipt_session'];
-    private const COLLECTION_CLEANUP_ID = '202610110300_order_driven_collection:ma_payment_plugin_conf_collection_cleanup';
-
-    private const CHANNEL_MATCHING_ID = '202610130100_channel_matching:ma_pay_order_channel_matching';
-    private const RESERVATION_TABLE = 'ma_receipt_match_reservation';
-
     public const MINIMUM_MYSQL = '5.7.9';
 
     public function __construct(private readonly PDO $pdo)
@@ -74,16 +68,20 @@ final class MigrationService
             $this->checkSyntax($steps, $state['tables']);
             if (!isset($state['tables']['_mpay_migration_step'])) {
                 // state 已确认整个库为空，不能在其他应用的数据库中补建迁移账本。
-                $this->pdo->exec("CREATE TABLE _mpay_migration_step (
-                    version VARCHAR(64) NOT NULL, step VARCHAR(64) NOT NULL,
-                    checksum CHAR(64) NOT NULL, state VARCHAR(16) NOT NULL,
-                    completed_at DATETIME NULL,
-                    PRIMARY KEY (version,step)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin");
+                $this->pdo->exec(<<<'SQL'
+CREATE TABLE _mpay_migration_step (
+  `version` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '迁移版本文件名，不含.php扩展名',
+  `step` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '版本内步骤名，与version共同组成主键',
+  `checksum` char(64) COLLATE utf8mb4_bin NOT NULL COMMENT '建表SQL原文的SHA-256摘要；已登记步骤不得被静默替换',
+  `state` varchar(16) COLLATE utf8mb4_bin NOT NULL COMMENT '迁移步骤状态：pending已登记待完成，complete执行完成',
+  `completed_at` datetime DEFAULT NULL COMMENT '步骤确认完成时间，上海时区；pending时为NULL',
+  PRIMARY KEY (`version`,`step`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin COMMENT='MPAY安装迁移账本，记录步骤摘要、完成状态及中断续跑位置'
+SQL);
             }
             foreach ($steps as $step) {
                 $record = $state['records'][$step->identity()] ?? null;
-                // 已完成步骤只由 state 核对；后续明确退役的列不能被旧 ADD 步骤重新创建。
+                // 已完成步骤只核对摘要和表归属，不重复建表或初始化字典。
                 if (($record['state'] ?? null) === 'complete') { continue; }
                 if ($record === null) {
                     $this->pdo->prepare("INSERT INTO _mpay_migration_step (version,step,checksum,state) VALUES (?,?,?,'pending')")
@@ -96,37 +94,15 @@ final class MigrationService
                 }
                 // 同摘要 pending 且表已存在，表示建表完成但确认中断；不重复 CREATE，也不清空该表。
                 // 只有 state 已确认属于本次迁移的表可走此分支；同名未知表在执行前即被拒绝。
-                if ($step->receiptPaidIndex) {
-                    $this->applyReceiptPaidIndex();
-                } elseif ($step->channelMatching) {
-                    $this->applyChannelMatching();
-                } elseif ($step->collectionCleanup) {
-                    $this->cleanupCollection();
-                } elseif ($step->removedColumns !== null) {
-                    $present = $this->removalColumnsPresent($step);
-                    if ($present !== []) {
-                        $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
-                        $this->pdo->exec('SET SESSION lock_wait_timeout=10');
-                        try { $this->pdo->exec('ALTER TABLE `' . $step->table . '` DROP COLUMN `' . implode('`, DROP COLUMN `', $present) . '`'); }
-                        finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
-                    }
-                } elseif ($step->nullableColumns !== null) {
-                    if (($record['state'] ?? null) !== 'complete') { $this->applyNullable($step); }
-                } elseif ($step->comments !== null) {
-                    if (($record['state'] ?? null) !== 'complete') { $this->applyComments($step); }
-                } elseif ($step->addedColumn !== null) {
-                    // ADD COLUMN 不可回滚；pending 且目标列已存在时只核对该列并继续确认。
-                    if (!$this->addedColumnExists($step)) { $this->pdo->exec($step->sql); }
-                    if (!$this->addedColumnExists($step)) { throw new RuntimeException('列追加后未找到目标列'); }
-                } elseif (!isset($state['tables'][$step->table])) {
+                if (!isset($state['tables'][$step->table])) {
                     $this->pdo->exec($step->sql);
                     $this->assertTable($step->table, $this->tables()[$step->table] ?? null);
                 }
                 // 初装字典先于该步 complete 写入；已安装后不重新添加管理员删除的支付方式。
-                if ($step->comments === null && $step->addedColumn === null && $step->table === 'ma_payment_type' && ($record['state'] ?? null) !== 'complete') {
-                    $this->pdo->exec("INSERT INTO ma_payment_type (code,name,enabled) VALUES ('alipay','支付宝',1),('wxpay','微信支付',1),('unionpay','云闪付',0) ON DUPLICATE KEY UPDATE name=IF(code='unionpay',VALUES(name),name)");
+                if ($step->table === 'ma_payment_type') {
+                    $this->pdo->exec("INSERT INTO ma_payment_type (code,name,enabled) VALUES ('alipay','支付宝',1),('wxpay','微信支付',1),('unionpay','云闪付',0) ON DUPLICATE KEY UPDATE code=VALUES(code)");
                 }
-                if ($step->comments === null && $step->table === 'ma_payment_plugin' && ($record['state'] ?? null) !== 'complete') {
+                if ($step->table === 'ma_payment_plugin') {
                     // 仅初次安装初始化已交付插件；元信息读取不联网，写入仍严格使用本次迁移的 PDO。
                     $factory = app()->make(PaymentPluginFactoryService::class);
                     $insert = $this->pdo->prepare('INSERT INTO ma_payment_plugin (code,name,version,pay_types,class_name,config_schema,description,enabled) VALUES (?,?,?,?,?,?,?,1) ON DUPLICATE KEY UPDATE code=VALUES(code)');
@@ -136,7 +112,6 @@ final class MigrationService
                             json_encode($definition->configSchema, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), $definition->description]);
                     }
                 }
-                if (($record['state'] ?? null) === 'complete') { continue; }
                 $this->pdo->prepare("UPDATE _mpay_migration_step SET state='complete',completed_at=COALESCE(completed_at,NOW()) WHERE version=? AND step=?")
                     ->execute([$step->version, $step->name]);
             }
@@ -147,14 +122,7 @@ final class MigrationService
     /** @return list<string> 固定建表集合，供安装服务检查已有业务数据，不连接数据库。 */
     public function managedTables(string $directory): array
     {
-        $steps = $this->loadPlan($directory);
-        $tables = array_values(array_unique(array_map(static fn (MigrationStep $step): string => $step->table,
-            array_filter($steps, static fn (MigrationStep $step): bool => $step->comments === null))));
-        foreach ($steps as $step) {
-            if ($step->collectionCleanup) { $tables = array_values(array_diff($tables, self::RETIRED_COLLECTION_TABLES)); }
-            if ($step->channelMatching) { $tables = array_values(array_diff($tables, [self::RESERVATION_TABLE])); }
-        }
-        return $tables;
+        return array_map(static fn (MigrationStep $step): string => $step->table, $this->loadPlan($directory));
     }
 
     /** 初始化和迁移共用连接级命名锁；重入时每次取得都对应一次释放。 */
@@ -166,7 +134,7 @@ final class MigrationService
 
     /**
      * 文件顺序、文件内声明顺序决定建表次序；重复表名在写入数据库前拒绝。
-     * 列追加必须跟在所属表的建表定义之后；只处理声明的追加列，不维护整表结构比较。
+     * 文件内按外键依赖排列；不维护旧结构到新结构的升级分支。
      *
      * @return list<MigrationStep>
      */
@@ -181,20 +149,7 @@ final class MigrationService
             foreach ($definitions as $name => $definition) {
                 if (!is_string($name)) { throw new RuntimeException('迁移步骤缺少表名'); }
                 $step = MigrationStep::fromDefinition(pathinfo($file, PATHINFO_FILENAME), $name, $definition);
-                if ($step->receiptPaidIndex || $step->channelMatching || $step->collectionCleanup || $step->nullableColumns !== null || $step->removedColumns !== null) {
-                    if (!isset($tables[$step->table])) { throw new RuntimeException('结构调整缺少前置建表定义'); }
-                    $steps[] = $step;
-                    continue;
-                }
-                if ($step->comments !== null) {
-                    if ($step->table !== '_mpay_migration_step' && !isset($tables[$step->table])) {
-                        throw new RuntimeException('注释迁移缺少前置建表定义');
-                    }
-                    $steps[] = $step;
-                    continue;
-                }
-                if ($step->addedColumn === null && isset($tables[$step->table])) { throw new RuntimeException('迁移存在重复建表定义：' . $step->table); }
-                if ($step->addedColumn !== null && !isset($tables[$step->table])) { throw new RuntimeException('列追加缺少前置建表定义'); }
+                if (isset($tables[$step->table])) { throw new RuntimeException('迁移存在重复建表定义：' . $step->table); }
                 $steps[] = $step; $tables[$step->table] = true;
             }
         }
@@ -219,11 +174,9 @@ final class MigrationService
         }
         $this->assertTable('_mpay_migration_step', $tables['_mpay_migration_step']);
         $expected = []; $byTable = [];
-        $removals = [];
         foreach ($steps as $step) {
             $expected[$step->identity()] = $step;
-            if ($step->comments === null && $step->addedColumn === null && $step->nullableColumns === null && $step->removedColumns === null && !$step->collectionCleanup && !$step->channelMatching && !$step->receiptPaidIndex) { $byTable[$step->table] = $step->identity(); }
-            foreach ($step->removedColumns ?? [] as $column) { $removals[$step->table . '.' . $column] = $step->identity(); }
+            $byTable[$step->table] = $step->identity();
         }
         if (array_diff(array_keys($tables), [...array_keys($byTable), '_mpay_migration_step']) !== []) {
             throw new RuntimeException('数据库含未声明的表，拒绝接管');
@@ -237,7 +190,7 @@ final class MigrationService
             }
             $step = $expected[$identity];
             if (!hash_equals($step->checksum, $record['checksum'])
-                && ($step->receiptPaidIndex || $step->channelMatching || $step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->addedColumn !== null || $record['state'] !== 'pending' || isset($tables[$step->table]))) {
+                && ($record['state'] !== 'pending' || isset($tables[$step->table]))) {
                 throw new RuntimeException('已创建表的迁移 SQL 摘要已改变，拒绝覆盖');
             }
             $records[$identity] = $record;
@@ -246,67 +199,7 @@ final class MigrationService
         foreach ($steps as $step) {
             $record = $records[$step->identity()] ?? null;
             if ($record !== null && $unfinished) { throw new RuntimeException('迁移进度不连续，需先核对中断步骤'); }
-            if ($step->receiptPaidIndex) {
-                if (($record['state'] ?? null) === 'complete') { $this->assertReceiptPaidIndex(); }
-                $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
-                continue;
-            }
-            if ($step->channelMatching) {
-                if (($record['state'] ?? null) === 'complete') { $this->assertChannelMatching(); }
-                $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
-                continue;
-            }
-            if ($step->table === self::RESERVATION_TABLE && !isset($tables[$step->table])
-                && isset($records[self::CHANNEL_MATCHING_ID])) {
-                if (($record['state'] ?? null) !== 'complete') { throw new RuntimeException('预约退役缺少完整前置迁移'); }
-                continue;
-            }
-            if ($step->collectionCleanup) {
-                if (($record['state'] ?? null) === 'complete') { $this->assertCollectionCleanup(); }
-                $unfinished = $unfinished || ($record['state'] ?? null) !== 'complete';
-                continue;
-            }
-            // 后续有明确 pending/complete 退役意图，才能认可原已建表不再存在；不能自动重建。
-            if (in_array($step->table, self::RETIRED_COLLECTION_TABLES, true)
-                && !isset($tables[$step->table]) && isset($records[self::COLLECTION_CLEANUP_ID])) {
-                if (($record['state'] ?? null) !== 'complete') { throw new RuntimeException('退役表缺少完整前置迁移'); }
-                continue;
-            }
-            if ($step->removedColumns !== null) {
-                if (!isset($tables[$step->table])) {
-                    if ($record !== null) { throw new RuntimeException('列退役迁移缺少所属表'); }
-                } else {
-                    $present = $this->removalColumnsPresent($step);
-                    if ($record === null) {
-                        foreach (array_diff($step->removedColumns, $present) as $column) {
-                            foreach ($steps as $prior) {
-                                if ($prior->table === $step->table && $prior->addedColumn === $column
-                                    && ($records[$prior->identity()]['state'] ?? null) === 'complete') {
-                                    throw new RuntimeException('列已缺失但没有退役迁移记录');
-                                }
-                            }
-                        }
-                    }
-                    if (($record['state'] ?? null) === 'complete' && $present !== []) { throw new RuntimeException('已退役的列重新出现'); }
-                }
-            } elseif ($step->nullableColumns !== null) {
-                if (isset($tables[$step->table])) {
-                    $states = $this->nullableStates($step);
-                    if ($record === null && in_array('YES', $states, true)) { throw new RuntimeException('目标列已可空但没有迁移记录'); }
-                    if (($record['state'] ?? null) === 'complete' && in_array('NO', $states, true)) { throw new RuntimeException('已完成的可空迁移定义不符'); }
-                } elseif ($record !== null) { throw new RuntimeException('可空迁移缺少所属表'); }
-            } elseif ($step->comments !== null) {
-                if ($record !== null && !isset($tables[$step->table])) { throw new RuntimeException('注释迁移缺少所属表'); }
-            } elseif ($step->addedColumn !== null) {
-                if (isset($tables[$step->table])) {
-                    $exists = $this->addedColumnExists($step);
-                    if ($exists && $record === null) { throw new RuntimeException('目标列已存在但没有对应迁移记录'); }
-                    $removal = $removals[$step->table . '.' . $step->addedColumn] ?? null;
-                    if (!$exists && ($record['state'] ?? null) === 'complete' && ($removal === null || !isset($records[$removal]))) {
-                        throw new RuntimeException('已完成迁移的列缺失');
-                    }
-                } elseif ($record !== null) { throw new RuntimeException('列追加迁移缺少所属表'); }
-            } elseif (isset($tables[$step->table])) {
+            if (isset($tables[$step->table])) {
                 if ($record === null) { throw new RuntimeException('存在未登记的同名表：' . $step->table); }
                 $this->assertTable($step->table, $tables[$step->table]);
             } elseif (($record['state'] ?? null) === 'complete') {
@@ -336,145 +229,6 @@ final class MigrationService
     }
 
     /**
-     * 只修改表/列 COMMENT，不从注释文件接收类型或默认值。
-     * MySQL MODIFY 必须重述完整列声明，因此直接保留 SHOW CREATE 返回的原列定义，
-     * 仅替换末尾 COMMENT；生成列、字符集、默认值及 ON UPDATE 均保留。
-     * 每表一条 DDL，由 MySQL 选择执行算法；5.7 的存储生成列可能需要内部重建。
-     * 中断后按实际注释补齐，已一致时不再执行 ALTER。
-     *
-     * @throws RuntimeException 表/列缺失或服务器声明无法安全识别；不得猜测字段类型后继续。
-     * @throws PDOException 数据库拒绝 DDL，保留 pending 供修复后继续。
-     */
-    private function applyComments(MigrationStep $step): void
-    {
-        $comments = $step->comments ?? throw new LogicException('缺少注释声明');
-        $table = '`' . $step->table . '`';
-        $tableQuery = $this->pdo->prepare('SELECT TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
-        $columnsQuery = $this->pdo->prepare('SELECT COLUMN_NAME,COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? ORDER BY ORDINAL_POSITION');
-        $tableQuery->execute([$step->table]);
-        $tableComment = $tableQuery->fetchColumn();
-        if ($tableComment === false) { throw new RuntimeException('注释目标表不存在'); }
-        $columnsQuery->execute([$step->table]);
-        $columns = $columnsQuery->fetchAll(PDO::FETCH_KEY_PAIR);
-        if (array_diff(array_keys($comments['columns']), array_keys($columns)) !== []) {
-            throw new RuntimeException('注释声明引用了不存在的字段');
-        }
-        $changes = [];
-        if ($tableComment !== $comments['comment']) { $changes[] = 'COMMENT=' . $this->pdo->quote($comments['comment']); }
-        $changedColumns = array_filter($comments['columns'], static fn (string $comment, string $column): bool => $columns[$column] !== $comment, ARRAY_FILTER_USE_BOTH);
-        if ($changedColumns !== []) {
-            // SHOW CREATE 的带引号标识符是一行一个字段；不解析请求 SQL 或重新拼装完整类型元数据。
-            $quoted = (int) $this->pdo->query('SELECT @@SESSION.sql_quote_show_create')->fetchColumn();
-            if ($quoted !== 1) { $this->pdo->exec('SET SESSION sql_quote_show_create=1'); }
-            try { $create = (string) $this->pdo->query('SHOW CREATE TABLE ' . $table)->fetch(PDO::FETCH_NUM)[1]; }
-            finally { if ($quoted !== 1) { $this->pdo->exec('SET SESSION sql_quote_show_create=' . $quoted); } }
-            foreach ($changedColumns as $column => $comment) {
-                if (!preg_match('/^  `' . preg_quote($column, '/') . '` (.+)$/m', $create, $match)) {
-                    throw new RuntimeException('无法保留注释目标字段的原始声明');
-                }
-                $declaration = rtrim($match[1], ",\r");
-                // 仅识别服务器输出末尾的 SQL 字符串；支持引号转义及已有注释中的反斜杠。
-                $declaration = preg_replace("/ COMMENT '(?:[^'\\\\]|\\\\.|'')*'$/D", '', $declaration);
-                if ($declaration === null || $declaration === '') { throw new RuntimeException('字段声明识别失败'); }
-                $changes[] = 'MODIFY COLUMN `' . $column . '` ' . $declaration . ' COMMENT ' . $this->pdo->quote($comment);
-            }
-        }
-        if ($changes === []) { return; }
-        $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
-        $this->pdo->exec('SET SESSION lock_wait_timeout=10');
-        try {
-            // 不强制 INPLACE：实测 MySQL 5.7 会拒绝存储生成列的该算法；完整原声明保留其表达式和索引语义。
-            $this->pdo->exec('ALTER TABLE ' . $table . ' ' . implode(', ', $changes));
-        } finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
-        $tableQuery->execute([$step->table]);
-        $columnsQuery->execute([$step->table]);
-        $actual = $columnsQuery->fetchAll(PDO::FETCH_KEY_PAIR);
-        if ($tableQuery->fetchColumn() !== $comments['comment']
-            || array_diff_assoc($comments['columns'], $actual) !== []) {
-            throw new RuntimeException('数据库注释写入后核对不一致');
-        }
-    }
-
-    /** @return list<string> 只检查明示退役列；DDL 完成、账本 pending 时返回空集合以安全续跑。 */
-    private function removalColumnsPresent(MigrationStep $step): array
-    {
-        $query = $this->pdo->prepare('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
-        $query->execute([$step->table]);
-        return array_values(array_intersect($step->removedColumns ?? [], $query->fetchAll(PDO::FETCH_COLUMN)));
-    }
-
-    /** @return array<string,string> 仅读取本次允许放宽的关联列，拒绝缺失列及非预期类型。 */
-    private function nullableStates(MigrationStep $step): array
-    {
-        $expected = ['app_id' => 'bigint', 'pid' => 'varbinary', 'credential_version_id' => 'bigint',
-            'notify_url' => 'varchar', 'poll_group_id' => 'bigint'];
-        $query = $this->pdo->prepare('SELECT COLUMN_NAME,DATA_TYPE,IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
-        $query->execute([$step->table]); $states = [];
-        foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $column) {
-            if (!in_array($column['COLUMN_NAME'], $step->nullableColumns ?? [], true)) { continue; }
-            if ($column['DATA_TYPE'] !== $expected[$column['COLUMN_NAME']]) { throw new RuntimeException('可空迁移目标列类型不符'); }
-            $states[$column['COLUMN_NAME']] = $column['IS_NULLABLE'];
-        }
-        if (count($states) !== count($step->nullableColumns ?? [])) { throw new RuntimeException('可空迁移缺少目标列'); }
-        return $states;
-    }
-
-    /** 只把指定关联列改为可空；保留 SHOW CREATE 原类型、注释和外键，pending 可按实际结果续跑。 */
-    private function applyNullable(MigrationStep $step): void
-    {
-        $states = $this->nullableStates($step); $changes = [];
-        $quoted = (int) $this->pdo->query('SELECT @@SESSION.sql_quote_show_create')->fetchColumn();
-        if ($quoted !== 1) { $this->pdo->exec('SET SESSION sql_quote_show_create=1'); }
-        try { $create = (string) $this->pdo->query('SHOW CREATE TABLE `' . $step->table . '`')->fetch(PDO::FETCH_NUM)[1]; }
-        finally { if ($quoted !== 1) { $this->pdo->exec('SET SESSION sql_quote_show_create=' . $quoted); } }
-        foreach ($states as $column => $nullable) {
-            if ($nullable === 'YES') { continue; }
-            if (!preg_match('/^  `' . preg_quote($column, '/') . '` (.+)$/m', $create, $match)) { throw new RuntimeException('无法保留目标列声明'); }
-            $declaration = rtrim($match[1], ",\r");
-            $declaration = preg_replace('/^((?:bigint(?:\([0-9]+\))? unsigned|varbinary\(32\)|varchar\(2048\))(?: CHARACTER SET [a-z0-9_]+)?(?: COLLATE [a-z0-9_]+)?) NOT NULL\b/i', '$1 NULL', $declaration, 1, $count);
-            if ($count !== 1) { throw new RuntimeException('可空迁移目标不是预期关联列：' . $column); }
-            $changes[] = 'MODIFY COLUMN `' . $column . '` ' . $declaration;
-        }
-        if ($changes !== []) {
-            $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
-            $this->pdo->exec('SET SESSION lock_wait_timeout=10');
-            try { $this->pdo->exec('ALTER TABLE `' . $step->table . '` ' . implode(', ', $changes)); }
-            finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
-        }
-        if (in_array('NO', $this->nullableStates($step), true)) { throw new RuntimeException('可空迁移未完成'); }
-    }
-
-    /** 只检查本次明确追加的列，以支持 DDL 已完成但进度未确认的续跑；不是整表元数据比对。 */
-    private function addedColumnExists(MigrationStep $step): bool
-    {
-        $statement = $this->pdo->prepare('SELECT DATA_TYPE,COLUMN_TYPE,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
-        $statement->execute([$step->table, $step->addedColumn]);
-        $column = $statement->fetch(PDO::FETCH_ASSOC);
-        if ($column === false) { return false; }
-        $expected = match ($step->columnDefinition) {
-            'DATETIME NULL DEFAULT NULL' => ['datetime', 'YES', null, false],
-            'BIGINT UNSIGNED NULL DEFAULT NULL' => ['bigint', 'YES', null, true],
-            'TINYINT UNSIGNED NOT NULL DEFAULT 1' => ['tinyint', 'NO', '1', true],
-            'TINYINT UNSIGNED NOT NULL DEFAULT 0' => ['tinyint', 'NO', '0', true],
-            'CHAR(32) NULL DEFAULT NULL UNIQUE' => ['char', 'YES', null, false],
-            default => throw new LogicException('未知追加列合同'),
-        };
-        if ($column['DATA_TYPE'] !== $expected[0] || $column['IS_NULLABLE'] !== $expected[1]
-            || ($column['COLUMN_DEFAULT'] === null ? null : (string) $column['COLUMN_DEFAULT']) !== $expected[2]
-            || str_contains(strtolower($column['COLUMN_TYPE']), 'unsigned') !== $expected[3]) {
-            throw new RuntimeException('目标追加列已存在但定义不符');
-        }
-        if ($step->columnDefinition === 'CHAR(32) NULL DEFAULT NULL UNIQUE') {
-            $index = $this->pdo->prepare('SELECT INDEX_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? GROUP BY INDEX_NAME HAVING MAX(NON_UNIQUE)=0 AND COUNT(*)=1 AND MAX(COLUMN_NAME)=?');
-            $index->execute([$step->table, $step->addedColumn]);
-            if (strtolower($column['COLUMN_TYPE']) !== 'char(32)' || $index->fetchColumn() === false) {
-                throw new RuntimeException('追加幂等键的长度或唯一约束缺失');
-            }
-        }
-        return true;
-    }
-
-    /**
      * 建表前由 MySQL 原生预处理解析全部待建 SQL，不执行 DDL，也不自行解析 SQL。
      * 仅检查语法，权限和外键等执行条件仍以实际建表结果为准；恢复 PDO 设置供后续 ORM 使用。
      *
@@ -487,177 +241,11 @@ final class MigrationService
         $this->pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
         try {
             foreach ($steps as $step) {
-                // 注释 SQL 依赖服务器当前列声明，执行该步时生成；声明校验已在 loadPlan 完成。
-                if ($step->receiptPaidIndex || $step->channelMatching || $step->collectionCleanup || $step->comments !== null || $step->nullableColumns !== null || $step->removedColumns !== null) { continue; }
-                if ($step->addedColumn === null && isset($tables[$step->table])) { continue; }
-                // 空库时 ALTER 依赖尚未执行的 CREATE；所属表建成后由 MySQL 执行该固定追加语句。
-                if ($step->addedColumn !== null && (!isset($tables[$step->table]) || $this->addedColumnExists($step))) { continue; }
+                if (isset($tables[$step->table])) { continue; }
                 $statement = $this->pdo->prepare($step->sql);
                 $statement = null;
             }
         } finally { $this->pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, $emulated); }
-    }
-
-    /**
-     * 开发阶段的明确结构替换：只在尚无插件配置/交易事实的库执行，不推断旧账号或改写旧证据。
-     * 每个 DDL 根据自身结果续跑，不能把 MySQL DDL 当作可回滚事务。
-     */
-    private function cleanupCollection(): void
-    {
-        foreach (['ma_payment_plugin_conf', 'ma_pay_order', 'ma_receipt_flow', 'ma_receipt_scope'] as $table) {
-            if ((int) $this->pdo->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn() !== 0) {
-                throw new RuntimeException('监听结构需在空配置/交易库初始化；现有业务数据须先明确处理，不自动清空或回填');
-            }
-        }
-        foreach (self::RETIRED_COLLECTION_TABLES as $table) { $this->pdo->exec('DROP TABLE IF EXISTS `' . $table . '`'); }
-        foreach (['account_key', 'query_key', 'session_key', 'auth_fingerprint'] as $column) {
-            if ($this->collectionColumn('ma_payment_plugin_conf', $column)) {
-                $this->pdo->exec('ALTER TABLE ma_payment_plugin_conf DROP COLUMN `' . $column . '`');
-            }
-        }
-        $this->pdo->exec("ALTER TABLE ma_payment_plugin_conf COMMENT='通道独立插件配置；平台账号分组及登录状态由插件处理'");
-        if ($this->collectionIndex('ma_receipt_scope', 'uk_scope_account_type')) {
-            $this->pdo->exec('ALTER TABLE ma_receipt_scope DROP INDEX uk_scope_account_type');
-        }
-        if ($this->collectionColumn('ma_receipt_scope', 'account_key')) { $this->pdo->exec('ALTER TABLE ma_receipt_scope DROP COLUMN account_key'); }
-        if (!$this->collectionColumn('ma_receipt_scope', 'api_config_id')) {
-            $this->pdo->exec("ALTER TABLE ma_receipt_scope ADD COLUMN api_config_id BIGINT UNSIGNED NOT NULL COMMENT '通道专属插件配置ID；业务锁范围，不代表平台账号'");
-        }
-        if (!$this->collectionIndex('ma_receipt_scope', 'uk_scope_configuration_type')) {
-            $this->pdo->exec('ALTER TABLE ma_receipt_scope ADD UNIQUE KEY uk_scope_configuration_type (api_config_id,pay_type_id)');
-        }
-        $foreign = $this->pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='ma_receipt_scope' AND CONSTRAINT_NAME='fk_scope_configuration'");
-        $foreign->execute();
-        if ((int) $foreign->fetchColumn() === 0) {
-            $this->pdo->exec('ALTER TABLE ma_receipt_scope ADD CONSTRAINT fk_scope_configuration FOREIGN KEY (api_config_id) REFERENCES ma_payment_plugin_conf(id)');
-        }
-        $this->pdo->exec("ALTER TABLE ma_receipt_scope COMMENT='配置与支付方式的识别占用锁范围；不用于采集账号分组'");
-        if ($this->collectionColumn('ma_receipt_flow', 'account_key')) { $this->pdo->exec('ALTER TABLE ma_receipt_flow DROP COLUMN account_key'); }
-        if ($this->collectionIndex('ma_receipt_flow', 'uk_flow_plugin_event')) { $this->pdo->exec('ALTER TABLE ma_receipt_flow DROP INDEX uk_flow_plugin_event'); }
-        if (!$this->collectionIndex('ma_receipt_flow', 'uk_flow_event')) {
-            $this->pdo->exec('ALTER TABLE ma_receipt_flow ADD UNIQUE KEY uk_flow_event (plugin_code,event_key)');
-        }
-        if ($this->collectionIndex('ma_pay_order', 'uk_pay_scope_trade')) { $this->pdo->exec('ALTER TABLE ma_pay_order DROP INDEX uk_pay_scope_trade'); }
-        if (!$this->collectionIndex('ma_pay_order', 'uk_pay_plugin_trade')) {
-            $this->pdo->exec('ALTER TABLE ma_pay_order ADD UNIQUE KEY uk_pay_plugin_trade (plugin_code,channel_trade_no)');
-        }
-        if (!$this->collectionIndex('ma_pay_order', 'idx_pay_collection')) {
-            $this->pdo->exec('ALTER TABLE ma_pay_order ADD KEY idx_pay_collection (plugin_code,status,expire_at,id)');
-        }
-        $this->assertCollectionCleanup();
-    }
-
-    /** 完成后只核对本次明确退役/新增的结构，不重建全库元数据校验器。 */
-    private function assertCollectionCleanup(): void
-    {
-        $tables = $this->tables();
-        if (array_intersect(self::RETIRED_COLLECTION_TABLES, array_keys($tables)) !== []) { throw new RuntimeException('旧采集运行表未退役'); }
-        foreach (['account_key', 'query_key', 'session_key', 'auth_fingerprint'] as $column) {
-            if ($this->collectionColumn('ma_payment_plugin_conf', $column)) { throw new RuntimeException('旧采集身份字段未退役'); }
-        }
-        if ($this->collectionColumn('ma_receipt_scope', 'account_key') || $this->collectionColumn('ma_receipt_flow', 'account_key')
-            || !$this->collectionColumn('ma_receipt_scope', 'api_config_id')
-            || !$this->collectionIndex('ma_receipt_scope', 'uk_scope_configuration_type')
-            || !$this->collectionIndex('ma_receipt_flow', 'uk_flow_event')
-            || !$this->collectionIndex('ma_pay_order', 'uk_pay_plugin_trade') || !$this->collectionIndex('ma_pay_order', 'idx_pay_collection')) {
-            throw new RuntimeException('订单驱动监听结构未完成');
-        }
-    }
-
-    /**
-     * 只执行已声明的通道查询索引和预约退役；不清空订单、不回填快照、不修改历史迁移摘要。
-     * 升级应在停止接单和工作者后执行；DDL 分步续跑，不能由业务事务回滚。
-     */
-    private function applyChannelMatching(): void
-    {
-        if (isset($this->tables()[self::RESERVATION_TABLE])) {
-            // 成功后的 pay_amount 已恢复原值，须与保留的识别快照比较，不能据此误判丢失。
-            $missing = $this->pdo->query("SELECT r.id FROM ma_receipt_match_reservation r LEFT JOIN ma_pay_order p ON p.pay_no=r.pay_no
-                WHERE p.id IS NULL OR p.request_at IS NULL OR p.request_at<>r.valid_from OR p.expire_at<>r.expire_at
-                OR COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.receipt_amount')),'')<>CAST(r.receipt_amount AS CHAR)
-                OR COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.match_mode')),'')<>r.match_mode
-                OR COALESCE(JSON_TYPE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.original_amount')),'')<>'INTEGER'
-                OR CAST(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.original_amount')) AS SIGNED)<1
-                OR (r.match_mode='remark' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(p.ext_json,'$.personal_receipt.remark')),'')<>r.match_value)
-                LIMIT 1")->fetchColumn();
-            if ($missing !== false) { throw new RuntimeException('预约历史与订单快照不一致，拒绝退役；不会自动回填或清空数据'); }
-        }
-        $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
-        $this->pdo->exec('SET SESSION lock_wait_timeout=10');
-        try {
-            foreach (['idx_pay_channel_active' => 'channel_id,status,expire_at,id',
-                'idx_pay_channel_receipt' => 'channel_id,pay_amount,expire_at,id'] as $name => $columns) {
-                if (!$this->collectionIndex('ma_pay_order', $name)) {
-                    $this->pdo->exec('ALTER TABLE ma_pay_order ADD KEY `' . $name . '` (' . $columns . ')');
-                }
-            }
-            // 同名索引可能结构不同；必须先核对，再退役旧表。
-            $this->assertChannelMatchingIndexes();
-            $this->pdo->exec('DROP TABLE IF EXISTS ma_receipt_match_reservation');
-        } finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
-        $this->assertChannelMatching();
-    }
-
-    /** 仅核对本版本的固定表与索引，不恢复通用结构差异框架。 */
-    private function assertChannelMatching(): void
-    {
-        if (isset($this->tables()[self::RESERVATION_TABLE])) { throw new RuntimeException('预约表尚未退役'); }
-        $this->assertChannelMatchingIndexes();
-    }
-
-    /** 固定索引核对也用于删除旧表前的保护检查。 */
-    private function assertChannelMatchingIndexes(): void
-    {
-        $query = $this->pdo->prepare("SELECT COLUMN_NAME FROM information_schema.STATISTICS
-            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ma_pay_order' AND INDEX_NAME=? ORDER BY SEQ_IN_INDEX");
-        foreach (['idx_pay_channel_active' => ['channel_id','status','expire_at','id'],
-            'idx_pay_channel_receipt' => ['channel_id','pay_amount','expire_at','id']] as $name => $columns) {
-            $query->execute([$name]);
-            if ($query->fetchAll(PDO::FETCH_COLUMN) !== $columns) { throw new RuntimeException('通道识别索引不符合已声明结构'); }
-        }
-    }
-
-    /** 新增固定统计索引，在线 DDL 不回写流水；中断后按真实索引结构续跑。 */
-    private function applyReceiptPaidIndex(): void
-    {
-        if (!$this->collectionIndex('ma_receipt_flow', 'idx_receipt_paid')) {
-            $wait = (int) $this->pdo->query('SELECT @@SESSION.lock_wait_timeout')->fetchColumn();
-            $this->pdo->exec('SET SESSION lock_wait_timeout=10');
-            try {
-                $this->pdo->exec('ALTER TABLE ma_receipt_flow ADD INDEX idx_receipt_paid (paid_at,pay_no), ALGORITHM=INPLACE, LOCK=NONE');
-            } finally { $this->pdo->exec('SET SESSION lock_wait_timeout=' . $wait); }
-        }
-        $this->assertReceiptPaidIndex();
-    }
-
-    /** 同名、错顺序、前缀或唯一索引均不能冒充本版本已经完成。 */
-    private function assertReceiptPaidIndex(): void
-    {
-        $rows = $this->pdo->query("SELECT COLUMN_NAME,NON_UNIQUE,SUB_PART,INDEX_TYPE FROM information_schema.STATISTICS
-            WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ma_receipt_flow' AND INDEX_NAME='idx_receipt_paid' ORDER BY SEQ_IN_INDEX")
-            ->fetchAll(PDO::FETCH_ASSOC);
-        if (array_column($rows, 'COLUMN_NAME') !== ['paid_at', 'pay_no']) {
-            throw new RuntimeException('到账日期索引不符合已声明结构');
-        }
-        foreach ($rows as $row) {
-            if ((int) $row['NON_UNIQUE'] !== 1 || $row['SUB_PART'] !== null || $row['INDEX_TYPE'] !== 'BTREE') {
-                throw new RuntimeException('到账日期索引属性不符合已声明结构');
-            }
-        }
-    }
-
-    private function collectionColumn(string $table, string $column): bool
-    {
-        $query = $this->pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?');
-        $query->execute([$table, $column]);
-        return (int) $query->fetchColumn() > 0;
-    }
-
-    private function collectionIndex(string $table, string $index): bool
-    {
-        $query = $this->pdo->prepare('SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?');
-        $query->execute([$table, $index]);
-        return (int) $query->fetchColumn() > 0;
     }
 
     /**

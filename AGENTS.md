@@ -19,6 +19,8 @@
 
 ## 需求和现状
 
+- 2026-10-14 HTTP/HTTPS 调整：删除 SiteUrl，使用原生 Request::domain()/isSsl() 与框架 url()。请求入口只做自动 Cookie/会话设置，不做全局域名格式校验，不添加代理 IP 名单、不自写转发头识别；COOKIE_SECURE 退役，HTTP/HTTPS 会话隔离。用户随后明确本轮修改验证后停止，不打包。具体证据见实现计划。
+
 - 2026-10-14 纯净新装交付：唯一基线 `202610140100_install.php` 直接建最终 25 个业务表，加 1 张安装进度表；13 个历史迁移及执行器对应调整分支退役。保留摘要、连续进度、非空保护与中断续装，不接管旧开发库，不修改其数据或账本。客户包按清单构建、独立安装生产 vendor，不含 docs/deploy/tools/tests、真实环境、缓存或上传数据；包内 README 来源为 docs/wiki/examples/install-README.md。本条覆盖历史新装迁移链描述，验收和包摘要见实现计划。
 
 - 2026-10-13 后续边界收敛：schema 检查归 PluginDefinition，配置值用原生 Validate 动态规则及闭包类型规则；不操作框架内部 must，不把配置比较放在校验器。展示入口只验证通用结构和有界 JSON，平台地址由插件生成，前端消费快照；公共时间为 expires_at/server_time，删除后端 Presentation 类及 CashierPageInterface。此调整不改表、不回填快照，实际验证见实现计划。

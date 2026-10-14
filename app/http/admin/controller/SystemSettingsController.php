@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\http\admin\controller;
 
 use app\common\base\BaseAdminController;
-use app\common\util\SiteUrl;
 use app\http\admin\validation\SystemSettingsValidator;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\config\SystemConfigService;
@@ -21,10 +20,10 @@ final class SystemSettingsController extends BaseAdminController
         return $this->success($settings->read('payment_defaults'));
     }
 
-    public function index(SystemSettingsValidator $validator, SystemConfigService $settings, SiteUrl $site, Config $config): Response
+    public function index(SystemSettingsValidator $validator, SystemConfigService $settings, Config $config): Response
     {
         $validator->emptyQuery($this->request->get());
-        return $this->success(['groups' => $settings->all(), 'current_origin' => $site->origin(),
+        return $this->success(['groups' => $settings->all(), 'current_origin' => $this->request->domain(),
             'notification_ports' => $config->get('http.allowed_ports', [80, 443])]);
     }
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 use app\http\install\controller\InstallController;
 use think\facade\Route;
 
-// 安装引导先选择本次协议的 Cookie，再初始化 Session；安装成功后整个入口由安装锁关闭。
+// 全局请求入口已按协议设置 Cookie；安装组先检查完成锁，再初始化 Session。
 Route::group(function (): void {
     Route::rule('install', [InstallController::class, 'index'], 'GET|HEAD')->name('install.page');
     Route::group('installapi', function (): void {

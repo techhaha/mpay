@@ -4,14 +4,17 @@ declare(strict_types=1);
 namespace app\http\middleware;
 
 use app\common\util\RequestContext;
+use think\App;
 use think\Request;
 use think\Response;
 
-/** HTTP 公共中间件只设置关联号和响应头；故障及业务审计由各自边界记录，不逐次写收银台轮询成功日志。 */
+/** HTTP 入口按框架请求协议设置会话及公共响应头；不重复实现地址、协议或代理判断。 */
 final class RequestMiddleware
 {
-    public function __construct(private readonly RequestContext $context)
-    {
+    public function __construct(
+        private readonly RequestContext $context,
+        private readonly App $app,
+    ) {
     }
 
     /**
@@ -21,6 +24,14 @@ final class RequestMiddleware
      */
     public function handle(Request $request, \Closure $next): Response
     {
+        // 必须早于路由的 SessionInit：Cookie/Session 由框架延迟创建，配置不冻结在安装时。
+        $secure = $request->isSsl();
+        $this->app->config->set(['secure' => $secure], 'cookie');
+        // HTTPS 身份不与明文 HTTP 共用 Cookie 或文件会话，切换协议可分别登录。
+        $this->app->config->set([
+            'name' => $secure ? '__Host-mpay_session' : 'mpay_session',
+            'path' => $this->app->getRuntimePath() . 'session/' . ($secure ? 'https/' : 'http/'),
+        ], 'session');
         $response = $next($request);
         return $response->header([
             'X-Request-Id' => $this->context->id(),

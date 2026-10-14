@@ -11,8 +11,8 @@ return [
     'path' => '/',
     // 空域名采用当前主机范围，不向其他子域共享会话标识。
     'domain' => '',
-    // 生产默认只经 HTTPS 发送；仅隔离 HTTP 开发站显式设置 COOKIE_SECURE=false。
-    'secure' => (bool) env('COOKIE_SECURE', true),
+    // HTTP 请求入口根据原生 Request::isSsl() 设置；不由安装时的环境变量固定协议。
+    'secure' => false,
     // 禁止页面脚本读取会话 Cookie；CSRF token 通过模板单独提供。
     'httponly' => true,
     // 由框架响应正常写入 Set-Cookie 头。

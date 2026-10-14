@@ -43,9 +43,11 @@ final class SystemDoctorService
         });
         $checks[] = $this->check('site', function (): array {
             $production = $this->app->config->get('mpay.environment') === 'production';
-            $secure = $this->app->config->get('cookie.secure') === true;
-            if ($production && (!$secure || $this->app->isDebug())) {
-                return ['error', '生产环境请启用 Secure Cookie 并关闭调试模式，同时为站点配置 HTTPS'];
+            if ($production && $this->app->isDebug()) {
+                return ['error', '生产环境请关闭调试模式'];
+            }
+            if (!$this->app->request->isCli() && !$this->app->request->isSsl()) {
+                return ['warning', '当前通过 HTTP 访问；正式站点建议配置 HTTPS，Cookie 随访问协议自动设置'];
             }
             return ['ok', '本站按访问域名生成链接；HTTPS 需按实际访问核验。业务回调允许目标由各接入应用配置。'];
         });

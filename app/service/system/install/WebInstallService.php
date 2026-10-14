@@ -74,9 +74,9 @@ final class WebInstallService
      * @param array{database:array,administrator:array} $input 来自 InstallValidator 的完整输入。
      * @return array{login_url:string,message:string} 不返回数据库密码、管理员密码或应用 KEY。
      */
-    public function install(array $input, bool $https): array
+    public function install(array $input): array
     {
-        return $this->files->exclusive(function () use ($input, $https): array {
+        return $this->files->exclusive(function () use ($input): array {
             $this->assertOpen();
             if (!$this->environment()['ready']) { throw new BusinessException('请先完成环境检查中的必需项目', ApiResponseConstant::CONFLICT); }
             $database = $input['database'];
@@ -100,7 +100,7 @@ final class WebInstallService
                 $this->files->saveEnvironment([
                     'DB_HOST' => $database['host'], 'DB_PORT' => (string) $database['port'], 'DB_NAME' => $database['name'],
                     'DB_USER' => $database['user'], 'DB_PASS' => $database['pass'], 'APP_DEBUG' => 'false',
-                    'MPAY_ENV' => (string) $this->app->config->get('mpay.environment', 'production'), 'COOKIE_SECURE' => $https ? 'true' : 'false',
+                    'MPAY_ENV' => (string) $this->app->config->get('mpay.environment', 'production'),
                 ]);
                 $stage = 'initialization';
                 $admin = $input['administrator'];

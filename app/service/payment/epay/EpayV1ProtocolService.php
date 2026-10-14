@@ -8,7 +8,6 @@ use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\common\util\HttpTargetPolicy;
-use app\common\util\SiteUrl;
 use app\exception\BusinessException;
 use app\exception\PaymentDefinitiveException;
 use app\model\payment\BizOrder;
@@ -40,7 +39,6 @@ final class EpayV1ProtocolService extends BaseService
         private readonly PayOrderRepository $payOrders,
         private readonly EpayV1MessageService $messages,
         private readonly HttpTargetPolicy $targets,
-        private readonly SiteUrl $site,
         private readonly Clock $clock,
         private readonly CashierService $cashier,
     ) {
@@ -54,8 +52,7 @@ final class EpayV1ProtocolService extends BaseService
     {
         $identity = $this->authenticate($raw, true);
         $input = $this->validator->order($raw, $scene, $identity['app']['id'], $identity['version'], $clientIp, $device);
-        // 校验本次访问来源可构造收银台链接；多个域名各自返回当前域名，不把站点地址写入订单。
-        $this->site->origin();
+        // 链接由框架按当前 Request 生成，不冻结为安装时的域名。
         $created = $this->orders->create($input, $this->clock->now());
         if ($created->payNo !== null) {
             $pay = $this->dispatch->dispatch($created->payNo, $this->clock->now(), $requestId);
@@ -64,7 +61,7 @@ final class EpayV1ProtocolService extends BaseService
             }
         }
         return ['trade_no' => $created->payNo ?? '',
-            'payurl' => $this->site->path('/cashier/pay', ['biz_no' => $created->bizNo, 'token' => $created->accessToken]),
+            'payurl' => (string) url('/cashier/pay', ['biz_no' => $created->bizNo, 'token' => $created->accessToken])->suffix(false)->domain(true)->root(''),
             'reused' => $created->reused];
     }
 

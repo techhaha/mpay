@@ -5,7 +5,6 @@ namespace app\http\install\controller;
 
 use app\common\base\BaseController;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\SiteUrl;
 use app\exception\BusinessException;
 use app\http\install\validation\InstallValidator;
 use app\service\system\access\AdminSessionService;
@@ -27,11 +26,11 @@ final class InstallController extends BaseController
         return $this->success($service->check($validator->database($this->body())));
     }
 
-    public function install(InstallValidator $validator, WebInstallService $service, SiteUrl $site): Response
+    public function install(InstallValidator $validator, WebInstallService $service): Response
     {
         // 浏览器超时只停止等待，不能回滚 MySQL DDL；重入由迁移账本与安装目标检查负责。
         if (function_exists('set_time_limit')) { @set_time_limit(120); }
-        return $this->success($service->install($validator->installation($this->body()), str_starts_with($site->origin(), 'https://')));
+        return $this->success($service->install($validator->installation($this->body())));
     }
 
     /** @return array<string,mixed> 正文大小与同源/CSRF 已由路由中间件限制，嵌套对象留给验证器。 */

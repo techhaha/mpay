@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\http\admin\controller;
 
 use app\common\base\BaseAdminController;
-use app\common\util\SiteUrl;
 use app\http\admin\validation\PaymentAppValidator;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\payment\config\PaymentAppService;
@@ -13,9 +12,9 @@ use think\Response;
 /** 应用管理入口；路由组统一登录/CSRF，秘密响应禁止缓存，业务事务由服务负责。 */
 final class PaymentAppController extends BaseAdminController
 {
-    public function index(PaymentAppService $service, SiteUrl $site): Response
+    public function index(PaymentAppService $service): Response
     {
-        return $this->success(['items' => $service->listing(), 'origin' => $site->origin()])->header(['Cache-Control' => 'no-store']);
+        return $this->success(['items' => $service->listing(), 'origin' => $this->request->domain()])->header(['Cache-Control' => 'no-store']);
     }
 
     public function create(PaymentAppValidator $validator, PaymentAppService $service): Response

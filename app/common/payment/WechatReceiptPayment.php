@@ -265,7 +265,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
     {
         $message = $this->verifier->verify($request, $this->getConfig('sms_forwarder_secret'),
             [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT, 'com.tencent.mm'], $this->clock->now(),
-            strtolower((string) $request->server('HTTPS', '')) === 'on' || (string) $request->server('SERVER_PORT') === '443',
+            $request->isSsl(),
             $this->getConfig('sms_forwarder_time_tolerance'));
         try { $content = json_decode($message->content, true, 32, JSON_THROW_ON_ERROR); }
         catch (JsonException) { throw new ReceiptMessageException('invalid_message'); }

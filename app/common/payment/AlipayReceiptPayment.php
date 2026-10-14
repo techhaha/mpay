@@ -361,7 +361,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
             $this->getConfig('sms_forwarder_secret'),
             ['com.eg.android.AlipayGphone'],
             $this->clock->now(),
-            strtolower((string) $request->server('HTTPS', '')) === 'on' || (string) $request->server('SERVER_PORT') === '443',
+            $request->isSsl(),
             $this->getConfig('sms_forwarder_time_tolerance')
         );
         try {

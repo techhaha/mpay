@@ -6,7 +6,6 @@ namespace app\http\admin\controller;
 use app\common\base\BaseAdminController;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
-use app\common\util\SiteUrl;
 use app\exception\BusinessException;
 use app\http\admin\validation\ConfigurationQueryValidator;
 use app\http\admin\validation\ImageUploadValidator;
@@ -30,8 +29,7 @@ final class PaymentConfigurationController extends BaseAdminController
     public function testChannel(
         PaymentChannelTestValidator $validator,
         PaymentChannelTestService $service,
-        Clock $clock,
-        SiteUrl $site
+        Clock $clock
     ): Response {
         $input = $validator->input($this->jsonBody());
         $order = $service->create(
@@ -46,7 +44,7 @@ final class PaymentConfigurationController extends BaseAdminController
             'biz_no' => $order->bizNo,
             'pay_no' => $order->payNo,
             'reused' => $order->reused,
-            'cashier_url' => $site->path('/cashier/pay', ['biz_no' => $order->bizNo, 'token' => $order->accessToken])
+            'cashier_url' => (string) url('/cashier/pay', ['biz_no' => $order->bizNo, 'token' => $order->accessToken])->suffix(false)->domain(true)->root('')
         ], '测试订单已创建');
     }
 
@@ -66,11 +64,11 @@ final class PaymentConfigurationController extends BaseAdminController
         return $this->success($query->configuration($validator->identity($this->request->get())));
     }
 
-    public function channel(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query, SiteUrl $site): Response
+    public function channel(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
     {
         $data = $query->channel($validator->identity($this->request->get()));
         $path = $data['notification']['path'];
-        $data['notification']['url'] = $path === null ? null : $site->path($path);
+        $data['notification']['url'] = $path === null ? null : (string) url($path)->suffix(false)->domain(true)->root('');
         return $this->success($data);
     }
 

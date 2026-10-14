@@ -59,6 +59,12 @@
 
 <a id="web-install"></a>
 
+## 📦 纯净安装包
+
+客户安装包包含生产 `vendor/`，解压后按包内 README 配置 `public/` 运行目录并访问 `/install`，服务器无需执行 Composer。包内不含 `docs/`、开发工具、测试、站点配置、上传图片或演示数据；使用手册通过在线 Wiki 阅读。[安装包文件说明](docs/wiki/examples/install-README.md)。
+
+当前新装只有 `database/migrations/202610140100_install.php` 一份最终基线，保留逐表进度与中断续装。仅用于空库全新安装，不是旧开发库的覆盖升级包；恢复站点应使用与备份一致的程序版本。
+
 ## 🚀 网页安装
 
 **推荐通过浏览器完成安装。** 网站准备好以后，在自己的 MPAY 网站地址后加 `/install`，按四步向导操作。

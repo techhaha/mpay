@@ -25,3 +25,5 @@
 本地实施方案：`docs/payment-data-model-redesign-2026-10-13.md`。已按用户确认实施通道范围分配/匹配、保留 JSON 快照、预约退役和公开收银台模块。代码、隔离验证及当前数据库的实际进度见实现计划；本地维护资料继续遵循 Git 忽略规则。
 
 本轮全局审查记录：`docs/global-code-audit-2026-10-13.md`，包含输入校验、插件运行参数、交易异常恢复、SQL 性能与实际页面验收的范围和证据；最终结果以实现计划最新节点为准。
+
+纯净交付：客户 README 维护在 [安装包说明](wiki/examples/install-README.md)，构建与验证范围见 `docs/clean-install-release-20261014.md`。客户 ZIP 不包含 docs 目录。

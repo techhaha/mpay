@@ -1,0 +1,75 @@
+# MPAY · 码支付 V1
+
+让个人收款更加轻松便捷。
+
+MPAY 是基于 ThinkPHP 与 Layui 的收款管理程序，提供多应用 PID/KEY、收款通道、订单核对、收银台和商户通知，对外支持易支付 V1 接口。内置微信手机/PC、支付宝手机、支付宝账单和收钱吧码牌四个监听插件。
+
+## 安装要求
+
+- PHP 8.2 及以上、64 位；Web 与命令行 PHP 均需满足要求。
+- MySQL 5.7.9 及以上，使用独立空数据库；MySQL 5.7.44 满足要求。
+- PHP 扩展：PDO MySQL、cURL、OpenSSL、mbstring、DOM、GD、fileinfo、BCMath、ctype、iconv；libcurl 7.59.0 及以上。
+- Nginx 或 Apache，正式站点使用 HTTPS。无需 Redis、消息队列或 Workerman。
+
+## 安装步骤
+
+1. 解压安装包到站点目录。包内已含生产依赖，无需在服务器执行 Composer。
+2. 将网站运行目录设置为 `public/`，配置 HTTPS 和伪静态。Nginx 站点配置示例：
+
+   ```nginx
+   location / {
+       try_files $uri $uri/ /index.php?$query_string;
+   }
+   ```
+
+   `/submit.php`、`/mapi.php`、`/api.php` 是程序路由，没有对应磁盘文件；也需要交给 `index.php`。Nginx 添加：
+
+   ```nginx
+   location = /submit.php { rewrite ^ /index.php last; }
+   location = /mapi.php   { rewrite ^ /index.php last; }
+   location = /api.php    { rewrite ^ /index.php last; }
+   ```
+
+   PHP 请求交给已配置的 PHP-FPM；Apache 使用包内 `public/.htaccess`，需启用 rewrite 和相应 AllowOverride。禁止上传目录执行 PHP。
+3. 创建独立空数据库及其账号。安装时账号需具备建表、索引、外键和数据读写权限。安装器不会创建或清空数据库。
+4. 确保 PHP 进程可写项目根目录、`runtime/` 和 `public/storage/`。访问 `https://你的域名/install`，完成环境检查、数据库连接和管理员设置。
+5. 安装完成后，限制 `.env` 仅供站点运行账号读取，并收紧项目根目录写权限；`runtime/` 和 `public/storage/` 继续保留运行所需写权限。安装入口会自动关闭。
+6. 在进程管理工具中分别守护以下两个命令，工作目录设置为项目目录：
+
+   ```sh
+   php think payment:watch
+   php think payment:work
+   ```
+
+   `watch` 负责主动查单，`work` 负责商户通知和订单维护。默认持续运行；退出后由 Supervisor、systemd 或服务器面板自动重启。PHP 不在 PATH 时填写实际 PHP 可执行文件路径。
+7. 登录 `/admin/login`，进入“收款配置”新增通道并填写插件参数。在“更多 → 测试”发起一笔付款，核对到账和后台状态；再将应用的 PID/KEY 填入业务网站。
+
+首次安装自动创建默认应用、默认轮询组及绑定。后续新增应用、通道也会自动接入默认路由。付款测试应由真实到账验证，二维码生成或浏览器跳转不代表收款成功。
+
+## 文件说明
+
+```text
+app/                  程序代码及内置插件
+config/               程序配置
+database/migrations/  一份最终新装建表定义
+public/               网站公开入口、前端资源及空 storage 目录
+route/                路由
+runtime/              空运行目录，首次运行后生成缓存、日志和安装锁
+vendor/               已安装的生产依赖及其许可证
+view/                 页面模板
+composer.json
+composer.lock
+think
+LICENSE.txt
+README.md
+```
+
+安装包不含站点配置、账号密码、演示订单、缓存和上传图片。安装过程中会生成 `.env` 和安装锁，二者不可随意删除。数据库只有一份新装基线；安装进度表用于故障后续装，不能删除。中断后使用同一安装包和原数据库继续安装，不需要清库。
+
+此包用于全新安装，不能覆盖旧开发版本执行升级。恢复站点应使用与备份数据库匹配的程序版本，并恢复数据库、`.env`、`runtime/install.lock` 和 `public/storage/`。
+
+## 使用文档
+
+[Gitee 使用手册](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub 使用手册](https://github.com/techhaha/mpay/wiki)
+
+具体平台所需账号、权限和监听客户端见对应插件说明。开源许可证见 `LICENSE.txt`；第三方依赖和前端组件保留各自许可证。

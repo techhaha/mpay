@@ -5,7 +5,7 @@ MpayAdmin.ready(function () {
     const feedback=document.getElementById('admin-feedback');let page=1,overviewSequence=0;
     const when=value=>value==null?'暂无记录':new Date(value*1000).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
     async function overview(){const sequence=++overviewSequence;try{
-        const data=(await MpayHttp.request('/adminapi/runtime')).data;if(sequence!==overviewSequence)return;
+        const data=(await MpayHttp.request('/adminapi/maintenance')).data;if(sequence!==overviewSequence)return;
         const workers=document.getElementById('runtime-workers');workers.replaceChildren();
         data.workers.workers.forEach(worker=>{const card=document.createElement('section');card.className='admin-worker-card';card.innerHTML='<h2>'+E(worker.label)+UI.state(worker.status_label)+'</h2><p>最近活动：'+E(when(worker.observed_at))+'</p>';workers.append(card);});
         if(!data.workers.scan_complete)UI.feedback(feedback,'任务活动记录读取不完整，请核对运行目录权限。');
@@ -14,7 +14,7 @@ MpayAdmin.ready(function () {
     }catch(exception){if(sequence===overviewSequence)UI.error(feedback,exception);}}
     function collections(current=1){
         const where={};new FormData(form).forEach((value,key)=>{if(value!=='')where[key]=value;});
-        UI.table({elem:'#runtime-collections',id:'runtime-collections',url:'/adminapi/runtime/collections',where,
+        UI.table({elem:'#runtime-collections',id:'runtime-collections',url:'/adminapi/maintenance/collections',where,
             page:{curr:current},feedback,done(result,curr){page=curr;},emptyText:'暂无采集记录',cols:[[
                 {field:'name',title:'收款通道',minWidth:180,templet:row=>E(row.name)},
                 {title:'状态',width:170,align:'center',templet:row=>UI.state(row.status_label)},
@@ -30,7 +30,7 @@ MpayAdmin.ready(function () {
     });
     document.getElementById('runtime-doctor').addEventListener('click',()=>{
         const handle=UI.open({title:'只读环境诊断',width:850,content:'<table class="runtime-diagnosis"></table>'});
-        handle.run(async()=>{handle.feedback('正在检查…','loading');const data=(await MpayHttp.request('/adminapi/runtime/doctor',{timeout:30000})).data;
+        handle.run(async()=>{handle.feedback('正在检查…','loading');const data=(await MpayHttp.request('/adminapi/maintenance/doctor',{timeout:30000})).data;
             const names={php:'PHP 与扩展',site:'站点配置',runtime:'运行目录',database:'数据库',migrations:'安装进度',notification:'通知任务',collection:'采集状态',workers:'任务活动'};
             const states={ok:['通过','green'],warning:['需关注','orange'],error:['未通过','red']};
             UI.table({elem:handle.node.querySelector('.runtime-diagnosis'),data:data.checks,page:false,cellExpandedMode:'tips',cols:[[{title:'项目',width:160,templet:row=>E(names[row.id]||row.id)},{title:'结果',width:100,align:'center',templet:row=>UI.badge(...(states[row.status]||['未知','gray']))},{field:'message',title:'说明',minWidth:300,templet:row=>E(row.message)}]]});handle.feedback('');

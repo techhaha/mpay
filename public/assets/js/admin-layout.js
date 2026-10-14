@@ -17,7 +17,7 @@ layui.use(['element','layer'], function () {
     const currentPage=document.getElementById('admin-current-page');
     currentPage.textContent = main.querySelector('h1')?.textContent || '管理后台';
     // 通知与回调排查为业务页面的下级入口，侧栏高亮和面包屑保留用户所处上下文。
-    const parent={'/admin/notifications':['/admin/orders','交易订单'],'/admin/ingress':['/admin/runtime','运行维护']}[location.pathname];
+    const parent={'/admin/notifications':['/admin/orders','交易订单'],'/admin/ingress':['/admin/maintenance','运行维护']}[location.pathname];
     if(parent){
         const link=document.createElement('a');link.href=parent[0];link.textContent=parent[1];
         const separator=document.createElement('span');separator.textContent='/';separator.setAttribute('aria-hidden','true');

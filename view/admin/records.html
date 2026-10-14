@@ -1,6 +1,6 @@
 {extend name="layouts/admin" /}
 {block name="content"}
-<section class="admin-intro"><h1>{$heading|htmlspecialchars}</h1><div class="admin-actions">{if $kind == 'notifications'}<a class="layui-btn layui-btn-primary" href="/admin/orders">返回交易订单</a>{elseif $kind == 'ingress'}<a class="layui-btn layui-btn-primary" href="/admin/runtime">返回运行维护</a>{/if}<button type="button" class="layui-btn layui-btn-primary" id="records-refresh">刷新</button></div></section>
+<section class="admin-intro"><h1>{$heading|htmlspecialchars}</h1><div class="admin-actions">{if $kind == 'notifications'}<a class="layui-btn layui-btn-primary" href="/admin/orders">返回交易订单</a>{elseif $kind == 'ingress'}<a class="layui-btn layui-btn-primary" href="/admin/maintenance">返回运行维护</a>{/if}<button type="button" class="layui-btn layui-btn-primary" id="records-refresh">刷新</button></div></section>
 <div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
 <section class="layui-card"><div class="layui-card-body">
 <form id="records-filter" class="layui-form admin-filter-panel" data-kind="{$kind|htmlspecialchars}" novalidate>

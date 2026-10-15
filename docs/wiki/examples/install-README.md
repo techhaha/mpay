@@ -14,7 +14,7 @@ MPAY 是基于 ThinkPHP 与 Layui 的收款管理程序，提供多应用 PID/KE
 ## 安装步骤
 
 1. 解压安装包到站点目录。包内已含生产依赖，无需在服务器执行 Composer。
-2. 将网站运行目录设置为 `public/`，配置访问地址和伪静态。宝塔选择“PHP 项目”，站点 PHP 选 8.2 及以上；在“网站目录”保存运行目录 `/public`，在“伪静态”选择 `thinkphp` 模板，或将编辑框替换为：
+2. 将网站运行目录设置为 `public/`，配置访问地址和伪静态。宝塔选择“PHP 项目”，站点 PHP 选 8.2 及以上；在“网站目录”保存运行目录 `/public`，在“伪静态”用以下规则整体替换编辑框中的旧内容并保存：
 
    ```nginx
    if (!-e $request_filename) {
@@ -22,7 +22,7 @@ MPAY 是基于 ThinkPHP 与 Layui 的收款管理程序，提供多应用 PID/KE
    }
    ```
 
-   片段位于 Nginx 的 server 上下文，保留面板管理的 PHP-FPM 配置。`/submit.php`、`/mapi.php`、`/api.php` 是没有对应磁盘文件的程序路由，上述规则同样将它们交给 `index.php`，保留原路径和查询参数，不需要创建同名文件。不要将完整站点配置粘贴进伪静态输入框。Apache 使用包内 `public/.htaccess`，需启用 rewrite 和相应 AllowOverride。禁止上传目录执行 PHP。完整图文见 [宝塔部署教程](https://gitee.com/technical-laohu/mpay/wikis/新手-宝塔建站准备)。
+   片段位于 Nginx 的 server 上下文，**不要包裹 `location /`**；不同版本的 `thinkphp` 预置模板可能不同，以此片段为准。保留面板管理的 PHP-FPM 配置及主配置中的敏感目录保护。`/submit.php`、`/mapi.php`、`/api.php` 是没有对应磁盘文件的程序路由，上述规则同样将它们交给 `index.php`，保留原路径和查询参数，不需要创建同名文件。不要将完整站点配置粘贴进伪静态输入框。Apache 使用包内 `public/.htaccess`，需启用 rewrite 和相应 AllowOverride。禁止上传目录执行 PHP。完整图文见 [宝塔部署教程](https://gitee.com/technical-laohu/mpay/wikis/新手-宝塔建站准备)。
 3. 创建独立空数据库及其账号。安装时账号需具备建表、索引、外键和数据读写权限。安装器不会创建或清空数据库。
 4. 确保 PHP 进程可写项目根目录、`runtime/` 和 `public/storage/`。访问 `https://你的域名/install`，完成环境检查、数据库连接和管理员设置。
 5. 安装完成后，限制 `.env` 仅供站点运行账号读取，并收紧项目根目录写权限；`runtime/` 和 `public/storage/` 继续保留运行所需写权限。安装入口会自动关闭。

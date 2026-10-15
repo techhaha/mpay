@@ -1,6 +1,7 @@
-# Paste into the MPAY site's BaoTa Nginx rewrite editor (server context).
-# Keep the panel-managed PHP-FPM configuration and set the run directory to /public.
-# Preserve the original query string; do not append a trailing question mark.
+# 整体替换宝塔本站的伪静态编辑框内容；运行目录须为 /public。
+# 在 server 层执行，不要包裹 location /，不要另加 break 或重复叠加旧模板。
+# 主配置中的 PHP-FPM 和敏感目录保护保持；虚拟 .php 路由也由下方规则交给入口。
+# 保留原查询参数，不要在重写目标末尾追加问号。
 if (!-e $request_filename) {
     rewrite ^(.*)$ /index.php?s=$1 last;
 }

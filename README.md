@@ -71,10 +71,10 @@
 
 ### 1. 准备程序、网站和数据库
 
-1. 从 [Gitee v1 分支](https://gitee.com/technical-laohu/mpay/tree/v1/)或 [GitHub v1 分支](https://github.com/techhaha/mpay/tree/v1)取得对应源码，上传并解压到独立网站目录。
+1. 使用明确对应本版的纯净安装包，或从 [Gitee v1 分支](https://gitee.com/technical-laohu/mpay/tree/v1/) / [GitHub v1 分支](https://github.com/techhaha/mpay/tree/v1)取得源码，上传并解压到独立网站目录。纯净安装包已含生产依赖，源码包需按第 3 步准备依赖。
 2. 创建 MPAY 专用空数据库，保存地址、端口、库名、用户名和密码。
 3. 确认 PHP、扩展和依赖满足[环境要求](#requirements)。源码没有 `vendor` 时，先按[依赖准备](docs/wiki/V1-03-安装与环境要求.md#源码部署的依赖准备)安装锁定依赖。
-4. 将网站运行目录设置为程序下的 `public`，配置本站路由与 HTTPS。使用宝塔可跟随[建站图文教程](docs/wiki/新手-宝塔建站准备.md)。
+4. 将网站运行目录设置为程序下的 `public`，配置本站路由和实际 HTTP 或 HTTPS 地址；正式访问建议配置 HTTPS。使用宝塔可跟随[建站图文教程](docs/wiki/新手-宝塔建站准备.md)。
 
 **包含 `think`、`app`、`public` 的那一级是程序目录，`public` 是网站运行目录。** 当前源码分支不等于已经打包好依赖的正式发行包，勿使用旧版下载包套用本教程。
 
@@ -176,7 +176,7 @@ MPAY 对外使用 **易支付 V1**。已有兼容模块的业务网站，通常�
 | **MySQL** | **5.7.9 及以上**，InnoDB / utf8mb4；5.7.44 可以使用 |
 | **PHP 扩展** | pdo_mysql、curl、openssl、mbstring、dom、gd、fileinfo、bcmath、ctype、iconv |
 | **libcurl** | 7.59.0 及以上 |
-| **Web 服务** | Nginx 或 Apache，运行目录指向 `public`；正式接入使用 HTTPS |
+| **Web 服务** | Nginx 或 Apache，运行目录指向 `public`；支持 HTTP / HTTPS，正式访问建议使用 HTTPS |
 | **后台运行** | Supervisor 或 systemd，分别守护采集与通知两个原生 PHP 命令 |
 
 页面由 ThinkPHP 渲染，Layui 及品牌素材随程序本地交付。部署无需 Node 前端构建服务，也不需要 Redis、消息队列或 Workerman。Web PHP 与命令行 PHP 都需要满足依赖。
@@ -250,7 +250,7 @@ app/
   common/sdk/              平台 SDK
   command/                 安装、诊断与两个后台任务
 config/                    应用配置
-database/migrations/       建表及版本迁移
+database/migrations/       最终新装基线及建表定义
 public/                    网站入口、Layui、主题与品牌素材
 view/                      安装、后台和收银台模板
 docs/wiki/                 使用手册、接口及开发文档

@@ -26,4 +26,10 @@
 
 本轮全局审查记录：`docs/global-code-audit-2026-10-13.md`，包含输入校验、插件运行参数、交易异常恢复、SQL 性能与实际页面验收的范围和证据；最终结果以实现计划最新节点为准。
 
+访问规则：HTTP/HTTPS 不作为手机通知准入条件，当前主机共用固定会话；后台和收银台不比较浏览器 Origin 与后端协议，仍执行认证、CSRF、跨站标识和载荷检查。当前部署说明见 [部署与后台任务](wiki/V1-18-部署与后台任务.md)，实际同步范围见实现计划。
+
+验证规则：普通输入统一使用 think\Validate；手机通知共用 SmsForwarderValidator，读取框架 POST 参数，不依赖服务器重写参数或独立消息 DTO。字段验证与签名、平台消息解释的边界见[开发规范](development-standards.md)及[插件合同](p2-plugin-contracts.md)，24 个验证器的本轮审查范围见实现计划。
+
+监听应答：支付宝手机和微信手机/PC 插件成功返回 HTTP 200、正文 `200`，业务拒绝返回 HTTP 200、正文 `400：错误原因`；通知工具的成功关键字填 `200`。业务网站接收付款通知时仍返回 `success`。完整说明见[微信监听](wiki/V1-11-微信手机与PC监听.md#通知应答)及[支付宝监听](wiki/V1-12-支付宝手机监听.md)。
+
 纯净交付：客户 README 维护在 [安装包说明](wiki/examples/install-README.md)，构建与验证范围见 `docs/clean-install-release-20261014.md`。客户 ZIP 不包含 docs 目录。

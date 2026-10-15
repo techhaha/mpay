@@ -18,7 +18,6 @@ final class ReceiptMessageException extends BusinessException
     public function __construct(public readonly string $reasonCode)
     {
         [$message, $code] = match ($reasonCode) {
-            'transport_required' => ['来源消息需要安全传输', ApiResponseConstant::FORBIDDEN],
             'invalid_message' => ['来源消息格式不符合合同', ApiResponseConstant::BAD_REQUEST],
             'authentication_failed' => ['来源消息认证失败', ApiResponseConstant::FORBIDDEN],
             'transport_expired' => ['来源消息超出接收时间窗口', ApiResponseConstant::FORBIDDEN],

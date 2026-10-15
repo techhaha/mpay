@@ -5,7 +5,7 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
-use app\http\admin\validation\PaginationValidator;
+use InvalidArgumentException;
 use think\Validate;
 
 /** 工作台及运维记录的只读字段/场景校验；来源代码只用于筛选，不能据请求指定来源可用性。 */
@@ -42,7 +42,7 @@ final class OperationsQueryValidator extends Validate
      */
     public function listing(string $kind, array $input): array
     {
-        $fields = $this->scene[$kind] ?? throw new \InvalidArgumentException('未知运行记录场景');
+        $fields = $this->scene[$kind] ?? throw new InvalidArgumentException('未知运行记录场景');
         $supportsAllDates = in_array($kind, ['receipts', 'notifications'], true);
         $this->known($input, [...$fields, 'start_date', 'end_date', 'page', 'limit', ...($supportsAllDates ? ['all_dates'] : [])]);
         if (isset($input['all_dates']) && !in_array($input['all_dates'], ['0', '1'], true)) {
@@ -69,7 +69,7 @@ final class OperationsQueryValidator extends Validate
      */
     public function identity(string $field, array $input, bool $paged = false): array
     {
-        if (!in_array($field, ['id', 'notify_no'], true)) { throw new \InvalidArgumentException('未知记录身份'); }
+        if (!in_array($field, ['id', 'notify_no'], true)) { throw new InvalidArgumentException('未知记录身份'); }
         $this->known($input, $paged ? [$field, 'page', 'limit'] : [$field]);
         $validator = (clone $this)->only([$field])->append($field, 'require')->failException(false);
         if (!$validator->check($input)) { throw new BusinessException('记录编号无效', ApiResponseConstant::VALIDATION_FAILED); }

@@ -5,6 +5,7 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
+use InvalidArgumentException;
 use think\Validate;
 
 /** 后台登录/改密的原生验证器；密码不 trim、不转换类型、不回显，身份字段只允许来自服务端会话。 */
@@ -39,7 +40,7 @@ final class AdminAuthValidator extends Validate
      */
     public function validateInput(string $scene, array $input): array
     {
-        $fields = $this->scene[$scene] ?? throw new \InvalidArgumentException('未知认证验证场景');
+        $fields = $this->scene[$scene] ?? throw new InvalidArgumentException('未知认证验证场景');
         if (array_diff(array_keys($input), $fields) !== []) {
             throw new BusinessException('认证操作包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED);
         }

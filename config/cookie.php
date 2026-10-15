@@ -11,7 +11,7 @@ return [
     'path' => '/',
     // 空域名采用当前主机范围，不向其他子域共享会话标识。
     'domain' => '',
-    // HTTP 请求入口根据原生 Request::isSsl() 设置；不由安装时的环境变量固定协议。
+    // 允许 HTTP 和 HTTPS 共用当前主机的会话 Cookie；请求入口不按协议改写配置。
     'secure' => false,
     // 禁止页面脚本读取会话 Cookie；CSRF token 通过模板单独提供。
     'httponly' => true,

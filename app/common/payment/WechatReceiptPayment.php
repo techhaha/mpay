@@ -6,10 +6,10 @@ namespace app\common\payment;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ChannelNotifyInterface;
-use app\common\sdk\smsforwarder\SmsForwarderVerifier;
 use app\common\sdk\wechat\WechatMessageXml;
 use app\common\util\Clock;
 use app\common\util\Money;
+use app\common\validation\SmsForwarderValidator;
 use app\exception\BusinessException;
 use app\exception\ReceiptMessageException;
 use app\exception\UnsupportedPaymentOperationException;
@@ -65,7 +65,7 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
         private readonly BizOrderRepository $businessOrders,
         private readonly PaymentChannelRepository $channels,
         private readonly Clock $clock,
-        private readonly SmsForwarderVerifier $verifier,
+        private readonly SmsForwarderValidator $notificationValidator,
         private readonly WechatMessageXml $xml,
     ) {
     }
@@ -255,23 +255,32 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
 
     /** 码牌监听没有原路退款接口，人工退款不伪造成插件退款成功。 */
     public function refund(array $order): array { throw new UnsupportedPaymentOperationException(); }
-    public function notifySuccess(): string|Response { return 'success'; }
-    public function notifyFail(): string|Response { return 'fail'; }
+    /** 手机与 PC 监听工具共用纯文本 200；仅由服务在交易确认完成后调用。 */
+    public function notifySuccess(): string|Response { return '200'; }
+
+    /** 业务失败由正文 400 和公开原因表达；字符串应答交由框架输出。 */
+    public function notifyFail(string $message): string|Response
+    {
+        return '400：' . mb_strcut($message, 0, 4000, 'UTF-8');
+    }
 
     public function notify(Request $request): array { return $this->notifyPayload(['record' => $this->receipt($request)]); }
 
     /** @return array<string,mixed> 已按明确消息来源解析的标准流水，不携带平台原文。 */
     private function receipt(Request $request): array
     {
-        $message = $this->verifier->verify($request, $this->getConfig('sms_forwarder_secret'),
-            [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT, 'com.tencent.mm'], $this->clock->now(),
-            $request->isSsl(),
-            $this->getConfig('sms_forwarder_time_tolerance'));
-        try { $content = json_decode($message->content, true, 32, JSON_THROW_ON_ERROR); }
+        $message = $this->notificationValidator->validateInput(
+            $request->post(),
+            $this->getConfig('sms_forwarder_secret'),
+            [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT, 'com.tencent.mm'],
+            $this->clock->now(),
+            $this->getConfig('sms_forwarder_time_tolerance')
+        );
+        try { $content = json_decode($message['content'], true, 32, JSON_THROW_ON_ERROR); }
         catch (JsonException) { throw new ReceiptMessageException('invalid_message'); }
         if (!is_array($content)) { throw new ReceiptMessageException('invalid_message'); }
         // 同一认证入口接收手机与 PC；认证后按明确的发送方/消息格式解析，不使用外部 source 开关。
-        if (in_array($message->from, [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT], true)) { return $this->pcReceipt($message->from, $content); }
+        if (in_array($message['from'], [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT], true)) { return $this->pcReceipt($message['from'], $content); }
         if (!in_array($content['title'] ?? null, ['微信支付', '微信收款助手', '微信收款商业版'], true)
             || !is_string($content['msg'] ?? null)
             || !preg_match('/(?:到账|收款|收款到账)\s*[¥￥]?\s*(\d+(?:\.\d{1,2})?)\s*(?:元)?/u', $content['msg'], $amount)) {
@@ -279,8 +288,8 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
         }
         $remark = preg_match('/(?:备注|留言|附言|付款备注|收款备注)[:：\s]*([0-9]{4})/u', $content['msg'], $code) ? $code[1] : null;
         // 沿用 V2 手机合同：通知时间参与监听编号及订单窗口，不称其为微信官方交易时间/交易号。
-        $reference = 'SF' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
-        return $this->record($reference, Money::parse($amount[1]), intdiv($message->transportTimestampMilliseconds, 1000), $remark);
+        $reference = 'SF' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $message['from'] . '|' . $message['timestamp'] . '|' . $message['content']), 0, 30);
+        return $this->record($reference, Money::parse($amount[1]), intdiv($message['timestamp'], 1000), $remark);
     }
 
     /**

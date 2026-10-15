@@ -70,8 +70,8 @@ const mount = function (host, order, params, context, autoTransfer = false) {
         host.querySelector('.cashier-scan-guide').append(link);
     }
     const copy = async () => {
-        try { await navigator.clipboard.writeText(params.remark); if (!disposed) layui.layer.msg('备注已复制'); }
-        catch (_) { if (!disposed) layui.layer.msg('请长按或选中备注手动复制'); }
+        const copied = await MpayClipboard.writeText(params.remark);
+        if (!disposed) layui.layer.msg(copied ? '备注已复制' : '请长按或选中备注手动复制');
     };
     remark.querySelector('button').addEventListener('click', copy);
     const started = performance.now();

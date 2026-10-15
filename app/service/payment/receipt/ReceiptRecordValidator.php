@@ -5,15 +5,20 @@ namespace app\service\payment\receipt;
 
 use app\common\util\Money;
 use app\common\validation\PaymentTypeCode;
-use DateTimeImmutable;
 use think\Validate;
 use UnexpectedValueException;
 
 /** SDK/插件返回的标准流水边界；服务在落库和通知调用前检查，不要求插件依赖内部证据类。 */
 final class ReceiptRecordValidator extends Validate
 {
-    protected $rule = ['pay_type' => ['require', 'string', 'regex' => PaymentTypeCode::PATTERN], 'event_key' => 'require|max:128',
-        'amount' => 'require|integer|gt:0'];
+    protected $rule = [
+        'pay_type' => ['require', 'string', 'regex' => PaymentTypeCode::PATTERN],
+        'event_key' => ['require', 'string', 'utf8Text', 'byteLength' => 128],
+        'amount' => ['require', 'integerValue', 'between' => [1, Money::MAX_CENTS]],
+        'paid_at' => ['requireNullableText' => 19, 'regex' => '/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D', 'dateFormat' => 'Y-m-d H:i:s'],
+        'trade_no' => ['requireNullableText' => 128],
+        'remark' => ['requireNullableText' => 256],
+    ];
 
     /**
      * @return array{pay_type:string,event_key:string,amount:int,paid_at:?string,trade_no:?string,remark:?string,
@@ -22,21 +27,8 @@ final class ReceiptRecordValidator extends Validate
     public function validateRecord(array $record): array
     {
         if (array_diff(array_keys($record), ['pay_type', 'event_key', 'amount', 'paid_at', 'trade_no', 'remark', 'payload_digest', 'extra']) !== []
-            || !$this->check($record) || !is_string($record['event_key'] ?? null) || strlen($record['event_key']) > 128
-            || !mb_check_encoding($record['event_key'], 'UTF-8') || !is_int($record['amount'] ?? null)
-            || !array_key_exists('paid_at', $record) || !array_key_exists('trade_no', $record) || !array_key_exists('remark', $record)) {
+            || !(clone $this)->failException(false)->check($record)) {
             throw new UnexpectedValueException('插件流水字段无效');
-        }
-        Money::assertRange($record['amount']);
-        foreach (['paid_at' => 19, 'trade_no' => 128, 'remark' => 256] as $field => $maximum) {
-            if ($record[$field] !== null && (!is_string($record[$field]) || $record[$field] === ''
-                || ($field === 'trade_no' ? strlen($record[$field]) : mb_strlen($record[$field], 'UTF-8')) > $maximum || !mb_check_encoding($record[$field], 'UTF-8'))) {
-                throw new UnexpectedValueException('插件流水文本字段无效');
-            }
-        }
-        if ($record['paid_at'] !== null) {
-            $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $record['paid_at']);
-            if (!$date || $date->format('Y-m-d H:i:s') !== $record['paid_at']) { throw new UnexpectedValueException('插件流水时间格式无效'); }
         }
         $value = array_intersect_key($record, array_flip(['pay_type', 'event_key', 'amount', 'paid_at', 'trade_no', 'remark']));
         $value['payload_digest'] = hash('sha256', json_encode([$value['pay_type'], $value['event_key'], $value['amount'],
@@ -51,5 +43,17 @@ final class ReceiptRecordValidator extends Validate
             $value['payload_digest'] = hash('sha256', $value['payload_digest'] . ':' . $encoded);
         }
         return $value;
+    }
+
+    protected function integerValue(mixed $value): bool { return is_int($value); }
+    protected function utf8Text(string $value): bool { return mb_check_encoding($value, 'UTF-8'); }
+    protected function byteLength(string $value, int $maximum): bool { return strlen($value) <= $maximum; }
+
+    /** 可空文本必须显式提供；交易号按字节限制，备注按字符限制。 */
+    protected function requireNullableText(mixed $value, int $maximum, array $data, string $field): bool
+    {
+        return array_key_exists($field, $data) && ($value === null || (is_string($value) && $value !== ''
+            && mb_check_encoding($value, 'UTF-8')
+            && ($field === 'trade_no' ? strlen($value) : mb_strlen($value, 'UTF-8')) <= $maximum));
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\http\api\validation;
 
 use app\common\constant\ApiResponseConstant;
+use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
 use think\Validate;
 
@@ -14,7 +15,7 @@ final class CashierValidator extends Validate
     protected $rule = [
         'biz_no' => ['require', 'string', 'regex' => '/^B[A-Za-z0-9]{1,63}$/D'],
         'token' => ['require', 'string', 'regex' => '/^[a-f0-9]{64}$/D'],
-        'type' => ['require', 'string', 'regex' => \app\common\validation\PaymentTypeCode::PATTERN],
+        'type' => ['require', 'string', 'regex' => PaymentTypeCode::PATTERN],
     ];
     protected $scene = ['identity' => ['biz_no', 'token'], 'selection' => ['type']];
 

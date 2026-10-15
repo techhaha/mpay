@@ -6,8 +6,11 @@ namespace app\service\payment\epay;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\HttpTargetPolicy;
 use app\common\util\Money;
+use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
 use app\service\payment\order\CreateOrderInput;
+use InvalidArgumentException;
+use LogicException;
 use think\Validate;
 
 /** 易支付原生字段/场景验证；下单必须先验证原始表单签名，再调用本类截断名称和转换金额。 */
@@ -19,7 +22,7 @@ final class EpayV1Validator extends Validate
         'out_trade_no' => ['require', 'string', 'max' => 64],
         'name' => ['require', 'string'],
         'money' => ['require', 'string'],
-        'type' => ['string', 'regex' => \app\common\validation\PaymentTypeCode::PATTERN],
+        'type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
         'notify_url' => ['require', 'string'],
         'return_url' => ['string'],
         // 原生 ip 规则默认只接受 IPv4；filter 规则不限定地址族，符合本接口同时接受 IPv4/IPv6 的合同。
@@ -75,10 +78,10 @@ final class EpayV1Validator extends Validate
      */
     public function order(array $input, string $scene, string $appId, string $versionId, ?string $requestIp, string $detectedDevice): CreateOrderInput
     {
-        if (!in_array($scene, ['submit', 'mapi'], true)) { throw new \LogicException('未知易支付下单场景'); }
+        if (!in_array($scene, ['submit', 'mapi'], true)) { throw new LogicException('未知易支付下单场景'); }
         $this->assertScene($scene, $input);
         try { $amount = Money::parse($input['money']); }
-        catch (\InvalidArgumentException) { $this->invalid('money', '金额必须为有效的正数元字符串，最多两位小数'); }
+        catch (InvalidArgumentException) { $this->invalid('money', '金额必须为有效的正数元字符串，最多两位小数'); }
         if ($amount < 1) { $this->invalid('money', '付款金额必须大于零'); }
         $type = ($input['type'] ?? '') === '' ? null : $input['type'];
         $notify = $input['notify_url'];
@@ -129,7 +132,7 @@ final class EpayV1Validator extends Validate
         if (($input['refund_no'] ?? '') === '') { unset($input['refund_no']); }
         $this->assertScene('refund', $input);
         try { $amount = Money::parse($input['money']); }
-        catch (\InvalidArgumentException) { $this->invalid('money', '退款金额必须为有效正数，最多两位小数'); }
+        catch (InvalidArgumentException) { $this->invalid('money', '退款金额必须为有效正数，最多两位小数'); }
         if ($amount < 1) { $this->invalid('money', '退款金额必须大于零'); }
         return ['amount' => $amount, 'request_no' => $input['refund_no'] ?? null];
     }

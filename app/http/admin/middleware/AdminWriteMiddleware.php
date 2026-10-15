@@ -6,12 +6,10 @@ namespace app\http\admin\middleware;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 use app\service\file\FileAssetService;
-use GuzzleHttp\Psr7\Uri;
-use InvalidArgumentException;
 use think\Request;
 use think\Response;
 
-/** 后台写接口共用的来源和载荷边界；登录也必须使用 Session CSRF，不能作为匿名写入豁免。 */
+/** 后台写接口共用的跨站标识和载荷边界；登录也必须使用 Session CSRF，不能作为匿名写入豁免。 */
 final class AdminWriteMiddleware
 {
     /**
@@ -24,17 +22,9 @@ final class AdminWriteMiddleware
             'default' => 8192, 'configuration' => 131072, 'image' => FileAssetService::MAX_UPLOAD_BYTES + 65536,
             default => throw new \LogicException('未知后台正文限制配置'),
         };
-        $origin = $request->header('Origin', '');
-        try {
-            $origin = $origin === '' ? '' : (string) new Uri($origin);
-            $siteOrigin = (string) new Uri($request->domain());
-        }
-        catch (InvalidArgumentException) {
-            throw new BusinessException('请求来源地址无效', ApiResponseConstant::FORBIDDEN);
-        }
-        if ($request->header('Sec-Fetch-Site', '') === 'cross-site'
-            || ($origin !== '' && $origin !== $siteOrigin)) {
-            throw new BusinessException('请求来源与当前站点不一致，请检查访问地址或代理配置', ApiResponseConstant::FORBIDDEN);
+        // 使用浏览器的跨站标识，不从服务器感知的协议重建 Origin；缺少标识仍须校验 CSRF。
+        if ($request->header('Sec-Fetch-Site', '') === 'cross-site') {
+            throw new BusinessException('不允许跨站提交后台操作', ApiResponseConstant::FORBIDDEN);
         }
         $contentType = strtolower(trim(explode(';', (string) $request->header('Content-Type', ''))[0]));
         if ($profile === 'image') {

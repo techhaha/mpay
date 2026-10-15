@@ -1,4 +1,4 @@
-# 隔离 HTTP 开发站模板，放入 Nginx http 上下文；生产使用同目录 HTTPS 模板。
+# HTTP 站点模板，放入 Nginx http 上下文；使用 TLS 时可选择同目录 HTTPS 模板。
 # 替换域名、public 根目录及 MPAY 专属 socket；同一实例可列出多个域名，不在应用中固定 site_url。
 map $request_uri $mpay_v1_path_info {
     ~^([^?]*) $1;

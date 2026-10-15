@@ -46,10 +46,7 @@ final class SystemDoctorService
             if ($production && $this->app->isDebug()) {
                 return ['error', '生产环境请关闭调试模式'];
             }
-            if (!$this->app->request->isCli() && !$this->app->request->isSsl()) {
-                return ['warning', '当前通过 HTTP 访问；正式站点建议配置 HTTPS，Cookie 随访问协议自动设置'];
-            }
-            return ['ok', '本站按访问域名生成链接；HTTPS 需按实际访问核验。业务回调允许目标由各接入应用配置。'];
+            return ['ok', '站点运行模式正常；业务回调允许目标由各接入应用配置。'];
         });
         $checks[] = $this->check('runtime', function (): array {
             $runtime = realpath($this->app->getRuntimePath());

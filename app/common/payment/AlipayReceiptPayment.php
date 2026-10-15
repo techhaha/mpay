@@ -7,9 +7,9 @@ namespace app\common\payment;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ChannelNotifyInterface;
-use app\common\sdk\smsforwarder\SmsForwarderVerifier;
 use app\common\util\Clock;
 use app\common\util\Money;
+use app\common\validation\SmsForwarderValidator;
 use app\exception\BusinessException;
 use app\exception\ReceiptMessageException;
 use app\exception\UnsupportedPaymentOperationException;
@@ -100,7 +100,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
         private readonly BizOrderRepository $businessOrders,
         private readonly PaymentChannelRepository $channels,
         private readonly Clock $clock,
-        private readonly SmsForwarderVerifier $verifier
+        private readonly SmsForwarderValidator $notificationValidator
     ) {}
 
     /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
@@ -334,13 +334,16 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
     {
         throw new UnsupportedPaymentOperationException();
     }
+    /** 监听工具按纯文本 200 判断成功；仅由服务在交易确认完成后调用。 */
     public function notifySuccess(): string|Response
     {
-        return 'success';
+        return '200';
     }
-    public function notifyFail(): string|Response
+
+    /** 业务失败由正文 400 和公开原因表达；字符串应答交由框架输出。 */
+    public function notifyFail(string $message): string|Response
     {
-        return 'fail';
+        return '400：' . mb_strcut($message, 0, 4000, 'UTF-8');
     }
 
     public function notify(Request $request): array
@@ -356,16 +359,15 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
      */
     private function receipt(Request $request): array
     {
-        $message = $this->verifier->verify(
-            $request,
+        $message = $this->notificationValidator->validateInput(
+            $request->post(),
             $this->getConfig('sms_forwarder_secret'),
             ['com.eg.android.AlipayGphone'],
             $this->clock->now(),
-            $request->isSsl(),
             $this->getConfig('sms_forwarder_time_tolerance')
         );
         try {
-            $content = json_decode($message->content, true, 16, JSON_THROW_ON_ERROR);
+            $content = json_decode($message['content'], true, 16, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
             throw new ReceiptMessageException('invalid_message');
         }
@@ -377,8 +379,8 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
             throw new ReceiptMessageException('unsupported_message');
         }
         $remark = preg_match('/(?:备注|留言|附言|付款备注|收款备注)[:：\s]*([0-9]{4})/u', $text, $code) ? $code[1] : null;
-        $reference = 'SF' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $message->from . '|' . $message->transportTimestampMilliseconds . '|' . $message->content), 0, 30);
-        $time = (new DateTimeImmutable('@' . intdiv($message->transportTimestampMilliseconds, 1000)))->setTimezone(new DateTimeZone('Asia/Shanghai'));
+        $reference = 'SF' . substr(hash('sha256', $this->getConfig('channel_id') . '|' . $message['from'] . '|' . $message['timestamp'] . '|' . $message['content']), 0, 30);
+        $time = (new DateTimeImmutable('@' . intdiv($message['timestamp'], 1000)))->setTimezone(new DateTimeZone('Asia/Shanghai'));
         return [
             'pay_type' => 'alipay',
             'event_key' => $reference,

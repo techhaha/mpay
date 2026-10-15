@@ -9,12 +9,12 @@ MPAY 是基于 ThinkPHP 与 Layui 的收款管理程序，提供多应用 PID/KE
 - PHP 8.2 及以上、64 位；Web 与命令行 PHP 均需满足要求。
 - MySQL 5.7.9 及以上，使用独立空数据库；MySQL 5.7.44 满足要求。
 - PHP 扩展：PDO MySQL、cURL、OpenSSL、mbstring、DOM、GD、fileinfo、BCMath、ctype、iconv；libcurl 7.59.0 及以上。
-- Nginx 或 Apache，正式站点使用 HTTPS。无需 Redis、消息队列或 Workerman。
+- Nginx 或 Apache，支持 HTTP 或 HTTPS 站点。无需 Redis、消息队列或 Workerman。
 
 ## 安装步骤
 
 1. 解压安装包到站点目录。包内已含生产依赖，无需在服务器执行 Composer。
-2. 将网站运行目录设置为 `public/`，配置 HTTPS 和伪静态。Nginx 站点配置示例：
+2. 将网站运行目录设置为 `public/`，配置访问地址和伪静态。Nginx 站点配置示例：
 
    ```nginx
    location / {
@@ -46,7 +46,7 @@ MPAY 是基于 ThinkPHP 与 Layui 的收款管理程序，提供多应用 PID/KE
 
 首次安装自动创建默认应用、默认轮询组及绑定。后续新增应用、通道也会自动接入默认路由。付款测试应由真实到账验证，二维码生成或浏览器跳转不代表收款成功。
 
-HTTP/HTTPS 由框架按请求自动识别，Cookie 自动适配，不需要填写 `COOKIE_SECURE` 或固定站点网址。两种协议的登录会话独立，切换协议可重新登录。反向代理需正确传递原始访问协议和主机信息，并在服务器入口保证转发头可信；程序没有 FRPC 专用模式或代理 IP 名单。
+HTTP 和 HTTPS 都可以访问，不需要填写 `COOKIE_SECURE` 或固定站点网址。两种协议共用当前主机的 `mpay_session` 和文件会话，程序不按协议改写 Cookie、不比较浏览器 Origin 与服务器地址。反向代理需正确传递访问主机和协议，以便框架生成可用链接；程序没有代理专用模式。
 
 ## 文件说明
 

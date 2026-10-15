@@ -3,13 +3,15 @@ declare(strict_types=1);
 
 namespace app\http\admin\validation;
 
-use app\common\constant\ApiResponseConstant as Code;
+use app\common\constant\ApiResponseConstant;
 use app\common\constant\NotifyConstant;
 use app\common\util\Money;
+use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
-use app\http\admin\validation\PaginationValidator;
 use app\service\payment\order\ManualReceiptEvidence;
 use DateTimeImmutable;
+use InvalidArgumentException;
+use LogicException;
 use think\Validate;
 
 /** 后台订单的原生字段/场景验证；金额只接收十进制元字符串，身份和操作权限不从正文获取。 */
@@ -22,7 +24,7 @@ final class PayOrderValidator extends Validate
         'pid' => ['string', 'regex' => '/^[1-9][0-9]{0,31}$/D'],
         'poll_group_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'channel_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
-        'pay_type' => ['string', 'regex' => \app\common\validation\PaymentTypeCode::PATTERN],
+        'pay_type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
         'status' => ['string', 'in' => ['0', '1', '2', '3', '4', '5']],
         'notification_status' => ['string', 'regex' => '/^(?:none|acknowledged|[0-9])$/D', 'in' => ['none', 'acknowledged', NotifyConstant::STATUS_PENDING,
             NotifyConstant::STATUS_SENDING, NotifyConstant::STATUS_SUCCESS, NotifyConstant::STATUS_EXHAUSTED, NotifyConstant::STATUS_HELD]],
@@ -32,7 +34,7 @@ final class PayOrderValidator extends Validate
         'kind' => ['require', 'string', 'in' => ['operations', 'callbacks', 'notifications']],
         'reason' => ['require', 'string', 'max' => 512, 'nonBlank'],
         'received_amount' => ['require', 'string', 'regex' => '/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/D'],
-        'paid_at' => ['require', 'string', 'regex' => '/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D'],
+        'paid_at' => ['require', 'string', 'regex' => '/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D', 'dateFormat' => 'Y-m-d H:i:s'],
         'reference' => ['require', 'string', 'max' => 1024, 'nonBlank'],
         'platform_trade_no' => ['string', 'max' => 128],
         'current_password' => ['require', 'string', 'regex' => '/^[^\x00]{1,72}$/D'],
@@ -99,7 +101,7 @@ final class PayOrderValidator extends Validate
      */
     public function action(string $action, array $input): array
     {
-        if (!in_array($action, ['confirm', 'close', 'retry'], true)) { throw new \LogicException('未知订单操作场景'); }
+        if (!in_array($action, ['confirm', 'close', 'retry'], true)) { throw new LogicException('未知订单操作场景'); }
         $this->known($input, $this->scene[$action]);
         foreach (['platform_trade_no'] as $optional) {
             if (($input[$optional] ?? null) === '') { unset($input[$optional]); }
@@ -116,21 +118,11 @@ final class PayOrderValidator extends Validate
     public function evidence(array $input): ManualReceiptEvidence
     {
         try {
-            return new ManualReceiptEvidence(Money::parse($input['received_amount']), $this->date($input['paid_at'], 'Y-m-d H:i:s'),
+            return new ManualReceiptEvidence(Money::parse($input['received_amount']), new DateTimeImmutable($input['paid_at']),
                 $input['platform_trade_no'] ?? null, $input['reference']);
-        } catch (\InvalidArgumentException) {
-            throw new BusinessException('收款证据的金额、时间或引用格式无效', Code::VALIDATION_FAILED);
+        } catch (InvalidArgumentException) {
+            throw new BusinessException('收款证据的金额、时间或引用格式无效', ApiResponseConstant::VALIDATION_FAILED);
         }
-    }
-
-    /** 原生日历解析后再逐字回比，拒绝 2 月 31 日等被自动纠正的输入；不接受浏览器时区替换。 */
-    private function date(string $value, string $format): DateTimeImmutable
-    {
-        $date = DateTimeImmutable::createFromFormat('!' . $format, $value);
-        if ($date === false || $date->format($format) !== $value) {
-            throw new BusinessException('日期或时间无效，请按上海时区填写', Code::VALIDATION_FAILED);
-        }
-        return $date;
     }
 
     /** @param array<string,mixed> $input */
@@ -143,7 +135,7 @@ final class PayOrderValidator extends Validate
             // 不使用含动态规则值的默认文案，更不把密码或原始证据拼到响应中。
             $errors = [];
             foreach (array_keys($validator->getError(true)) as $field) { $errors[$field] = ['字段格式或范围无效']; }
-            throw new BusinessException('请检查筛选或操作字段', Code::VALIDATION_FAILED, $errors);
+            throw new BusinessException('请检查筛选或操作字段', ApiResponseConstant::VALIDATION_FAILED, $errors);
         }
     }
 
@@ -153,7 +145,7 @@ final class PayOrderValidator extends Validate
      */
     private function known(array $input, array $allowed): void
     {
-        if (array_diff(array_keys($input), $allowed) !== []) { throw new BusinessException('包含未允许的字段', Code::VALIDATION_FAILED); }
+        if (array_diff(array_keys($input), $allowed) !== []) { throw new BusinessException('包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED); }
     }
 
     protected function nonBlank(mixed $value): bool

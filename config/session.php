@@ -5,7 +5,7 @@ declare(strict_types=1);
 // | 会话设置：仅供 HTTP 身份及 CSRF 使用，不保存订单、通知或流水事实。
 // +----------------------------------------------------------------------
 return [
-    // HTTP 会话 Cookie 名；全局请求入口按 HTTPS 使用独立的 __Host-mpay_session 和文件路径。
+    // HTTP 和 HTTPS 使用同一 Cookie 名及文件会话，不按访问协议拆分登录状态。
     'name' => 'mpay_session',
     // 不允许通过 URL/表单参数指定 Session ID，统一使用框架 Cookie。
     'var_session_id' => '',

@@ -10,6 +10,7 @@ use app\common\constant\TradeConstant;
 use app\common\interface\ChannelNotifyInterface;
 use app\common\interface\ReceiptCollectorInterface;
 use app\common\util\Clock;
+use app\common\util\SafeLogger;
 use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use app\exception\ReceiptCollectionException;
@@ -50,6 +51,7 @@ final class PayOrderCallbackService extends BaseService
         private readonly ReceiptFlowRepository $flows,
         private readonly ReceiptRecordValidator $records,
         private readonly PaymentPluginNotifyResultValidator $results,
+        private readonly SafeLogger $logger,
     ) {
     }
 
@@ -57,10 +59,10 @@ final class PayOrderCallbackService extends BaseService
      * 通道消息入口只接收原始报文和路由选择器；账号、配置和范围全部从服务器读取。
      * 插件一次完成验签、解析和定位，服务核对归属后提交匹配；协议 ACK 本身不代表订单成功。
      *
-     * @return array{status:int,content_type:string,body:string} 由来源 HTTP 适配器原样转成协议响应。
-     * @throws BusinessException 通道未知、来源不可用、验签或消息解析失败。
+     * @return string|Response 插件协议应答原样交给控制器；不拆解或重新构造响应。
+     * @throws BusinessException 未知通道或插件装配前的入口错误；插件装配后的业务拒绝由 notifyFail 应答。
      */
-    public function receiveChannel(string $channelId, Request $request, string $requestId): array
+    public function receiveChannel(string $channelId, Request $request, string $requestId): string|Response
     {
         if (!preg_match('/^[1-9][0-9]{0,19}$/D', $channelId)
             || !preg_match('/^[a-f0-9]{32}$/D', $requestId) || strlen($request->getInput()) > 65536) {
@@ -68,7 +70,8 @@ final class PayOrderCallbackService extends BaseService
         }
         $channel = $this->channels->find($channelId) ?? throw new BusinessException('来源通道不存在', ApiResponseConstant::NOT_FOUND);
         $pluginCode = $channel['plugin_code'];
-        $digest = hash('sha256', $request->method(true) . "\n" . $request->server('QUERY_STRING', '') . "\n" . $request->getInput());
+        // 审计只摘要通知正文；服务器重写参数不属于设备发送的通知内容。
+        $digest = hash('sha256', $request->getInput());
         $flowIds = [];
         try {
             $context = $this->channelContext($channelId, $channel['api_config_id']);
@@ -81,32 +84,18 @@ final class PayOrderCallbackService extends BaseService
             $accepted = $this->acceptPluginResult($result, $context, $requestId);
             if (!$accepted['matched']) { throw new BusinessException('通知未匹配到符合收款条件的订单', ApiResponseConstant::CONFLICT); }
             $flowIds[] = $accepted['flow_id'];
-            $ack = $this->acknowledgement($plugin->notifySuccess(), true);
+            $ack = $plugin->notifySuccess();
         } catch (Throwable $error) {
             $this->recordChannel($channelId, $requestId, $pluginCode, $error instanceof BusinessException ? Result::CHANNEL_REJECTED : Result::CHANNEL_FAULT, $digest, $flowIds);
             if ($error instanceof BusinessException && isset($plugin) && $plugin instanceof ChannelNotifyInterface) {
+                // 技术日志保留关联诊断；仅将 BusinessException 约定的公开说明交给插件组织失败应答。
+                $this->logger->exception($error);
                 // 业务拒绝按原插件协议回应；未知通道和程序故障仍交全局处理，不能伪装已接收。
-                return $this->acknowledgement($plugin->notifyFail(), false, ApiResponseConstant::httpStatus($error->getCode()));
+                return $plugin->notifyFail($error->getMessage());
             }
             throw $error;
         }
         $this->recordChannel($channelId, $requestId, $pluginCode, Result::CHANNEL_ACCEPTED, $digest, $flowIds);
-        return $ack;
-    }
-
-    /** 插件可提供平台要求的 Response；字符串失败应答保留原业务 HTTP 状态。 */
-    private function acknowledgement(string|Response $reply, bool $success, int $failureStatus = 400): array
-    {
-        $ack = $reply instanceof Response
-            ? ['status' => $reply->getCode(), 'content_type' => $reply->getHeader('Content-Type') ?: 'text/plain; charset=utf-8', 'body' => $reply->getContent()]
-            : ['status' => $success ? 200 : $failureStatus, 'content_type' => 'text/plain; charset=utf-8', 'body' => $reply];
-        if ($ack['status'] < 200 || $ack['status'] > ($success ? 299 : 599)
-            || ($ack['status'] >= 300 && $ack['status'] <= 399)
-            || strlen($ack['body']) > 4096 || !mb_check_encoding($ack['body'], 'UTF-8')
-            || !in_array($ack['content_type'], ['text/plain; charset=utf-8', 'text/html; charset=utf-8', 'application/json; charset=utf-8', 'application/xml; charset=utf-8'], true)
-            || (in_array($ack['status'], [204, 205], true) && $ack['body'] !== '')) {
-            throw new UnexpectedValueException('插件 ACK 无效');
-        }
         return $ack;
     }
 

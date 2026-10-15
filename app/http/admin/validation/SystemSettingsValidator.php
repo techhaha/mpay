@@ -5,6 +5,7 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
+use stdClass;
 use think\Validate;
 
 /** 系统设置 HTTP 外层字段；组内规则由共享 SystemConfigValidator 处理，版本/操作者不会从任意表单字段推导。 */
@@ -39,5 +40,5 @@ final class SystemSettingsValidator extends Validate
     }
 
     protected function jsonInteger(mixed $value): bool { return is_int($value); }
-    protected function jsonObject(mixed $value): bool { return $value instanceof \stdClass; }
+    protected function jsonObject(mixed $value): bool { return $value instanceof stdClass; }
 }

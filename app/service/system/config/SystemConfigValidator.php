@@ -24,7 +24,7 @@ final class SystemConfigValidator extends Validate
 
     /**
      * @param array<string,mixed> $values 完整组对象；缺失/null/字符串数字不能隐式补默认。
-     * @return array<string,int|list<string>> 已核验原始类型的公开配置；域名只规范为小写，列表顺序保持。
+     * @return array<string,int> 已核验原始类型的公开配置，不隐式转换数值。
      */
     public function values(string $group, array $values): array
     {

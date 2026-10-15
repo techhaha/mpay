@@ -19,7 +19,11 @@
 
 ## 需求和现状
 
-- 2026-10-14 HTTP/HTTPS 调整：删除 SiteUrl，使用原生 Request::domain()/isSsl() 与框架 url()。请求入口只做自动 Cookie/会话设置，不做全局域名格式校验，不添加代理 IP 名单、不自写转发头识别；COOKIE_SECURE 退役，HTTP/HTTPS 会话隔离。用户随后明确本轮修改验证后停止，不打包。具体证据见实现计划。
+- 2026-10-15 监听应答：支付宝手机、微信手机/PC 插件直接返回字符串 200 或“400：错误原因”，框架默认 HTTP 200。ChannelNotifyInterface::notifyFail(string $message) 接收可公开的业务提示，插件负责格式/状态；服务不传任意异常原文。服务和控制器原样透传 string|Response，不增加 ACK 数组转换器、响应校验或 Response 重建。故障及插件调用前入口错误仍由统一异常处理。易支付商户应答仍为 success，不与设备通知混用；不运行独立测试。
+
+- 2026-10-15 验证器收敛：普通字段、枚举、日期及场景使用 think\Validate；严格 JSON 类型、字节长度和可空字段通过原生自定义规则补充，不自建执行器。手机通知由插件传入 Request::post()，共用 app/common/validation/SmsForwarderValidator，删除 sdk/smsforwarder 的验证器与消息 DTO；不检查 QUERY_STRING、访问协议或 Content-Type 精确字符串，不合并 query。保留时间窗/HMAC/来源及插件模板校验。易支付原始 query 从 Request::url() 解析，避开伪静态注入参数。用户要求不再运行独立测试；本轮仅静态审查和语法检查，实际设备问题以现场日志为准。
+
+- 2026-10-14 HTTP/HTTPS 简化：手机通知不以访问协议作为准入条件；删除 secureTransport/transport_required、动态 Cookie 设置、协议专属会话及 Origin 与服务器地址的精确比较。使用固定 mpay_session、框架文件会话及 cookie.secure=false；保留跨站标识、CSRF、认证、载荷限制和通知验签。原生 Request::domain()/url() 负责链接，平台 SDK TLS 与商户目标校验保持；不新增代理/协议适配层、环境开关或数据库变更。修改验证后停止，不打包部署。具体证据见实现计划。
 
 - 2026-10-14 纯净新装交付：唯一基线 `202610140100_install.php` 直接建最终 25 个业务表，加 1 张安装进度表；13 个历史迁移及执行器对应调整分支退役。保留摘要、连续进度、非空保护与中断续装，不接管旧开发库，不修改其数据或账本。客户包按清单构建、独立安装生产 vendor，不含 docs/deploy/tools/tests、真实环境、缓存或上传数据；包内 README 来源为 docs/wiki/examples/install-README.md。本条覆盖历史新装迁移链描述，验收和包摘要见实现计划。
 
@@ -27,7 +31,7 @@
 
 - 2026-10-13 最新匹配规则：按 channel_id 分配和匹配；金额模式通道内金额唯一，备注模式通道内备注唯一且金额一致。插件在 Biz→Pay→Channel 锁内读取有效订单快照并分配，服务只校验标准交易事实和统一确认。预约表及专用释放由 202610130100_channel_matching 退役；Scope 仍保留归属/确认锁，不做匹配算法。相同真实账号只合并登录/查单，多通道候选不明确时插件跳过并记日志。保留 ext_json 快照与现有金额语义，不新建 payload 表；JSON 查询以普通索引限定范围。四插件保留金额/备注，支付宝账单补 alipay_transfer；展示由插件返回公开参数、生命周期保存快照、前端注册组件；公共后端不保留专用展示类或 CashierPageInterface。此条覆盖下文历史配置范围占用描述，实际数据库应用/验收范围见实现计划。
 
-- 2026-10-12 两个手机监听插件统一通知配置：通知密钥 6～32 个字符，通知时间容差 5～30 秒、默认 30；范围和帮助说明由各插件 schema 声明。SmsForwarderVerifier 的容差必须由插件明确传入，不再提供默认 300 秒。付款有效期、主动采集/预登录间隔及其他平台凭证规则分别处理，不一起缩短；刷新目录不自动改写通道密钥或历史配置。
+- 2026-10-12 两个手机监听插件统一通知配置：通知密钥 6～32 个字符，通知时间容差 5～30 秒、默认 30；范围和帮助说明由各插件 schema 声明。共用 SmsForwarderValidator 的容差必须由插件明确传入，不再提供默认 300 秒。付款有效期、主动采集/预登录间隔及其他平台凭证规则分别处理，不一起缩短；刷新目录不自动改写通道密钥或历史配置。
 
 - 2026-10-12 插件接口收敛为三个：PaymentInterface 只含元信息与支付动作；ChannelNotifyInterface 定义 HTTP notify/ACK；ReceiptCollectorInterface 定义 collect、matchReceipts、prelogin 及 isPreloginEnabled。采集插件代码元信息 prelogin 默认为 false，仅 true 才补充无订单启用通道并调度低频保活；账号、间隔和登录状态由插件解释。删除独立匹配/预登录接口，不放入 config_schema、不增加数据库字段；最新合同见公开 Wiki 插件开发与主动采集文档。
 

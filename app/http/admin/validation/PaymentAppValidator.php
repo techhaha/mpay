@@ -13,13 +13,13 @@ use think\Validate;
 final class PaymentAppValidator extends Validate
 {
     protected $rule = [
-        'id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
-        'expected_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
-        'revision' => ['integerJson', 'between' => [1, 4294967295]],
-        'name' => ['require', 'string', 'max' => 128], 'pid' => ['string', 'max' => 32],
-        'enabled' => ['booleanJson'], 'use_default_route' => ['booleanJson'], 'allowed_hosts' => ['array'],
+        'id' => ['require', 'string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
+        'expected_id' => ['require', 'string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
+        'revision' => ['require', 'integerJson', 'between' => [1, 4294967295]],
+        'name' => ['require', 'string', 'max' => 128], 'pid' => ['requireText', 'max' => 32],
+        'enabled' => ['requireBoolean'], 'use_default_route' => ['requireBoolean'], 'allowed_hosts' => ['requireArray'],
         'reason' => ['require', 'string', 'max' => 500], 'password' => ['require', 'string', 'max' => 72],
-        'key' => ['string', 'max' => 128], 'parameters' => ['objectJson'],
+        'key' => ['requireText', 'max' => 128], 'parameters' => ['requireObject'],
     ];
     protected $scene = [
         'routing' => ['id', 'revision', 'use_default_route'],
@@ -41,16 +41,6 @@ final class PaymentAppValidator extends Validate
             throw new BusinessException('应用参数缺失或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
         }
         $validator = (clone $this)->scene($scene)->failException(false);
-        // 空 PID/KEY 表示由服务生成；布尔 false 和空域名列表也是合法值。
-        $validator->append(['id' => 'require', 'expected_id' => 'require', 'revision' => 'require']);
-        foreach (['pid', 'key'] as $field) {
-            $validator->rule($field, [static fn (mixed $value): bool => is_string($value), ...$this->rule[$field]]);
-        }
-        foreach (['enabled', 'use_default_route'] as $field) {
-            $validator->rule($field, [static fn (mixed $value): bool => is_bool($value)]);
-        }
-        $validator->rule('allowed_hosts', [static fn (mixed $value): bool => is_array($value)]);
-        $validator->rule('parameters', [static fn (mixed $value): bool => $value instanceof stdClass]);
         if (!$validator->check($input) || (isset($input['reason']) && trim($input['reason']) === '')) {
             throw new BusinessException('应用参数类型或范围无效', ApiResponseConstant::VALIDATION_FAILED);
         }
@@ -69,6 +59,9 @@ final class PaymentAppValidator extends Validate
     }
 
     protected function integerJson(mixed $value): bool { return is_int($value); }
-    protected function booleanJson(mixed $value): bool { return is_bool($value); }
-    protected function objectJson(mixed $value): bool { return $value instanceof stdClass; }
+    // require 前缀使原生 Validate 检查空值类型；空 PID/KEY、false 和空列表仍是合法值。
+    protected function requireText(mixed $value): bool { return is_string($value); }
+    protected function requireBoolean(mixed $value): bool { return is_bool($value); }
+    protected function requireArray(mixed $value): bool { return is_array($value); }
+    protected function requireObject(mixed $value): bool { return $value instanceof stdClass; }
 }

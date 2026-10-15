@@ -342,7 +342,10 @@
             done(result,current,count){if(!options.url)tableLimits.set(node,this.limit);else feedback(errorTarget,'');done?.call(this,result,current,count);}
         });
     }
-    function copy(value) { navigator.clipboard.writeText(String(value)).then(() => message('已复制')).catch(() => message('复制未完成，请手动选择内容复制')); }
+    async function copy(value) {
+        const copied = await MpayClipboard.writeText(value);
+        message(copied ? '已复制' : '复制未完成，请手动选择内容复制');
+    }
     /**
      * 官方 upload 校验图片后交给业务处理。auto:false 的 choose 早于大小检查，故使用 before。
      * 返回 false 阻止组件再次发送；写请求仍由 MpayHttp 统一处理 CSRF、登录失效和超时。

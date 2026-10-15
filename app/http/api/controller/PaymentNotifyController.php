@@ -10,9 +10,8 @@ use think\Response;
 /** 设备消息只进入插件回调服务；来源密钥由插件验证，不使用后台 Session 或 JSON 成功包装。 */
 final class PaymentNotifyController extends BaseController
 {
-    public function notify(string $channelId, PayOrderCallbackService $callbacks): Response
+    public function notify(string $channelId, PayOrderCallbackService $callbacks): string|Response
     {
-        $ack = $callbacks->receiveChannel($channelId, $this->request, $this->context->id());
-        return Response::create($ack['body'], 'html', $ack['status'])->header(['Content-Type' => $ack['content_type']]);
+        return $callbacks->receiveChannel($channelId, $this->request, $this->context->id());
     }
 }

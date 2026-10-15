@@ -5,7 +5,6 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
-use app\http\admin\validation\PaginationValidator;
 use think\Validate;
 
 /** 运行页面只读参数；没有任意命令、路径或修复选项，状态枚举由查询服务核验。 */

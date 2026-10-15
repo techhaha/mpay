@@ -5,7 +5,7 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
-use app\http\admin\validation\PaginationValidator;
+use InvalidArgumentException;
 use think\Validate;
 
 /** 配置管理只读参数：显式场景、字符串 ID 和有界分页，不把请求键用作数据库字段或排序表达式。 */
@@ -31,7 +31,7 @@ final class ConfigurationQueryValidator extends Validate
      */
     public function listing(string $kind, array $input): array
     {
-        $fields = $this->scene[$kind] ?? throw new \InvalidArgumentException('未知配置列表场景');
+        $fields = $this->scene[$kind] ?? throw new InvalidArgumentException('未知配置列表场景');
         $this->known($input, [...$fields, 'page', 'limit']);
         $filters = array_filter(array_intersect_key($input, array_flip($fields)), static fn (mixed $value): bool => $value !== '');
         $validator = (clone $this)->scene($kind)->failException(false);

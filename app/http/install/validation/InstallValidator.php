@@ -6,6 +6,7 @@ namespace app\http\install\validation;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 use app\service\system\install\InitializationValidator;
+use stdClass;
 use think\Validate;
 
 /** 网页安装输入使用原生 Validate；数据库目标不可夹带 DSN 指令，管理员规则与 CLI 完全共用。 */
@@ -34,7 +35,7 @@ final class InstallValidator extends Validate
     /** @return array{database:array,administrator:array} 嵌套 JSON 必须为对象，不接受列表或额外安装开关。 */
     public function installation(array $input): array
     {
-        if (count($input) !== 2 || !(($input['database'] ?? null) instanceof \stdClass) || !(($input['administrator'] ?? null) instanceof \stdClass)) { $this->invalid(); }
+        if (count($input) !== 2 || !(($input['database'] ?? null) instanceof stdClass) || !(($input['administrator'] ?? null) instanceof stdClass)) { $this->invalid(); }
         $administrator = get_object_vars($input['administrator']);
         if (array_diff(array_keys($administrator), ['username', 'password', 'password_confirmation'])) { $this->invalid(); }
         $administrator['app_name'] = '默认应用';

@@ -59,7 +59,10 @@ final class EpayV1Controller
      */
     private function parameters(): array
     {
-        $query = UrlEncodedForm::parse((string) $this->request->server('QUERY_STRING', ''));
+        // 原始访问 URL 保留待签名参数；不把服务器伪静态补入的路由参数混进验签。
+        $rawQuery = parse_url($this->request->url(), PHP_URL_QUERY);
+        if ($rawQuery === false) { throw new BusinessException('请求地址格式无效', ApiResponseConstant::BAD_REQUEST); }
+        $query = UrlEncodedForm::parse($rawQuery ?? '');
         if ($this->request->method(true) === 'GET' || $this->request->method(true) === 'HEAD') {
             return $query;
         }

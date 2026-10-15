@@ -222,6 +222,8 @@ MPAY 对外使用 **易支付 V1**。已有兼容模块的业务网站，通常�
 
 两个命令默认持续运行，不需要添加时长参数；更新程序或环境配置后应重启任务。进程守护负责退出后重启，不再增加每分钟重复启动的计划任务。网页安装完成后无需重新执行数据库初始化。
 
+使用宝塔可直接跟随[常驻进程配置图文](docs/wiki/V1-18-部署与后台任务.md#用进程守护工具添加任务)：安装进程守护管理器，分别添加 `payment_work`、`payment_watch`，每个进程数量设为 1，再核对 RUNNING 状态和日志。
+
 ## 📚 文档导航
 
 完整手册：[Gitee Wiki](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub Wiki](https://github.com/techhaha/mpay/wiki) · [仓库内文档](docs/wiki/Home.md)。

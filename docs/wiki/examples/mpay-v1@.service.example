@@ -1,13 +1,14 @@
 # 原生 systemd 方案，与 Supervisor 二选一。仅启用 mpay-v1@work、mpay-v1@watch 两个实例。
-# 替换本实例的用户、PHP 8.2 和项目绝对路径；此文件没有安装或启动任何服务。
+# 运行用户默认 www，与本站 PHP-FPM 保持一致；使用专用站点用户时同步替换 User/Group。
+# 替换 PHP 和项目绝对路径，确保运行用户可读取程序/.env、写入 runtime；此文件没有安装或启动任何服务。
 [Unit]
 Description=MPAY V1 %i worker
 After=network.target
 
 [Service]
 Type=simple
-User=mpay
-Group=mpay
+User=www
+Group=www
 WorkingDirectory=/srv/mpay-v1/app
 ExecStart=/www/server/php/82/bin/php /srv/mpay-v1/app/think payment:%i
 Restart=always

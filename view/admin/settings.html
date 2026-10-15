@@ -1,16 +1,40 @@
 {extend name="layouts/admin" /}
+{block name="page_styles"}<link rel="stylesheet" href="/assets/css/settings.css?v=20261015cards">{/block}
 {block name="content"}
-<section class="admin-intro"><h1>系统设置</h1><div class="admin-actions"><button id="settings-refresh" type="button" class="layui-btn layui-btn-primary">重新读取</button></div></section><div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
-<div class="admin-settings-grid"><section class="layui-card"><div class="layui-card-header">订单设置</div><div class="layui-card-body">
-<form data-settings-group="payment_defaults" class="layui-form admin-setting-form" novalidate><fieldset disabled>
-<div class="admin-form-grid">
-<div class="admin-field"><label>新业务单有效期 <button type="button" class="admin-help-button" data-help="只影响之后创建的业务单，不修改已有订单。" aria-label="业务单有效期说明">ⓘ</button></label><div class="admin-unit"><input name="order_valid_seconds" type="number" min="1" max="86400" step="1" class="layui-input" required><span>秒</span></div></div>
-</div><div class="admin-save-row"><span class="admin-muted" data-version></span><button type="submit" class="layui-btn">保存默认值</button></div></fieldset></form>
-</div></section>
-<section class="layui-card"><div class="layui-card-header">技术日志</div><div class="layui-card-body">
-<form data-settings-group="maintenance" class="layui-form admin-setting-form" novalidate><fieldset disabled><div class="admin-form-grid">
-<div class="admin-field"><label>日志保留天数 <button type="button" class="admin-help-button" data-help="维护任务定期清理过期技术日志。订单、到账、商户通知和操作日志不受影响。" aria-label="日志保留说明">ⓘ</button></label><div class="admin-unit"><input name="technical_log_days" type="number" min="7" max="365" step="1" class="layui-input" required><span>天</span></div></div>
-</div><div class="admin-save-row"><span class="admin-muted" data-version></span><button type="submit" class="layui-btn">保存保留期</button></div></fieldset></form>
-</div></section></div><details class="layui-card admin-details"><summary class="layui-card-header">站点信息</summary><div class="layui-card-body"><span id="settings-origin"></span><button class="admin-help-button" type="button" data-help="支持多个访问域名。迁移后按新地址访问，无需保存固定站点网址。" aria-label="访问域名说明">ⓘ</button></div></details>
+<section class="admin-intro"><h1>系统设置</h1><div class="admin-actions"><button id="settings-refresh" type="button" class="layui-btn layui-btn-primary">重新读取</button></div></section>
+<div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
+<div class="settings-cards">
+    <section class="layui-card" aria-labelledby="settings-pages-title">
+        <div class="layui-card-header" id="settings-pages-title">页面显示</div>
+        <div class="layui-card-body">
+            <form data-settings-group="page_display" class="layui-form settings-form" lay-filter="settings-page-display" novalidate><fieldset disabled>
+                <div class="settings-switch-row"><div class="settings-switch-heading"><label id="home-enabled-label" for="home-enabled">网站首页</label><input id="home-enabled" type="checkbox" name="home_enabled" lay-skin="switch" lay-filter="page-display" title="开启|关闭" aria-labelledby="home-enabled-label"></div><p>关闭后，网站根地址进入后台。</p></div>
+                <div class="settings-switch-row"><div class="settings-switch-heading"><label id="about-enabled-label" for="about-enabled">关于 MPAY</label><input id="about-enabled" type="checkbox" name="about_enabled" lay-skin="switch" lay-filter="page-display" title="开启|关闭" aria-labelledby="about-enabled-label"></div><p>关闭后，隐藏菜单并停止关于页访问。</p></div>
+                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存页面设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
+            </fieldset></form>
+        </div>
+    </section>
+    <section class="layui-card" aria-labelledby="settings-orders-title">
+        <div class="layui-card-header" id="settings-orders-title">订单设置</div>
+        <div class="layui-card-body">
+            <form data-settings-group="payment_defaults" class="layui-form settings-form" novalidate><fieldset disabled>
+                <div class="admin-field"><label for="order-valid-seconds">新业务单有效期</label><div class="admin-unit"><input id="order-valid-seconds" name="order_valid_seconds" type="number" min="1" max="86400" step="1" class="layui-input" required aria-describedby="order-valid-help"><span>秒</span></div></div>
+                <p class="settings-hint" id="order-valid-help">默认 300 秒，可设置 1～86400 秒。<br>仅影响新订单，已有订单保持原有效期。</p>
+                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存订单设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
+            </fieldset></form>
+        </div>
+    </section>
+    <section class="layui-card" aria-labelledby="settings-logs-title">
+        <div class="layui-card-header" id="settings-logs-title">技术日志</div>
+        <div class="layui-card-body">
+            <form data-settings-group="maintenance" class="layui-form settings-form" novalidate><fieldset disabled>
+                <div class="admin-field"><label for="technical-log-days">日志保留天数</label><div class="admin-unit"><input id="technical-log-days" name="technical_log_days" type="number" min="7" max="365" step="1" class="layui-input" required aria-describedby="technical-log-help"><span>天</span></div></div>
+                <p class="settings-hint" id="technical-log-help">默认 30 天，可设置 7～365 天。<br>仅清理技术日志，交易与操作记录不受影响。</p>
+                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存日志设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
+            </fieldset></form>
+        </div>
+    </section>
+</div>
+<details class="layui-card admin-details"><summary class="layui-card-header">站点信息</summary><div class="layui-card-body"><span id="settings-origin"></span><p class="admin-hint">支持多个访问域名，无需保存固定站点网址。</p></div></details>
 {/block}
 {block name="scripts"}<script src="/assets/js/admin-settings.js?v=20261015boundaries"></script>{/block}

@@ -3,10 +3,11 @@ declare(strict_types=1);
 
 use app\http\page\AdminController;
 use app\http\page\CashierController;
+use app\http\page\HomeController;
 use think\facade\Route;
 
 // 只有输出会话/CSRF 的页面初始化 Session；支付结果回跳仍由业务服务核验，页面不确认收款。
-Route::rule('/', [AdminController::class, 'index'], 'GET|HEAD')->name('home');
+Route::rule('/', [HomeController::class, 'index'], 'GET|HEAD')->name('home');
 Route::rule('admin', [AdminController::class, 'index'], 'GET|HEAD')->name('admin.page.home');
 Route::group('admin', function (): void {
     Route::rule('login', [AdminController::class, 'login'], 'GET|HEAD')->name('admin.page.login');
@@ -20,6 +21,7 @@ Route::group('admin', function (): void {
     Route::rule('configurations', [AdminController::class, 'configurations'], 'GET|HEAD')->name('admin.page.configurations')->middleware('admin.auth');
     Route::rule('plugins', [AdminController::class, 'plugins'], 'GET|HEAD')->name('admin.page.plugins')->middleware('admin.auth');
     Route::rule('settings', [AdminController::class, 'settings'], 'GET|HEAD')->name('admin.page.settings')->middleware('admin.auth');
+    Route::rule('about', [AdminController::class, 'about'], 'GET|HEAD')->name('admin.page.about')->middleware('admin.auth');
     Route::rule('applications', [AdminController::class, 'applications'], 'GET|HEAD')->name('admin.page.applications')->middleware('admin.auth');
     Route::rule('maintenance', [AdminController::class, 'runtime'], 'GET|HEAD')->name('admin.page.maintenance')->middleware('admin.auth');
     Route::rule('poll-groups', [AdminController::class, 'pollGroups'], 'GET|HEAD')->name('admin.page.poll-groups')->middleware('admin.auth');

@@ -93,6 +93,8 @@ final class SystemConfigService extends BaseService
         return match ($group) {
             'payment_defaults' => ['order_valid_seconds' => $this->config->get('mpay.order_valid_seconds', 300)],
             'maintenance' => ['technical_log_days' => $this->config->get('mpay.technical_log_days', 30)],
+            // 未保存的新装站点直接采用开启默认值，读取页面不补写配置记录。
+            'page_display' => ['home_enabled' => 1, 'about_enabled' => 1],
             default => throw new \LogicException('未知系统默认组'),
         };
     }

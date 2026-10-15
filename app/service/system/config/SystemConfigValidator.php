@@ -13,10 +13,13 @@ final class SystemConfigValidator extends Validate
     protected $rule = [
         'order_valid_seconds' => ['jsonInteger', 'between' => [1, 86400]],
         'technical_log_days' => ['jsonInteger', 'between' => [7, 365]],
+        'home_enabled' => ['jsonInteger', 'in' => [0, 1]],
+        'about_enabled' => ['jsonInteger', 'in' => [0, 1]],
     ];
     protected $scene = [
         'payment_defaults' => ['order_valid_seconds'],
         'maintenance' => ['technical_log_days'],
+        'page_display' => ['home_enabled', 'about_enabled'],
     ];
 
     /** @return list<string> 只由本程序固定的组名组成，调用者不能按请求拼接数据库键。 */

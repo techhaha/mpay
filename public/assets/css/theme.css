@@ -74,7 +74,8 @@
 }
 .layui-input,.layui-textarea,.layui-select {border-color:var(--mpay-input-border);color:var(--mpay-text)}
 .layui-input::placeholder,.layui-textarea::placeholder {color:var(--mpay-placeholder)}
-.layui-input:focus,.layui-textarea:focus {border-color:var(--mpay-primary)!important;box-shadow:0 0 0 2px var(--mpay-focus-ring)}
+/* 输入框以边框和浅色光晕标识焦点，避免与通用 focus-visible 外轮廓叠成双框；按钮与链接保留轮廓。 */
+.layui-input:focus,.layui-textarea:focus {outline:none;outline-offset:0;border-color:var(--mpay-primary)!important;box-shadow:0 0 0 2px var(--mpay-focus-ring)}
 .layui-form-radioed>i,.layui-form-radio:hover>i {color:var(--mpay-primary)}
 .layui-form-checked[lay-skin=primary]>i,.layui-form-onswitch {border-color:var(--mpay-primary)!important;background:var(--mpay-primary);color:var(--mpay-on-primary)}
 .layui-form-select dl dd.layui-this,.layui-select-panel-wrap dd.layui-this {background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}

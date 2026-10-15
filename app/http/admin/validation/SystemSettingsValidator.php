@@ -12,7 +12,7 @@ use think\Validate;
 final class SystemSettingsValidator extends Validate
 {
     protected $rule = [
-        'group' => ['require', 'string', 'in' => ['payment_defaults', 'maintenance']],
+        'group' => ['require', 'string', 'in' => ['payment_defaults', 'maintenance', 'page_display']],
         'expected_version' => ['jsonInteger', 'between' => [0, 4294967294]],
         'values' => ['jsonObject'],
     ];

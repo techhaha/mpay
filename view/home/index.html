@@ -1,0 +1,90 @@
+{extend name="layouts/base" /}
+{block name="body_class"}home-page{/block}
+{block name="styles"}<link rel="stylesheet" href="/assets/css/home.css?v=20261015refresh">{/block}
+{block name="base_scripts"}{/block}
+{block name="content"}
+<header class="home-header">
+    <div class="home-container home-header-inner">
+        <a href="/" aria-label="MPAY 首页"><img class="mpay-logo" src="/assets/brand/mpay-logo.svg" width="145" height="36" alt="MPAY 码支付"></a>
+        <nav aria-label="首页导航">
+            <a class="home-nav-text" href="#features">功能介绍</a>
+            <a class="home-nav-text" href="{$links.docs|htmlspecialchars}" target="_blank" rel="noopener noreferrer">使用文档</a>
+            <a href="/admin" class="layui-btn layui-btn-sm">管理后台</a>
+        </nav>
+    </div>
+</header>
+<section class="home-hero home-container" aria-labelledby="home-title">
+    <span class="home-kicker">MPAY · {$project_name|htmlspecialchars}</span>
+    <h1 id="home-title">让个人收款<span>更加轻松便捷</span></h1>
+    <p>统一收款接入，集中管理订单与通知。</p>
+    <div class="home-actions">
+        <a class="layui-btn" href="/admin">进入管理后台 <i class="layui-icon layui-icon-right" aria-hidden="true"></i></a>
+        <a class="layui-btn layui-btn-primary" href="{$links.integration|htmlspecialchars}" target="_blank" rel="noopener noreferrer">查看接入文档 <i class="layui-icon layui-icon-right" aria-hidden="true"></i></a>
+    </div>
+    <div class="home-payment-brands" aria-label="支付方式">
+        <span><img src="/assets/brand/wechat-pay-icon.svg" width="28" height="28" alt="">微信支付</span>
+        <span><img src="/assets/brand/alipay-icon.svg" width="28" height="28" alt="">支付宝</span>
+    </div>
+</section>
+<section class="home-features-section" id="features" aria-labelledby="home-features-title">
+    <div class="home-container home-features-layout">
+        <div class="home-feature-copy">
+            <div class="home-section-heading">
+                <h2 id="home-features-title">收款管理，简单有序</h2>
+                <p>从收款通道到订单通知，在一个后台完成管理。</p>
+            </div>
+            <div class="home-features">
+                <article class="home-feature">
+                    <i class="layui-icon layui-icon-component" aria-hidden="true"></i>
+                    <div><h3>多种收款接入</h3><p>支持微信、支付宝监听，以及支付宝账单与收钱吧码牌。</p><span>插件配置 · 通道路由</span></div>
+                </article>
+                <article class="home-feature">
+                    <i class="layui-icon layui-icon-link" aria-hidden="true"></i>
+                    <div><h3>易支付 V1 接入</h3><p>每个业务应用拥有独立 PID 与 KEY，按支付方式配置收款通道。</p><span>独立应用 · 统一接口</span></div>
+                </article>
+                <article class="home-feature">
+                    <i class="layui-icon layui-icon-form" aria-hidden="true"></i>
+                    <div><h3>集中管理交易</h3><p>查询订单、核对到账流水，查看商户通知与操作记录。</p><span>订单查询 · 通知记录</span></div>
+                </article>
+            </div>
+        </div>
+        <!-- 只读产品示例不装配收银台脚本；二维码仅编码说明文字，不含订单或付款地址。 -->
+        <figure class="home-preview" aria-labelledby="home-preview-caption">
+            <figcaption id="home-preview-caption">收银台 <span>界面示例</span></figcaption>
+            <div class="home-preview-card">
+                <div class="home-preview-header"><img class="mpay-logo" src="/assets/brand/mpay-logo.svg" width="104" height="26" alt="MPAY"><span>等待付款</span></div>
+                <p class="home-preview-subject">商品订单示例</p>
+                <div class="home-preview-amount"><span>应付金额</span><strong><small>¥</small> 12.80</strong></div>
+                <div class="home-preview-method"><img src="/assets/brand/wechat-pay-icon.svg" width="21" height="21" alt="">微信支付</div>
+                <div class="home-preview-qr"><img src="/assets/home/cashier-preview-qr.svg" width="148" height="148" alt="展示二维码，仅包含示例说明文字"></div>
+                <p class="home-preview-note">界面展示，请勿付款</p>
+                <div class="home-preview-info"><span>订单信息</span><span>付款后等待系统确认</span></div>
+            </div>
+            <p class="home-preview-caption">清晰的付款指引，统一的支付体验</p>
+        </figure>
+    </div>
+</section>
+<section class="home-scenarios home-container" aria-labelledby="home-scenarios-title">
+    <div class="home-section-heading"><h2 id="home-scenarios-title">连接不同的业务场景</h2><p>通过统一接口，把收款能力接入已有网站。</p></div>
+    <div class="home-scenario-grid">
+        <article class="home-scenario"><i class="layui-icon layui-icon-cart-simple" aria-hidden="true"></i><div><h3>商城网站</h3><p>连接商品订单与支付结果，统一管理收款记录。</p></div></article>
+        <article class="home-scenario"><i class="layui-icon layui-icon-read" aria-hidden="true"></i><div><h3>数字商品</h3><p>通过支付通知对接业务系统，完成后续处理。</p></div></article>
+        <article class="home-scenario"><i class="layui-icon layui-icon-website" aria-hidden="true"></i><div><h3>自有业务</h3><p>按易支付 V1 协议接入，保留现有业务流程。</p></div></article>
+    </div>
+</section>
+<section class="home-start home-container" aria-labelledby="home-start-title">
+    <div class="home-start-heading"><h2 id="home-start-title">三步，连接你的业务</h2><a href="{$links.integration|htmlspecialchars}" target="_blank" rel="noopener noreferrer">查看接入指南 <i class="layui-icon layui-icon-right" aria-hidden="true"></i></a></div>
+    <ol class="home-start-steps">
+        <li><span class="home-step-number">01</span><div><h3>配置收款通道</h3><p>选择收款插件，填写收款参数。</p></div></li>
+        <li><span class="home-step-number">02</span><div><h3>获取应用凭证</h3><p>在应用管理中查看 PID 与 KEY。</p></div></li>
+        <li><span class="home-step-number">03</span><div><h3>接入业务网站</h3><p>按文档对接接口，核对订单与通知。</p></div></li>
+    </ol>
+</section>
+<footer class="home-footer">
+    <div class="home-container home-footer-inner">
+        <div class="home-footer-brand"><img class="mpay-logo" src="/assets/brand/mpay-logo-light.svg" width="145" height="36" alt="MPAY 码支付"><p>{$tagline|htmlspecialchars}。</p></div>
+        <nav aria-label="使用指南"><h2>使用指南</h2><a href="{$links.installation|htmlspecialchars}" target="_blank" rel="noopener noreferrer">安装说明</a><a href="{$links.integration|htmlspecialchars}" target="_blank" rel="noopener noreferrer">接入文档</a><a href="{$links.faq|htmlspecialchars}" target="_blank" rel="noopener noreferrer">常见问题</a></nav>
+        <nav aria-label="项目资源"><h2>项目资源</h2><a href="{$links.github|htmlspecialchars}" target="_blank" rel="noopener noreferrer">GitHub</a><a href="{$links.gitee|htmlspecialchars}" target="_blank" rel="noopener noreferrer">Gitee</a><a href="{$links.issues|htmlspecialchars}" target="_blank" rel="noopener noreferrer">问题反馈</a></nav>
+    </div>
+</footer>
+{/block}

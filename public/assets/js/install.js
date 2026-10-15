@@ -6,7 +6,7 @@ MpayForm.ready(function () {
     const feedback = document.getElementById('install-feedback'), resultButton = document.getElementById('install-result');
     const next = document.getElementById('install-next');
     let busy = false, ready = false, checked = false;
-    function message(text, failed = false) { feedback.textContent = text; feedback.classList.toggle('is-error', failed); }
+    function message(text, failed = false, tone = '') { feedback.textContent = text; feedback.classList.toggle('is-error', failed); feedback.dataset.tone = failed ? 'error' : tone; }
     function controls(value) {
         busy = value; root.setAttribute('aria-busy', String(value));
         root.querySelectorAll('fieldset,button').forEach(element => { element.disabled = value; });
@@ -18,7 +18,9 @@ MpayForm.ready(function () {
             const index = Number(label.dataset.stepLabel); label.classList.toggle('is-complete', index < number);
             if (index === number) label.setAttribute('aria-current', 'step'); else label.removeAttribute('aria-current');
         });
-        root.querySelector('[data-step="' + number + '"] h2')?.focus();
+        const panel = root.querySelector('[data-step="' + number + '"]');
+        if (panel.matches('form')) layui.form.render(null, panel.getAttribute('lay-filter'));
+        panel.querySelector('h2')?.focus();
     }
     function values() {
         return {host:database.elements.host.value, port:Number(database.elements.port.value), name:database.elements.name.value,
@@ -29,7 +31,7 @@ MpayForm.ready(function () {
         resultButton.hidden = true; step(3); message(text || '安装完成，请登录管理后台。');
     }
     async function environment() {
-        if (busy) return; controls(true); message('正在检查环境…');
+        if (busy) return; controls(true); message('正在检查环境…', false, 'loading');
         try {
             const data = (await MpayHttp.request('/installapi/environment')).data;
             const rows = document.getElementById('install-checks'); rows.replaceChildren();
@@ -49,7 +51,7 @@ MpayForm.ready(function () {
     }
     async function checkConnection(advance) {
         if (busy || !MpayForm.valid(database)) return;
-        controls(true); message('正在检查数据库连接和现有数据…');
+        controls(true); message('正在检查数据库连接和现有数据…', false, 'loading');
         try {
             const data = (await MpayHttp.request('/installapi/check', {method:'POST', data:values(), timeout:60000})).data;
             if (!data.ready) { completed(data.message); return; }
@@ -67,7 +69,7 @@ MpayForm.ready(function () {
         if (!checked) { step(1); message('请先检查数据库连接。', true); return; }
         if (administrator.elements.password.value !== administrator.elements.password_confirmation.value) { message('两次管理员密码不一致。', true); return; }
         const admin = Object.fromEntries(new FormData(administrator));
-        controls(true); resultButton.hidden = true; message('正在建立数据表和初始化系统，请保持页面打开…');
+        controls(true); resultButton.hidden = true; message('正在建立数据表和初始化系统，请保持页面打开…', false, 'loading');
         try {
             const data = (await MpayHttp.request('/installapi/install', {method:'POST', data:{database:values(), administrator:admin}, timeout:150000})).data;
             completed(data.message);

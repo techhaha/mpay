@@ -7,17 +7,21 @@
     <title>{$title|htmlspecialchars}</title>
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="/assets/layui/css/layui.css">
-    <link rel="stylesheet" href="/assets/css/theme.css?v=20261010classic">
+    <link rel="stylesheet" href="/assets/css/theme.css?v=20261015focus">
     <link rel="stylesheet" href="/assets/css/app.css?v=20261010classic">
+    <link rel="stylesheet" href="/assets/css/form.css?v=20261015pages">
     {block name="styles"}{/block}
+    {block name="page_styles"}{/block}
 </head>
 <body class="{block name="body_class"}{/block}">
     {block name="chrome"}{/block}
     <main class="mpay-shell">{block name="content"}{/block}</main>
+    {block name="base_scripts"}
     <script src="/assets/layui/layui.js"></script>
     <script src="/assets/js/http.js?v=20261015boundaries"></script>
     <script src="/assets/js/form.js?v=20261009layui"></script>
     <script src="/assets/js/brand.js?v=20261009catalog"></script>
+    {/block}
     {block name="shared_scripts"}{/block}
     {block name="scripts"}{/block}
 </body>

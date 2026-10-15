@@ -1,0 +1,11 @@
+/* 安装与后台共用字段排版；输入、密码显隐及验证交互仍由 Layui form 管理。 */
+.mpay-form-grid,.admin-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px 20px}
+.mpay-field,.admin-field{min-width:0}
+.mpay-field>label,.admin-field>label,.admin-label{display:block;font-size:13px;color:var(--mpay-text);margin:0 0 8px;font-weight:400;line-height:20px}
+.mpay-field.full,.admin-field.full{grid-column:1/-1}
+.mpay-field.is-required>label:first-of-type:before,.admin-field.is-required>label:first-of-type:before{content:'*';color:var(--mpay-danger);margin-right:4px}
+.mpay-field .layui-input,.mpay-field .layui-textarea{border-color:var(--mpay-input-border);border-radius:4px;font-size:13px}
+.mpay-field .layui-textarea,.admin-field .layui-textarea{height:80px;min-height:78px}
+.mpay-field .layui-input-wrap{width:100%}
+.mpay-hint{font-size:12px;color:var(--mpay-muted);line-height:1.8;margin:7px 0 0}
+@media(max-width:640px){.mpay-form-grid{grid-template-columns:minmax(0,1fr)}}

@@ -1,0 +1,32 @@
+{extend name="layouts/admin" /}
+{block name="page_styles"}<link rel="stylesheet" href="/assets/css/about.css?v=20261015pages">{/block}
+{block name="content"}
+<section class="admin-intro"><h1>关于 MPAY</h1><span class="admin-muted">了解项目 · 联系作者</span></section>
+<section class="layui-card about-intro">
+    <div class="layui-card-body">
+        <div class="about-brand"><img class="mpay-logo" src="/assets/brand/mpay-logo.svg" width="160" height="40" alt="MPAY"><span>{$project.name|htmlspecialchars}</span></div>
+        <h2>{$project.tagline|htmlspecialchars}</h2><p>{$project.description|htmlspecialchars}</p>
+        <div class="about-capabilities"><span>易支付 V1 接入</span><span>多应用管理</span><span>插件扩展</span><span>到账与通知记录</span></div>
+    </div>
+</section>
+<div class="about-grid">
+    <section class="layui-card"><div class="layui-card-header">项目资料</div><div class="layui-card-body">
+        <div class="about-links">
+            <a href="{$project.links.docs|htmlspecialchars}" target="_blank" rel="noopener noreferrer"><i class="layui-icon layui-icon-read" aria-hidden="true"></i><span>使用文档<small>安装、配置与日常操作</small></span><span aria-hidden="true">↗</span></a>
+            <a href="{$project.links.integration|htmlspecialchars}" target="_blank" rel="noopener noreferrer"><i class="layui-icon layui-icon-link" aria-hidden="true"></i><span>业务接入<small>连接你的业务网站</small></span><span aria-hidden="true">↗</span></a>
+            <a href="{$project.links.github|htmlspecialchars}" target="_blank" rel="noopener noreferrer"><i class="layui-icon layui-icon-code-circle" aria-hidden="true"></i><span>GitHub<small>项目源码</small></span><span aria-hidden="true">↗</span></a>
+            <a href="{$project.links.gitee|htmlspecialchars}" target="_blank" rel="noopener noreferrer"><i class="layui-icon layui-icon-code-circle" aria-hidden="true"></i><span>Gitee<small>项目源码</small></span><span aria-hidden="true">↗</span></a>
+        </div>
+        <a class="about-feedback" href="{$project.links.issues|htmlspecialchars}" target="_blank" rel="noopener noreferrer">问题反馈与功能建议 <span aria-hidden="true">↗</span></a>
+    </div></section>
+    <section class="layui-card"><div class="layui-card-header">联系作者</div><div class="layui-card-body about-contact">
+        <div class="about-author"><span class="about-avatar" aria-hidden="true">胡</span><div><h2>{$project.author.name|htmlspecialchars}</h2><p>项目交流与定制咨询</p></div></div>
+        <div class="about-wechat"><div><span>微信</span><strong>{$project.author.wechat|htmlspecialchars}</strong></div><button type="button" class="layui-btn layui-btn-primary layui-btn-sm" data-copy="{$project.author.wechat|htmlspecialchars}">复制微信号</button></div>
+        <p class="about-contact-hint">咨询时可说明业务场景、希望实现的功能，以及可提供的平台接口资料，便于沟通需求。</p>
+    </div></section>
+</div>
+<section class="layui-card"><div class="layui-card-header">定制开发服务</div><div class="layui-card-body">
+    <div class="about-services">{foreach $project.services as $service}<article><i class="layui-icon layui-icon-{$service.icon|htmlspecialchars}" aria-hidden="true"></i><h3>{$service.title|htmlspecialchars}</h3><p>{$service.description|htmlspecialchars}</p></article>{/foreach}</div>
+    <div class="about-cases"><span>商城案例方向</span><div>{foreach $project.cases as $case}<span>{$case|htmlspecialchars}</span>{/foreach}</div></div>
+</div></section>
+{/block}

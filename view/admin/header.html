@@ -31,6 +31,7 @@
         <li class="layui-nav-item"><a href="/admin/maintenance" aria-label="运行维护"><i class="layui-icon layui-icon-console" aria-hidden="true"></i><span>运行维护</span></a></li>
         <li class="layui-nav-item"><a href="/admin/audit" aria-label="操作日志"><i class="layui-icon layui-icon-list" aria-hidden="true"></i><span>操作日志</span></a></li>
         <li class="layui-nav-item"><a href="/admin/settings" aria-label="系统设置"><i class="layui-icon layui-icon-set" aria-hidden="true"></i><span>系统设置</span></a></li>
+        <li class="layui-nav-item" id="admin-about-nav" {if $about_enabled !== 1}hidden{/if}><a href="/admin/about" aria-label="关于 MPAY"><i class="layui-icon layui-icon-about" aria-hidden="true"></i><span>关于 MPAY</span></a></li>
     </ul>
     <div class="admin-nav-footer"><span class="admin-version">V1</span><span class="admin-brand-caption">让个人收款更加轻松便捷</span></div>
 </aside>

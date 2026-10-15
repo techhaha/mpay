@@ -20,7 +20,7 @@ use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
 use RuntimeException;
 
-/** 通道专属插件参数及不可变版本管理；本服务保存业务关联与快照，不猜平台字段或维护登录态。 */
+/** 通道专属插件参数及版本管理；Editor 在外层事务统一鉴权，本服务保存关联与快照，不猜平台字段或维护登录态。 */
 final class PaymentPluginConfService extends BaseService
 {
     public function __construct(private readonly PaymentPluginConfRepository $configurations,
@@ -42,13 +42,11 @@ final class PaymentPluginConfService extends BaseService
         $definition = $this->plugins->definition($code);
         $settings = $this->validator->validate($definition->configSchema, $settings, true);
         $this->validateAssets($definition, $settings);
-        $this->audit->authorize($actor);
         $id = $this->configurations->create(['plugin_code' => $definition->code, 'name' => $name,
             'config_json' => json_encode((object) $settings, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)]);
         // 业务锁按配置和支付方式登记，账号归并只在插件采集时进行。
-        $keys = []; $types = $definition->payTypes; sort($types, SORT_STRING);
-        foreach ($types as $type) { $keys[] = $this->scopeService->registerInTransaction($type, $id); }
-        sort($keys, SORT_STRING);
+        $types = $definition->payTypes; sort($types, SORT_STRING);
+        foreach ($types as $type) { $this->scopeService->registerInTransaction($type, $id); }
         $this->configurations->appendRevision($this->configurations->lock($id), $definition->version);
         $this->audit->record($actor, 'configuration.create', 'payment_plugin_conf', $id, 'created',
             ['plugin_code' => $definition->code, 'plugin_version' => $definition->version, 'new_version' => 1]);
@@ -69,7 +67,6 @@ final class PaymentPluginConfService extends BaseService
         ConfigurationActionContext $actor
     ): array {
         $this->requireTransaction();
-        $this->audit->authorize($actor);
         $configuration = $this->configurations->lock($id);
         $this->assertVersion($configuration['config_version'], $expectedVersion);
         $this->channels->lockForConfiguration($id);
@@ -80,7 +77,6 @@ final class PaymentPluginConfService extends BaseService
         $this->validateAssets($definition, $settings);
         $keys = []; $types = $definition->payTypes; sort($types, SORT_STRING);
         foreach ($types as $type) { $keys[] = $this->scopeService->registerInTransaction($type, $id); }
-        sort($keys, SORT_STRING);
         $this->lockScopes($keys, $definition);
         $revision = $this->configurations->revision($id, $expectedVersion)
             ?? throw new RuntimeException('插件配置版本缺失');
@@ -104,37 +100,32 @@ final class PaymentPluginConfService extends BaseService
         return ['id' => $id, 'config_version' => $version, 'enabled' => (int) $configuration['enabled'] === 1];
     }
 
-    /** 通道启用时在同一事务里复核并启用配置，不允许只完成其中一项。 */
-    public function setEnabledInTransaction(string $id, int $expectedVersion, bool $enabled, ConfigurationActionContext $actor): void
+    /** Editor 已在事务入口鉴权；这里复核并启用参数，通道停用仍由通道服务处理。 */
+    public function enableInTransaction(string $id, int $expectedVersion, ConfigurationActionContext $actor): void
     {
         $this->requireTransaction();
-        $this->audit->authorize($actor);
         $configuration = $this->configurations->lock($id);
         $this->assertVersion($configuration['config_version'], $expectedVersion);
         $this->channels->lockForConfiguration($id);
         $definition = $this->plugins->definition($configuration['plugin_code']);
         $this->scopeService->current($configuration, true);
         $now = $this->clock->now()->format('Y-m-d H:i:s');
-        if ($enabled) {
-            $this->management->assertNew($configuration['plugin_code']);
-            $values = $configuration['config_json'];
-            $this->validator->validate($definition->configSchema, $values);
-        } else { $this->channels->disableForConfiguration($id, $now); }
-        $this->configurations->setEnabled($id, $enabled, $now);
-        $this->audit->record($actor, 'configuration.enabled', 'payment_plugin_conf', $id, $enabled ? 'enabled' : 'disabled', ['enabled' => $enabled]);
+        $this->management->assertNew($configuration['plugin_code']);
+        $this->validator->validate($definition->configSchema, $configuration['config_json']);
+        $this->configurations->setEnabled($id, true, $now);
+        $this->audit->record($actor, 'configuration.enabled', 'payment_plugin_conf', $id, 'enabled', ['enabled' => true]);
     }
 
     /** @param list<string> $keys 不执行网络核验，仅检查已登记的支付方式与插件合同。 */
-    private function lockScopes(array $keys, PluginDefinition $definition): array
+    private function lockScopes(array $keys, PluginDefinition $definition): void
     {
-        sort($keys, SORT_STRING); $records = [];
+        sort($keys, SORT_STRING);
         foreach ($keys as $key) {
-            $scope = $this->scopes->lock($key); $records[$key] = $scope;
+            $scope = $this->scopes->lock($key);
             if (!in_array($this->catalog->typeCode($scope['pay_type_id']), $definition->payTypes, true)) {
                 throw new BusinessException('插件不支持所选范围的支付方式', ApiResponseConstant::VALIDATION_FAILED);
             }
         }
-        return $records;
     }
 
     /** 图片只允许引用已登记资产；字段名称和是否存在由插件 schema 决定。 */

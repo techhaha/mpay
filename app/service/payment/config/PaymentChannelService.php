@@ -20,6 +20,7 @@ use app\service\system\audit\ConfigurationAuditService;
 /**
  * 正式通道管理：完整规则、配置授权、冻结快照与审计一起提交；新通道和修改后的通道保持停用。
  * 启用只开放新单；停用不关闭静态二维码，也不停止原账号的历史到账采集。
+ * 仅由 Editor 在已授权的外层事务内调用；这里核对配置及通道版本，不重复查询管理员。
  */
 final class PaymentChannelService extends BaseService
 {
@@ -41,7 +42,6 @@ final class PaymentChannelService extends BaseService
         PaymentChannelInput $input, ConfigurationActionContext $actor): array
     {
         $this->requireTransaction();
-        $this->audit->authorize($actor);
         $old = $id === null ? null : $this->channels->find($id);
         $this->defaults->lockTypes(array_unique([...($old['pay_types'] ?? []), $input->payType]));
 
@@ -99,7 +99,6 @@ final class PaymentChannelService extends BaseService
     {
         $this->requireTransaction();
         $observed = $this->channels->find($id) ?? throw new BusinessException('通道不存在', ApiResponseConstant::NOT_FOUND);
-        $this->audit->authorize($actor);
         $this->defaults->lockTypes($observed['pay_types']);
 
         $configuration = $this->configurations->lock($observed['api_config_id']);

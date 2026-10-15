@@ -19,6 +19,8 @@
 
 ## 需求和现状
 
+- 2026-10-15 插件链路精简：用户已明确授权配置操作统一由 PaymentChannelEditorService 在事务入口鉴权，子服务不重复鉴权；通道启停保留，插件配置内部只保留实际使用的启用操作。单订单动作由工厂统一校验/初始化，元信息按类缓存；读取配置表单不执行保存规则，允许修正不合规值。内部到账上下文明确通道及已定位支付单，删除 ReceiptScopeSet 与空候选事件；匹配、归属锁和幂等不变。采集错误只传 reason/retry_after，预登录以 error=null 表示成功，状态由服务映射。仍不运行独立测试；语法和静态复核不能描述为真实支付验收。
+
 - 2026-10-15 监听应答：支付宝手机、微信手机/PC 插件直接返回字符串 200 或“400：错误原因”，框架默认 HTTP 200。ChannelNotifyInterface::notifyFail(string $message) 接收可公开的业务提示，插件负责格式/状态；服务不传任意异常原文。服务和控制器原样透传 string|Response，不增加 ACK 数组转换器、响应校验或 Response 重建。故障及插件调用前入口错误仍由统一异常处理。易支付商户应答仍为 success，不与设备通知混用；不运行独立测试。
 
 - 2026-10-15 验证器收敛：普通字段、枚举、日期及场景使用 think\Validate；严格 JSON 类型、字节长度和可空字段通过原生自定义规则补充，不自建执行器。手机通知由插件传入 Request::post()，共用 app/common/validation/SmsForwarderValidator，删除 sdk/smsforwarder 的验证器与消息 DTO；不检查 QUERY_STRING、访问协议或 Content-Type 精确字符串，不合并 query。保留时间窗/HMAC/来源及插件模板校验。易支付原始 query 从 Request::url() 解析，避开伪静态注入参数。用户要求不再运行独立测试；本轮仅静态审查和语法检查，实际设备问题以现场日志为准。

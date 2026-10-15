@@ -64,16 +64,6 @@ final class PaymentChannelRepository extends BaseRepository
     }
 
 
-    /**
-     * 无锁读取配置锁目标，调用方进入事务后必须再次核对该引用，不能把此值当稳定快照。
-     *
-     * @throws RuntimeException 通道不存在。
-     */
-    public function configurationId(string $id): string
-    {
-        return (string) ($this->model->where('id', $id)->value('api_config_id') ?? throw new RuntimeException('通道不存在'));
-    }
-
     /** 消息入口只据此定位配置锁；进入事务后仍须重新核验真实归属。 */
     public function find(string $id): ?PaymentChannel
     {

@@ -55,6 +55,12 @@ final class PaymentCatalogService extends BaseService
     /** 列表包含未同步及代码已移除条目，避免让目录数量掩盖实际安装状态。 */
     public function overview(): array
     {
+        return ['types' => $this->types(), 'plugins' => $this->pluginRows(true)];
+    }
+
+    /** 元信息与同步状态共用映射；动态表单不查询通道数量、品牌资产及支付方式引用。 */
+    private function pluginRows(bool $withCounts): array
+    {
         $stored = []; foreach ($this->records->all() as $row) { $stored[$row['code']] = $row; }
         $installed = $this->plugins->codes(); $items = [];
         foreach (array_unique([...$installed, ...array_keys($stored)]) as $code) {
@@ -69,9 +75,10 @@ final class PaymentCatalogService extends BaseService
                     && PluginDefinition::sameSchema($definition->configSchema, $row['config_schema'])
                     && $row['description'] === $definition->description && $row['class_name'] === $definition->className && $row['name'] === $definition->name && $row['pay_types'] === $definition->payTypes)),
                 'enabled' => $row !== null && (int) $row['enabled'] === 1,
-                'revision' => $row === null ? 0 : (int) $row['revision'], 'channel_count' => $this->records->channelCount($code)];
+                'revision' => $row === null ? 0 : (int) $row['revision']]
+                + ($withCounts ? ['channel_count' => $this->records->channelCount($code)] : []);
         }
-        return ['types' => $this->types(), 'plugins' => $items];
+        return $items;
     }
 
     /** 刷新同步固定目录内插件的完整定义；全程无网络，不隐式启用新插件。 */
@@ -94,7 +101,7 @@ final class PaymentCatalogService extends BaseService
     public function definitions(): array
     {
         $items = [];
-        foreach ($this->overview()['plugins'] as $row) {
+        foreach ($this->pluginRows(false) as $row) {
             if (!$row['installed'] || !$row['synchronized']) { continue; }
             $items[] = ['code' => $row['code'], 'name' => $row['name'], 'version' => $row['version'],
                 'schema' => $row['config_schema'], 'description' => $row['description'],

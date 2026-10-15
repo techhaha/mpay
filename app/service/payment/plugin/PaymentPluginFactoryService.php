@@ -19,6 +19,9 @@ final class PaymentPluginFactoryService
     /** @var array<string,class-string<PaymentInterface>>|null 当前请求发现的安装代码；常驻进程部署更新后应重启。 */
     private ?array $installed = null;
 
+    /** @var array<class-string<PaymentInterface>,PluginDefinition> 代码定义只核验一次；不缓存带通道配置的执行实例。 */
+    private array $definitions = [];
+
     public function __construct(private readonly App $app, private readonly Config $config, private readonly PluginConfigValidator $validator) {}
 
     /** @return list<string> 只列随本程序交付的插件，不从数据库或请求加载类名。 */
@@ -37,7 +40,12 @@ final class PaymentPluginFactoryService
         return $plugin;
     }
 
-    public function definition(string $code): PluginDefinition { return $this->describe($this->make($code)); }
+    public function definition(string $code): PluginDefinition
+    {
+        $class = $this->registrations()[$code] ?? null;
+        if (is_string($class) && isset($this->definitions[$class])) { return $this->definitions[$class]; }
+        return $this->describe($this->make($code));
+    }
 
     /**
      * 只从采集插件的代码声明读取调度选项；强类型 getter 拒绝非法布尔值，不猜平台名称。
@@ -50,13 +58,15 @@ final class PaymentPluginFactoryService
 
     public function describe(PaymentInterface $plugin): PluginDefinition
     {
+        if (isset($this->definitions[$plugin::class])) { return $this->definitions[$plugin::class]; }
         // 发现/刷新时即核对采集声明，避免错误类型等到后台任务执行才暴露。
         $this->preloginEnabled($plugin);
-        return new PluginDefinition($plugin->getCode(), $plugin->getVersion(), $plugin->getName(),
+        return $this->definitions[$plugin::class] = new PluginDefinition($plugin->getCode(), $plugin->getVersion(), $plugin->getName(),
             $plugin->getEnabledPayTypes(), $plugin->getConfigSchema(), $plugin::class, $plugin->getDescription());
     }
 
     /**
+     * 执行入口在此校验一次配置并初始化独立实例。init 只装配参数，外部支付动作随后调用。
      * @param array<string,mixed> $settings
      * @param array<string,mixed> $runtime 服务生成的约定通道参数；与插件配置冲突属于程序错误。
      */

@@ -292,8 +292,7 @@ final class PayOrderLifecycleService extends BaseService
     public function confirmReceipt(ReceiptEvent $event, DateTimeImmutable $receivedAt, string $requestId): array
     {
         $ignore = static fn (string $reason): array => ['flow_id'=>null,'pay_no'=>null,'matched'=>false,'reason'=>$reason];
-        if ($event->locatedPayNo === null) { return $ignore('no_candidate'); }
-        $target = $this->payOrders->find($event->locatedPayNo) ?? throw new RuntimeException('插件所选支付单不存在');
+        $target = $this->payOrders->find($event->payNo) ?? throw new RuntimeException('插件所选支付单不存在');
         $received = $receivedAt->format('Y-m-d H:i:s');
         // 来源认证由入口和插件完成；最终确认仍必须具有合理时间及事务内的金额、归属证据。
         if ($event->paidAt === null || $event->paymentTime() > $received) { return $ignore('insufficient_receipt_evidence'); }

@@ -28,7 +28,7 @@ schema 是有序字段列表，最多 128 项；顺序决定显示顺序。字�
 | `rows` | 否 | textarea/list 的高度，整数 2～20 |
 | `visible_when` | 否 | `{field: '其他字段', value: 类型一致的值}` 或 `{field: '其他字段', in: [值1, 值2]}`；条件控制显示和必填生效范围 |
 
-保留字段：`channel_id`、`receipt_scope_key`、`pay_type_code`、`configuration_id`、`api_config_id`、`collection_configuration_ids`。这些属于服务运行上下文，不能声明为用户设置。
+保留字段：`channel_id`、`receipt_scope_key`、`pay_type_code`、`api_config_id`。这些属于服务运行上下文，不能声明为用户设置。
 
 每个 `upload` 字段还会在付款初始化时派生同名加 `_url` 的同源图片地址。例如 `proof` 保存资产 ID，`proof_url` 提供图片地址；同一 schema 不能再声明 `proof_url`，无论声明顺序如何。`receipt_qrcode_image_url` 同样是 `receipt_qrcode_image` 的派生字段，不是系统猜测的固定二维码参数。冲突在插件发现/刷新时直接报错。
 
@@ -58,6 +58,8 @@ schema 是有序字段列表，最多 128 项；顺序决定显示顺序。字�
 - 改变插件重新生成该插件字段；返回向导上一步不清空字段。新建通道只在最后一步保存数据库。
 
 schema 声明在插件发现/定义阶段由 PluginDefinition 检查；配置值由 PluginConfigValidator 组装动态规则，调用原生 Validate::rule/check。范围、长度、正则及条件必填使用框架规则；严格 JSON 类型通过原生闭包规则补充。每次校验创建独立验证器，错误保留字段标题与具体约束，不回显提交的秘密值。配置比较不属于验证器职责。
+
+打开编辑表单时按当前 schema 返回已保存的对应字段，不执行保存规则，也不以默认值替换现有值。现有值不符合更新后的规则时，管理员仍可打开表单修正；已删除字段不再展示或回传。保存、启用和单订单执行入口分别校验配置，冻结快照只保存原值。插件更新后先刷新目录，常驻进程重启后使用新的代码定义。
 
 ## 只读详情展示
 

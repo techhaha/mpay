@@ -7,7 +7,6 @@ use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\interface\ChannelNotifyInterface;
 use app\common\interface\ReceiptCollectorInterface;
-use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use app\model\payment\ReceiptScope;
 use app\repository\payment\config\PaymentCatalogRepository;
@@ -29,7 +28,7 @@ final class PaymentConfigurationQueryService extends BaseService
         private readonly PaymentPluginConfRepository $configurations, private readonly PaymentChannelRepository $channels,
         private readonly ReceiptScopeRepository $scopes,
         private readonly PaymentCatalogRepository $catalog, private readonly PaymentPluginFactoryService $plugins,
-        private readonly PluginConfigValidator $validator, private readonly PaymentCatalogService $management,
+        private readonly PaymentCatalogService $management,
         private readonly DefaultRoutingService $defaults)
     {
     }
@@ -66,7 +65,8 @@ final class PaymentConfigurationQueryService extends BaseService
      * 表单保存必须带本次读出的 config_version，并提交实际配置值；不使用秘密占位值或保留标记。
      *
      * @return array<string,mixed> settings 是插件声明内的完整配置对象；调用方不得将其用于公开接口或日志。
-     * @throws BusinessException 记录不存在、快照损坏或当前插件声明无法解释配置。
+     * 读取不校验配置值；规则变更后仍允许管理员打开表单修正，保存和执行入口负责校验。
+     * @throws BusinessException 记录不存在或插件定义未同步。
      */
     public function configuration(string $id): array
     {
@@ -82,13 +82,16 @@ final class PaymentConfigurationQueryService extends BaseService
 
             $original = $revision['config_json'];
             if (!is_array($original)) { throw new RuntimeException('配置正文无效'); }
-            $settings = $this->validator->validate($plugin['schema'], $original);
-            $keys = array_map(static fn (ReceiptScope $scope): string => $scope['receipt_scope_key'], $this->scopes->configurationScopes($id, false));
-            if ($keys === []) { throw new RuntimeException('配置范围绑定缺失'); }
+            // 已删除字段不再渲染或回传；现有字段保持原值，不用默认值掩盖配置问题。
+            $settings = array_intersect_key($original, array_flip(array_column($plugin['schema'], 'field')));
+            $records = $this->scopes->configurationScopes($id, false);
+            if ($records === []) { throw new RuntimeException('配置范围绑定缺失'); }
+            $keys = [];
             $scopes = [];
             $typeCodes = $this->catalog->typeCodes();
-            foreach ($keys as $key) {
-                $scopes[] = $this->scope($this->scopes->find($key) ?? throw new RuntimeException('配置授权范围缺失'), $typeCodes);
+            foreach ($records as $scope) {
+                $keys[] = $scope['receipt_scope_key'];
+                $scopes[] = $this->scope($scope, $typeCodes);
             }
             return ['id' => $id, 'name' => $configuration['name'], 'config_version' => $version,
                 'enabled' => (int) $configuration['enabled'] === 1, 'plugin' => $plugin, 'scope_keys' => $keys, 'scopes' => $scopes,

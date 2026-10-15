@@ -11,7 +11,7 @@ use LogicException;
 final readonly class PluginDefinition
 {
     /** 服务运行参数不属于插件设置，防止声明相同字段后被运行值悄悄覆盖。 */
-    private const RESERVED = ['channel_id', 'receipt_scope_key', 'pay_type_code', 'configuration_id', 'api_config_id', 'collection_configuration_ids'];
+    private const RESERVED = ['channel_id', 'receipt_scope_key', 'pay_type_code', 'api_config_id'];
 
     /**
      * @param list<string> $payTypes

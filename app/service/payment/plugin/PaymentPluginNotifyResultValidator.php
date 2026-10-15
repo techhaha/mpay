@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\service\payment\plugin;
 
+use app\service\payment\receipt\ReceiptRecordValidator;
 use think\Validate;
 use UnexpectedValueException;
 
@@ -16,12 +17,18 @@ final class PaymentPluginNotifyResultValidator extends Validate
         'receipt' => ['require', 'array'],
     ];
 
-    /** @return array<string,mixed> 仅成功来源事实；匹配、数据库状态及重复责任不由验证器决定。 */
+    public function __construct(private readonly ReceiptRecordValidator $records)
+    {
+        parent::__construct();
+    }
+
+    /** @return array<string,mixed> 包含已归一化流水的成功事实；匹配、数据库状态及重复责任不由验证器决定。 */
     public function validateResult(array $result): array
     {
         if (!(clone $this)->failException(false)->check($result)) {
             throw new UnexpectedValueException('插件通知结果不符合标准字段');
         }
+        $result['receipt'] = $this->records->validateRecord($result['receipt']);
         return $result;
     }
 

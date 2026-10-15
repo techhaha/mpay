@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\common\payment;
 
 use app\common\constant\ApiResponseConstant;
-use app\common\constant\ReceiptRuntimeConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ReceiptCollectorInterface;
 use app\common\sdk\shouqianba\ShouQianBaClient;
@@ -281,7 +280,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             if (isset($this->queriedAccounts[$key])) { continue; }
             $result = $this->runAccount($key, $group, [], $deadline, true);
             if ($result !== null) {
-                yield ['channel_revision_ids' => $result['channel_revision_ids'], 'verified' => $result['error'] === null, 'error' => $result['error']];
+                yield ['channel_revision_ids' => $result['channel_revision_ids'], 'error' => $result['error']];
             }
         }
     }
@@ -390,7 +389,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             $delay = $error->retryAfterSeconds ?? (in_array($error->reasonCode, ['configuration_conflict', 'protocol_error'], true)
                 ? $interval : min(300, 30 * (2 ** min(4, $state['failures'] - 1))));
             $state['retry_at'] = $this->clock->now()->getTimestamp() + $delay;
-            $batch['error'] = ['code' => ReceiptRuntimeConstant::failure($error->reasonCode), 'reason' => $error->reasonCode, 'retry_after' => $delay];
+            $batch['error'] = ['reason' => $error->reasonCode, 'retry_after' => $delay];
         } finally {
             $state['next_query_at'] = $this->clock->now()->getTimestamp() + (int) $this->config->get('receipt.query_interval_seconds', 3);
             $store->set('shouqianba.account.' . $key, $state, 0);

@@ -40,7 +40,7 @@ final readonly class ReceiptEvent
         public string $pluginCode,
         public string $pluginVersion,
         public string $configurationId,
-        public ?string $locatedPayNo = null,
+        public string $payNo,
     ) {
         Money::assertRange($amount);
         if ($amount === 0 || $configVersion < 1 || $configVersion > 4294967295
@@ -63,7 +63,7 @@ final readonly class ReceiptEvent
 
     /**
      * 固定来源引用白名单。config_revision_id 是 api_config_id 下的配置版本号（P1 config_version），
-     * 不是通道快照行 ID；主动采集没有单一通道，不能替它伪造 PaymentChannelRevision 引用。
+     * 不是通道快照行 ID；事件已定位到具体订单，来源配置版本单独保留供审计。
      *
      * @return array{plugin_code:string,plugin_version:string,api_config_id:string,config_revision_id:int}
      */

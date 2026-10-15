@@ -6,7 +6,6 @@ namespace app\service\payment\plugin;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\common\util\Money;
-use app\common\validation\PluginConfigValidator;
 use app\exception\PaymentDefinitiveException;
 use app\exception\PaymentUncertainException;
 use app\model\payment\PayOrder;
@@ -16,7 +15,6 @@ use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\receipt\ChannelNotifyContext;
 use app\service\payment\receipt\PayOrderCallbackService;
-use app\service\payment\receipt\ReceiptScopeSet;
 use DateTimeImmutable;
 use RuntimeException;
 use think\Config;
@@ -38,7 +36,6 @@ final class PayOrderChannelDispatchService
         private readonly FileAssetService $files,
         private readonly Config $config,
         private readonly Clock $clock,
-        private readonly PluginConfigValidator $validator,
         private readonly PaymentPluginPayResultValidator $results,
     ) {
     }
@@ -71,14 +68,28 @@ final class PayOrderChannelDispatchService
         if (!is_string($version)) {
             throw new RuntimeException('订单插件版本快照缺失');
         }
-        $plugin = $this->plugins->make($pay['plugin_code']);
-        $definition = $this->plugins->describe($plugin);
+        $definition = $this->plugins->definition($pay['plugin_code']);
         // 材料和配置加载失败发生在认领之前，不制造“已调用外部平台”的错误事实。
         $context = $this->context($pay);
-        $this->validator->validate($definition->configSchema, $context->configuration);
         if (!in_array($context->payType, $definition->payTypes, true)) {
             throw new RuntimeException('插件实现与原订单来源合同不一致');
         }
+        // 只注入约定运行参数；图片派生地址仅供下单展示，回调及退款不依赖图片文件。
+        $runtime = [
+            'channel_id' => $context->channel['id'],
+            'api_config_id' => $context->channel['api_config_id'],
+            'receipt_scope_key' => $context->scopeKey,
+            'pay_type_code' => $context->payType,
+        ];
+        foreach ($definition->configSchema as $field) {
+            if ($field['type'] === 'upload') {
+                $asset = $context->configuration[$field['field']] ?? '';
+                // 错误类型交给统一配置验证，避免在验证前触发资产方法的类型错误。
+                if (is_string($asset)) { $runtime[$field['field'] . '_url'] = $this->files->publicImagePath($asset === '' ? null : $asset); }
+            }
+        }
+        // init 仅装配配置；配置或素材错误在认领之前暴露，不记录为已请求平台。
+        $plugin = $this->plugins->initialize($pay['plugin_code'], $context->configuration, $runtime);
         $lease = $this->config->get('payment.execution_lease_seconds', 30);
         if (!is_int($lease)) {
             throw new RuntimeException('执行认领期限必须为整数秒');
@@ -91,21 +102,6 @@ final class PayOrderChannelDispatchService
         $token = $claim['token'];
         try {
             // 生命周期的认领事务已经提交；任何 SDK 网络请求均发生在此边界之外。
-            // 只注入接口约定的运行参数；通道名称、金额策略等内部列不能覆盖插件同名设置。
-            $runtime = [
-                'channel_id' => $context->channel['id'],
-                'api_config_id' => $context->channel['api_config_id'],
-                'receipt_scope_key' => $context->scopeKey,
-                'pay_type_code' => $context->payType,
-            ];
-            // 图片字段由 schema 决定；服务只把受控资产 ID 转成同源地址，不猜测插件的字段名称。
-            foreach ($definition->configSchema as $field) {
-                if ($field['type'] === 'upload') {
-                    $asset = $context->configuration[$field['field']] ?? '';
-                    $runtime[$field['field'] . '_url'] = $this->files->publicImagePath($asset === '' ? null : $asset);
-                }
-            }
-            $plugin->init(array_replace($context->configuration, $runtime));
             $order = ['pay_no' => $payNo, 'biz_no' => $context->bizNo, 'pay_type_code' => $context->payType,
                 'amount' => $context->payAmount, 'expire_at' => $context->expiresAt->format('Y-m-d H:i:s'), 'extra' => $claim['pay']['ext_json']];
             $result = $this->results->validateResult($plugin->pay($order));
@@ -131,7 +127,7 @@ final class PayOrderChannelDispatchService
         }
         $callback = new ChannelNotifyContext($pay['channel_id'], $context->channel['api_config_id'],
             $context->configVersion, $pay['plugin_code'], $version,
-            new ReceiptScopeSet([$context->scopeKey => ['pay_type' => $context->payType]]),
+            $context->scopeKey, $context->payType,
             $context->configuration, $finishedAt);
         $this->callbacks->acceptPluginResult($result, $callback, $requestId);
         // 返回生命周期已经提交的实际状态，不能仅依据插件字符串向客户端宣称支付成功。

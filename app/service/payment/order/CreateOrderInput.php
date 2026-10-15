@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\service\payment\order;
 
 use app\common\util\Money;
+use app\common\validation\PaymentTypeCode;
 use InvalidArgumentException;
 
 /**
@@ -51,7 +52,7 @@ final readonly class CreateOrderInput
             || ($channelId !== null && !preg_match('/^[1-9][0-9]*$/D', $channelId))
             || ($returnUrl !== null && ($returnUrl === '' || mb_strlen($returnUrl, 'UTF-8') > 2048))
             || ($clientIp !== null && filter_var($clientIp, FILTER_VALIDATE_IP) === false)
-            || !in_array($requestedPayType, [null, 'wxpay', 'alipay'], true)
+            || ($requestedPayType !== null && !PaymentTypeCode::valid($requestedPayType))
             || !in_array($device, [null, 'pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump'], true)
             || !in_array($detectedDevice, [null, 'pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump'], true)) {
             throw new InvalidArgumentException('建单输入尚未完成业务规范化');

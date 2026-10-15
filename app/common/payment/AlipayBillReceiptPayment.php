@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace app\common\payment;
 
 use app\common\constant\ApiResponseConstant;
-use app\common\constant\ReceiptRuntimeConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ReceiptCollectorInterface;
 use app\common\sdk\alipay\AlipayBillClient;
@@ -446,7 +445,7 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
             } catch (ReceiptCollectionException $error) {
                 $state['failures'] = min(10, (int) ($state['failures'] ?? 0) + 1);
                 $delay = $error->retryAfterSeconds ?? min(300, 30 * (2 ** min(4, $state['failures'] - 1)));
-                $batch['error'] = ['code' => ReceiptRuntimeConstant::failure($error->reasonCode), 'reason' => $error->reasonCode, 'retry_after' => $delay];
+                $batch['error'] = ['reason' => $error->reasonCode, 'retry_after' => $delay];
             }
             $state['next_query_at'] = $this->clock->now()->getTimestamp() + $delay;
             $store->set('alipay_bill.account.' . $key, $state, 0);

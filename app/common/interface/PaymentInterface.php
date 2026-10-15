@@ -13,7 +13,10 @@ use app\exception\UnsupportedPaymentOperationException;
  */
 interface PaymentInterface
 {
-    /** @param array<string,mixed> $channelConfig 原版本配置及服务补充的通道参数，不接受请求直接覆盖。 */
+    /**
+     * 只装配参数，不发起支付或其他外部写操作；执行认领在 init 完成后、pay 调用前建立。
+     * @param array<string,mixed> $channelConfig 原版本配置及服务补充的通道参数，不接受请求直接覆盖。
+     */
     public function init(array $channelConfig): void;
 
     public function getCode(): string;

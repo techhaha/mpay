@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\repository\payment\config;
 
 use app\common\base\BaseRepository;
-use app\common\constant\TradeConstant;
 use app\service\payment\plugin\PluginDefinition;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPlugin;
@@ -31,14 +30,6 @@ final class PaymentPluginRepository extends BaseRepository
     public function channelCount(string $code): int
     {
         return $this->channels->where('plugin_code', $code)->whereNull('deleted_at')->count();
-    }
-
-    /** 当前订单责任按配置限定；用于服务判断停用插件是否还需要完成存量采集。 */
-    public function hasPending(string $configurationId): bool
-    {
-        return $this->orders->alias('p')->join('ma_payment_channel c', 'c.id=p.channel_id')
-            ->where('c.api_config_id', $configurationId)
-            ->whereIn('p.status', [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING])->value('p.id') !== null;
     }
 
     /** 元信息完整同步；仅写定义，不改人工启停。无变化刷新不递增版本。 */

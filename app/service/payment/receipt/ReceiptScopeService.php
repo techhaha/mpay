@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\service\payment\receipt;
 
 use app\common\base\BaseService;
-use app\common\validation\PaymentTypeCode;
 use app\model\payment\PaymentPluginConf;
 use app\model\payment\ReceiptScope;
 use app\repository\payment\config\PaymentCatalogRepository;
@@ -17,7 +16,7 @@ final class ReceiptScopeService extends BaseService
 {
     public function __construct(private readonly PaymentCatalogRepository $catalog, private readonly ReceiptScopeRepository $scopes) {}
 
-    /** 调用方拥有事务；相同配置及支付方式共用识别值占用。 */
+    /** 调用方拥有事务；登记配置及支付方式的归属/确认锁，识别值仍按通道分配。 */
     public function registerInTransaction(string $payType, string $configurationId): string
     {
         $this->requireTransaction();
@@ -43,25 +42,6 @@ final class ReceiptScopeService extends BaseService
         }
         if ($result === []) { throw new RuntimeException('配置缺少业务范围'); }
         return $result;
-    }
-
-    /**
-     * 将服务器读取的范围转换成回调服务内部授权集合；不允许从消息正文生成授权集合。
-     *
-     * @param array<string,ReceiptScope> $records 需要强一致时必须是 current(..., true) 的锁定结果。
-     * @return ReceiptScopeSet 范围必须具有完整支付方式关联，数据损坏明确报错。
-     */
-    public function describe(array $records): ReceiptScopeSet
-    {
-        $entries = [];
-        foreach ($records as $key => $scope) {
-            $type = $this->catalog->typeCode($scope['pay_type_id']);
-            if ($scope['receipt_scope_key'] !== $key || !PaymentTypeCode::valid($type)) {
-                throw new RuntimeException('收款范围的身份键或支付方式不一致');
-            }
-            $entries[$key] = ['pay_type' => $type];
-        }
-        return new ReceiptScopeSet($entries);
     }
 
 }

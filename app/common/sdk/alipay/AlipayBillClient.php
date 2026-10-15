@@ -77,11 +77,6 @@ final class AlipayBillClient
         if ($response->getStatusCode() === 429) { throw new ReceiptCollectionException('rate_limited'); }
         if ($response->getStatusCode() !== 200) { throw new ReceiptCollectionException('network_error'); }
         $body = $this->signer->response((string) $response->getBody(), $account['alipay_public_key']);
-        $result = json_decode($body, true, 64, JSON_THROW_ON_ERROR);
-        if (($result['code'] ?? null) !== '10000') {
-            // 不把平台完整错误报文带入异常；只有成功且已验签的账务正文才进入明细解释。
-            throw new ReceiptCollectionException('protocol_error');
-        }
         return self::decode($body);
     }
 
@@ -96,7 +91,8 @@ final class AlipayBillClient
         try {
             if (strlen($body) > 4194304) { throw new UnexpectedValueException(); }
             $value = json_decode($body, false, 64, JSON_THROW_ON_ERROR);
-            if (!$value instanceof stdClass) { throw new UnexpectedValueException(); }
+            // 已验签的业务对象只解码一次，状态和明细共同校验；错误不携带平台原文。
+            if (!$value instanceof stdClass || ($value->code ?? null) !== '10000') { throw new UnexpectedValueException(); }
             $page = self::integer($value->page_no ?? null, 1, 1000000);
             $size = self::integer($value->page_size ?? null, 1, 2000);
             $total = self::integer($value->total_size ?? null, 0, 2147483647);
@@ -120,7 +116,6 @@ final class AlipayBillClient
                 }
                 $entries[] = ['account_log_id' => $id, 'alipay_order_no' => self::optional($row, 'alipay_order_no', 128),
                     'amount_cents' => $amount, 'direction' => $direction, 'booked_at' => self::text($row->trans_dt ?? null, 64),
-                    'bill_source' => self::optional($row, 'bill_source', 128), 'type' => self::optional($row, 'type', 256),
                     'memo' => self::optional($row, 'trans_memo', 2048)];
             }
             return ['entries' => $entries, 'limit_reached' => $total > $size || count($rows) === $size];

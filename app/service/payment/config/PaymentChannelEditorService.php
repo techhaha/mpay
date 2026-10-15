@@ -61,7 +61,7 @@ final class PaymentChannelEditorService extends BaseService
             $channel = $this->channelService->writeInTransaction(null, null, $configurationId, $version,
                 $this->rules($input['channel'], $scopeKey, $input['pay_type'], $input['participates_default_route'] ?? null), $actor);
             if ($input['enabled'] ?? false) {
-                $this->configurationService->setEnabledInTransaction($configurationId, $version, true, $actor);
+                $this->configurationService->enableInTransaction($configurationId, $version, $actor);
                 $this->channelService->setEnabledInTransaction($channel['id'], $channel['revision_id'], $version, true, $actor);
                 $channel['enabled'] = true;
             }
@@ -105,7 +105,7 @@ final class PaymentChannelEditorService extends BaseService
             } else {
                 if ($input['settings'] !== []) { throw new BusinessException('请使用“配置”修改当前插件参数', Code::VALIDATION_FAILED); }
                 $configurationId = $configuration['id']; $version = (int) $configuration['config_version'];
-                $scopeKey = $this->scopeForType($configurationId, $version, $input['pay_type']);
+                $scopeKey = $this->scopeForType($configurationId, $input['pay_type']);
             }
             if ($bindingChanged) { $this->channels->changeConfiguration($channel['id'], $configurationId, $definition->code); }
             $saved = $this->channelService->writeInTransaction($channel['id'], $input['expected_revision'],
@@ -118,16 +118,16 @@ final class PaymentChannelEditorService extends BaseService
     private function createConfiguration(array $input, ConfigurationActionContext $actor): array
     {
         $created = $this->configurationService->createInTransaction($input['plugin_code'], $input['channel']['name'], $input['settings'], $actor);
-        return [$created['id'], $created['config_version'], $this->scopeForType($created['id'], $created['config_version'], $input['pay_type'])];
+        return [$created['id'], $created['config_version'], $this->scopeForType($created['id'], $input['pay_type'])];
     }
 
-    /** 配置版本只能在其已登记的支付方式内选择匹配范围。 */
-    private function scopeForType(string $id, int $version, string $type): string
+    /** 从当前配置已登记的支付方式关联取得业务锁范围。 */
+    private function scopeForType(string $id, string $type): string
     {
         $keys = [];
         foreach ($this->scopes->configurationScopes($id, false) as $scope) {
             $key = $scope['receipt_scope_key'];
-            if ($scope !== null && $this->catalog->typeCode($scope['pay_type_id']) === $type) { $keys[] = $key; }
+            if ($this->catalog->typeCode($scope['pay_type_id']) === $type) { $keys[] = $key; }
         }
         if (count($keys) !== 1) { throw new BusinessException('插件配置缺少唯一的支付方式关联', Code::CONFLICT); }
         return $keys[0];
@@ -175,7 +175,7 @@ final class PaymentChannelEditorService extends BaseService
             $this->assertCurrent($configuration, $this->channels->lock($input['id']), $input);
             if ($input['enabled']) {
                 $this->management->assertNew($configuration['plugin_code']);
-                $this->configurationService->setEnabledInTransaction($configuration['id'], $input['expected_configuration_version'], true, $actor);
+                $this->configurationService->enableInTransaction($configuration['id'], $input['expected_configuration_version'], $actor);
             }
             $this->channelService->setEnabledInTransaction($input['id'], $input['expected_revision'], $input['expected_configuration_version'], $input['enabled'], $actor);
         });

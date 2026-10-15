@@ -11,7 +11,6 @@ use app\common\interface\ChannelNotifyInterface;
 use app\common\interface\ReceiptCollectorInterface;
 use app\common\util\Clock;
 use app\common\util\SafeLogger;
-use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use app\exception\ReceiptCollectionException;
 use app\exception\UnsupportedPaymentOperationException;
@@ -44,7 +43,6 @@ final class PayOrderCallbackService extends BaseService
         private readonly PaymentCatalogRepository $catalog,
         private readonly ReceiptScopeService $scopeAccess,
         private readonly PaymentPluginFactoryService $plugins,
-        private readonly PluginConfigValidator $validator,
         private readonly ChannelNotifyLogRepository $channelLogs,
         private readonly Clock $clock,
         private readonly PayOrderRepository $orders,
@@ -80,8 +78,7 @@ final class PayOrderCallbackService extends BaseService
                     'receipt_scope_key' => $channel['receipt_scope_key']]);
             if (!$plugin instanceof ChannelNotifyInterface) { throw new UnsupportedPaymentOperationException(); }
             // 对同一请求只解析、定位一次，避免二次读取候选时跨越订单过期或并发成功边界。
-            $result = $this->results->validateResult($plugin->notify($request));
-            $accepted = $this->acceptPluginResult($result, $context, $requestId);
+            $accepted = $this->acceptPluginResult($plugin->notify($request), $context, $requestId);
             if (!$accepted['matched']) { throw new BusinessException('通知未匹配到符合收款条件的订单', ApiResponseConstant::CONFLICT); }
             $flowIds[] = $accepted['flow_id'];
             $ack = $plugin->notifySuccess();
@@ -134,7 +131,7 @@ final class PayOrderCallbackService extends BaseService
         $selected = []; $selectedEvents = [];
         foreach ($results as &$result) {
             $result = $this->results->validateResult($result);
-            $record = $this->records->validateRecord($result['receipt']);
+            $record = $result['receipt'];
             $pay = $orders[$result['pay_no']] ?? null;
             if ($pay === null || !isset($channels[$pay['channel_revision_id']]) || isset($selected[$result['pay_no']])
                 || isset($selectedEvents[$record['event_key']]) || isset($events[$record['event_key']])
@@ -152,9 +149,9 @@ final class PayOrderCallbackService extends BaseService
             $channel = $channels[$pay['channel_revision_id']];
             $context = new ChannelNotifyContext($channel['channel_id'], $channel['api_config_id'],
                 $channel['config_version'], $plugin->getCode(), $plugin->getVersion(),
-                new ReceiptScopeSet([$channel['receipt_scope_key'] => ['pay_type' => $pay['pay_type']]]),
+                $channel['receipt_scope_key'], $pay['pay_type'],
                 $channel['configuration'], $this->clock->now());
-            $matched += (int) $this->acceptPluginResult($result, $context, $requestId)['matched'];
+            $matched += (int) $this->confirmResult($result, $context, $requestId)['matched'];
         }
         return ['matched' => $matched, 'ignored' => count($records) - $matched];
     }
@@ -167,19 +164,27 @@ final class PayOrderCallbackService extends BaseService
      */
     public function acceptPluginResult(array $result, ChannelNotifyContext $context, string $requestId): array
     {
-        $result = $this->results->validateResult($result);
-        $record = $this->records->validateRecord($result['receipt']);
+        return $this->confirmResult($this->results->validateResult($result), $context, $requestId);
+    }
+
+    /**
+     * 消费已经验证的结果；批次先全部验证后逐笔确认，避免再次计算相同流水摘要。
+     * 归属、金额、事务和幂等处理与单条通知共用，不减少交易核对条件。
+     * @return array{flow_id:?string,pay_no:?string,matched:bool,reason:string}
+     */
+    private function confirmResult(array $result, ChannelNotifyContext $context, string $requestId): array
+    {
+        $record = $result['receipt'];
         $pay = $this->orders->find($result['pay_no']) ?? throw new BusinessException('通知支付单不存在', ApiResponseConstant::NOT_FOUND);
         $channel = $this->channels->find($pay['channel_id']);
-        $scope = $context->scopes->entries[$pay['receipt_scope_key']] ?? null;
         // 首次自动确认仍须命中识别金额；原成功交易的重报/补证据只核对已确认实收。
         // 这里是入口校验，最终关联及幂等结论仍由生命周期在锁内复核。
         $confirmed = (int) $pay['status'] === TradeConstant::ORDER_STATUS_SUCCESS;
         $expectedAmount = $confirmed ? $pay->receivedAmount() : $pay->receiptAmount();
         $sameEvent = ($pay['ext_json']['personal_receipt']['event_key'] ?? null) === $record['event_key'];
         if ($channel === null || $pay->channelRevision['api_config_id'] !== $context->configurationId
-            || ($context->channelId !== null && $pay['channel_id'] !== $context->channelId)
-            || $scope === null || $scope['pay_type'] !== $record['pay_type'] || $pay['plugin_code'] !== $context->pluginCode
+            || $pay['channel_id'] !== $context->channelId || $pay['receipt_scope_key'] !== $context->scopeKey
+            || $context->payType !== $record['pay_type'] || $pay['plugin_code'] !== $context->pluginCode
             || $result['paid_amount'] !== $pay->originalAmount() || $record['amount'] !== $expectedAmount
             || ($confirmed && ($pay['channel_trade_no'] !== $record['trade_no'] || ($record['trade_no'] === null && !$sameEvent)))
             || ($result['chan_trade_no'] ?? null) !== $record['trade_no']) {
@@ -211,19 +216,18 @@ final class PayOrderCallbackService extends BaseService
             $definition = $this->plugins->definition($configuration['plugin_code']);
             if ($revision['config_json'] !== $configuration['config_json']) { throw new RuntimeException('账号配置正文不一致'); }
             $authorized = $this->scopeAccess->current($configuration, true);
-            if (!isset($authorized[$channel['receipt_scope_key']])) {
+            $scope = $authorized[$channel['receipt_scope_key']] ?? null;
+            if ($scope === null) {
                 throw new BusinessException('该来源没有当前收款范围授权', ApiResponseConstant::FORBIDDEN);
             }
-            foreach ($authorized as $scope) {
-                if (!in_array($this->catalog->typeCode($scope['pay_type_id']), $definition->payTypes, true)) {
-                    throw new BusinessException('该来源没有当前收款范围授权', ApiResponseConstant::FORBIDDEN);
-                }
+            $payType = $this->catalog->typeCode($scope['pay_type_id']);
+            if (!in_array($payType, $definition->payTypes, true)) {
+                throw new BusinessException('该来源没有当前收款范围授权', ApiResponseConstant::FORBIDDEN);
             }
-            $settings = $this->validator->validate($definition->configSchema, $configuration['config_json']);
             return new ChannelNotifyContext($channelId, $configurationId, (int) $configuration['config_version'],
                 $definition->code, $definition->version,
-                $this->scopeAccess->describe($authorized),
-                $settings, $this->clock->now());
+                $channel['receipt_scope_key'], $payType,
+                $configuration['config_json'], $this->clock->now());
         });
     }
 

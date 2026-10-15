@@ -4,14 +4,12 @@ declare(strict_types=1);
 namespace app\service\payment\config;
 
 use app\common\base\BaseService;
-use app\common\validation\PluginConfigValidator;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\receipt\ReceiptScopeService;
-use JsonException;
 use RuntimeException;
 
 /**
@@ -24,29 +22,8 @@ final class PaymentChannelRevisionService extends BaseService
         private readonly PaymentChannelRepository $channels,
         private readonly PaymentPluginConfRepository $configurations,
         private readonly PaymentPluginFactoryService $plugins,
-        private readonly PluginConfigValidator $validator,
         private readonly ReceiptScopeService $scopeAccess,
     ) {
-    }
-
-    /**
-     * 在独立短事务内锁定配置和通道后追加快照，不允许嵌套在支付创建事务中。
-     * 冻结前再次核验已安装原版本的 schema，禁止用空 schema 或当前默认值掩盖配置缺失。
-     *
-     * @return numeric-string 新快照的数据库 ID，供支付单固定引用。
-     * @throws RuntimeException 通道/配置缺失、归属不符或配置正文无效。
-     * @throws JsonException 快照不能编码为 JSON。
-     */
-    public function freeze(string $channelId): string
-    {
-        // 先找出锁目标，不反向先锁通道；事务中还需检查引用是否已被并发修改。
-        $configurationId = $this->channels->configurationId($channelId);
-        return $this->transaction(function () use ($channelId, $configurationId): string {
-            // 配置操作先锁配置、后锁通道；不与交易生命周期的锁混用。
-            $configuration = $this->configurations->lock($configurationId);
-            $channel = $this->channels->lock($channelId);
-            return $this->freezeLocked($configuration, $channel);
-        });
     }
 
     /**
@@ -72,7 +49,9 @@ final class PaymentChannelRevisionService extends BaseService
         if (!isset($authorized[$channel['receipt_scope_key']])) {
             throw new RuntimeException('通道范围不在当前配置授权中');
         }
-        $config = $this->validator->validate($definition->configSchema, $configuration['config_json']);
+        // 快照只冻结已保存参数；保存、启用及插件执行负责校验，不在持久化时重复解释 schema。
+        $config = $configuration['config_json'];
+        if (!is_array($config)) { throw new RuntimeException('插件配置正文无效'); }
         $channelData = $channel->toArray();
         // 排除活动版本指针与维护时间，避免快照自引用和混入非支付规则字段。
         unset($channelData['current_revision_id'], $channelData['created_at'], $channelData['updated_at']);

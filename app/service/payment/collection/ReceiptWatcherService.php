@@ -17,6 +17,7 @@ use app\service\payment\receipt\PayOrderCallbackService;
 use RuntimeException;
 use think\Cache;
 use think\Config;
+use think\Validate;
 use UnexpectedValueException;
 
 /**
@@ -96,10 +97,7 @@ final class ReceiptWatcherService
                 foreach ($plugin->prelogin($channels, $deadline) as $batch) {
                     $covered = $this->batchChannels($batch, $channels);
                     $this->validateError($batch['error'] ?? null);
-                    if (!is_bool($batch['verified'] ?? null) || $batch['verified'] !== ($batch['error'] === null)) {
-                        throw new UnexpectedValueException('预登录批次结构无效');
-                    }
-                    $counts[$batch['verified'] ? 'verified' : 'failed']++;
+                    $counts[$batch['error'] === null ? 'verified' : 'failed']++;
                     $this->activity($code, $covered, $batch['error'], true, 0, false, $started);
                     if ($heartbeat !== null) { $heartbeat(); }
                     if ($counts['queried'] + $counts['verified'] + $counts['failed'] >= $limit) { break; }
@@ -173,10 +171,14 @@ final class ReceiptWatcherService
     private function validateError(?array $error): void
     {
         if ($error === null) { return; }
-        if (!is_int($error['code'] ?? null) || !is_string($error['reason'] ?? null) || !is_int($error['retry_after'] ?? null)
-            || array_diff(array_keys($error), ['code', 'reason', 'retry_after'])
-            || $error['code'] !== ReceiptRuntimeConstant::failure($error['reason'])) { throw new UnexpectedValueException('采集错误分类无效'); }
-        new ReceiptCollectionException($error['reason'], $error['retry_after']);
+        $rules = [
+            'reason' => ['require', 'string', 'in' => ReceiptCollectionException::REASONS],
+            'retry_after' => ['require', static fn (mixed $value): bool => is_int($value), 'between' => [1, 86400]],
+        ];
+        if (array_diff(array_keys($error), array_keys($rules))
+            || !(new Validate())->rule($rules)->failException(false)->check($error)) {
+            throw new UnexpectedValueException('采集错误分类或重试间隔无效');
+        }
     }
 
     /** 只缓存运行摘要，不保存流水和凭证；后台分别显示查单与登录验证时间。 */
@@ -189,7 +191,7 @@ final class ReceiptWatcherService
             $state = $store->get($key, []);
             if (!is_array($state) || ($state['config_version'] ?? null) !== $channel['config_version']) { $state = []; }
             $state['config_version'] = $channel['config_version'];
-            $state['status'] = $error === null ? ReceiptRuntimeConstant::HEALTHY : $error['code'];
+            $state['status'] = $error === null ? ReceiptRuntimeConstant::HEALTHY : ReceiptRuntimeConstant::failure($error['reason']);
             $state['reason_code'] = $error['reason'] ?? ($limited ? 'limit_reached' : null);
             $state['last_duration_ms'] = (int) ((hrtime(true) - $started) / 1000000);
             $state['updated_at'] = $now->format('Y-m-d H:i:s');

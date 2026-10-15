@@ -33,6 +33,7 @@ final class AlipayBillClient
      * @param array{app_id:string,private_key:string,alipay_public_key:string,bill_user_id:string,app_auth_token?:string} $account
      * @param int $fromTimestamp 左闭右开窗口起点，Unix 秒。
      * @param int $toTimestamp 窗口终点，SDK 请求上海时区时间，插件再按原窗口过滤边界记录。
+     * @return array{entries:list<array{alipay_order_no:?string,amount_cents:int,direction:string,booked_at:string,memo:?string}>,limit_reached:bool}
      * @throws ReceiptCollectionException 网络、验签或响应结构失败，不以空列表替代异常。
      */
     public function query(array $account, int $fromTimestamp, int $toTimestamp,
@@ -114,7 +115,7 @@ final class AlipayBillClient
                 if (!in_array($direction, ['收入', '支出'], true)) {
                     throw new UnexpectedValueException();
                 }
-                $entries[] = ['account_log_id' => $id, 'alipay_order_no' => self::optional($row, 'alipay_order_no', 128),
+                $entries[] = ['alipay_order_no' => self::optional($row, 'alipay_order_no', 128),
                     'amount_cents' => $amount, 'direction' => $direction, 'booked_at' => self::text($row->trans_dt ?? null, 64),
                     'memo' => self::optional($row, 'trans_memo', 2048)];
             }

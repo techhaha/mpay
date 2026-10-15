@@ -52,11 +52,12 @@ final class PaymentChannelEditorService extends BaseService
         }
         return $this->transaction(function () use ($input, $definition, $actor): array {
             $this->audit->authorize($actor);
-            $this->defaults->lockTypes([$input['pay_type']]);
+            // 配置会登记插件支持的全部方式；必须先按 ID 顺序取齐方式/默认组锁，再锁插件和配置。
+            $this->defaults->lockTypes($definition->payTypes);
             $type = $this->catalog->lockType($input['pay_type']);
             if ($type === null || (int) $type['enabled'] !== 1) { throw new BusinessException('支付方式已停用或不存在', Code::CONFLICT); }
             [$configurationId, $version, $scopeKey] = $this->createConfiguration($input, $actor);
-            // 先写通道专属配置，随后核对插件，与选路的配置→插件方向一致。
+            // 新配置尚未对其他事务可见；后续通道保存复用已持有的目录锁。
             $this->management->assertNew($definition->code);
             $channel = $this->channelService->writeInTransaction(null, null, $configurationId, $version,
                 $this->rules($input['channel'], $scopeKey, $input['pay_type'], $input['participates_default_route'] ?? null), $actor);
@@ -82,7 +83,8 @@ final class PaymentChannelEditorService extends BaseService
         }
         return $this->transaction(function () use ($input, $observed, $definition, $actor): array {
             $this->audit->authorize($actor);
-            $this->defaults->lockTypes(array_unique([...$observed['pay_types'], $input['pay_type']]));
+            // 更换插件时也会登记全部支持方式，不能持配置/插件锁后再补取其他方式锁。
+            $this->defaults->lockTypes(array_unique([...$observed['pay_types'], ...$definition->payTypes]));
             $configuration = $this->configurations->lock($observed['api_config_id']);
             $channel = $this->channels->lock($input['id']);
             $this->assertCurrent($configuration, $channel, $input);
@@ -141,9 +143,10 @@ final class PaymentChannelEditorService extends BaseService
     public function configure(array $input, ConfigurationActionContext $actor): array
     {
         $observed = $this->channels->find($input['id']) ?? throw new BusinessException('通道不存在', Code::NOT_FOUND);
-        return $this->transaction(function () use ($input, $observed, $actor): array {
+        $definition = $this->plugins->definition($observed['plugin_code']);
+        return $this->transaction(function () use ($input, $observed, $definition, $actor): array {
             $this->audit->authorize($actor);
-            $this->defaults->lockTypes($observed['pay_types']);
+            $this->defaults->lockTypes(array_unique([...$observed['pay_types'], ...$definition->payTypes]));
             $configuration = $this->configurations->lock($observed['api_config_id']);
             $this->channels->lockForConfiguration($configuration['id']);
             $channel = $this->channels->lock($input['id']);

@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 namespace app\service\payment\order;
 
-use app\common\constant\PaymentResultCode as Result;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant as Code;
+use app\common\constant\PaymentResultCode as Result;
 use app\common\constant\RefundConstant as State;
 use app\common\constant\TradeConstant;
 use app\common\util\BusinessNumber;
@@ -20,9 +20,13 @@ use app\repository\payment\trade\PayOrderRepository;
 use app\repository\payment\trade\RefundOrderRepository;
 use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
+use RuntimeException;
+use Throwable;
+use UnexpectedValueException;
 
 /**
  * 退款由原订单插件执行：先持久化唯一请求，再在事务外调用平台，最后记录明确结果。
+ * 准备阶段失败记录为未执行并释放额度；进入退款动作后无法确认的结果继续占用额度。
  * 相同请求只读取原结果；处理中、网络未知及进程中断均不自动重发，避免重复退款。
  */
 final class RefundService extends BaseService
@@ -71,22 +75,26 @@ final class RefundService extends BaseService
         if (!$claim['execute']) { return $refund; }
         $pay = $claim['pay'];
         $status = State::UNKNOWN; $channelNumber = null; $reason = Result::REFUND_UNKNOWN; $fault = null;
+        $invoked = false;
         try {
             // 配置和平台单号取自原订单，当前通道换插件/停用不改变退款目标。
             $snapshot = $this->revisions->snapshot($pay['channel_id'], $pay['channel_revision_id']);
-            if (($snapshot['channel']['plugin_code'] ?? null) !== $pay['plugin_code']) { throw new \RuntimeException('原退款插件快照不一致'); }
+            if (($snapshot['channel']['plugin_code'] ?? null) !== $pay['plugin_code']) { throw new RuntimeException('原退款插件快照不一致'); }
             $plugin = $this->plugins->initialize($pay['plugin_code'], $snapshot['configuration'],
                 ['channel_id' => $pay['channel_id'], 'api_config_id' => $snapshot['channel']['api_config_id'],
                     'receipt_scope_key' => $pay['receipt_scope_key'],
                     'pay_type_code' => $pay['ext_json']['payment_context']['pay_type']]);
-            $result = $plugin->refund(['refund_no' => $refund['refund_no'], 'pay_no' => $pay['pay_no'],
+            $input = ['refund_no' => $refund['refund_no'], 'pay_no' => $pay['pay_no'],
                 'refund_amount' => $amount, 'chan_order_no' => $pay['channel_order_no'],
-                'chan_trade_no' => $pay['channel_trade_no'], 'extra' => $pay['ext_json']]);
+                'chan_trade_no' => $pay['channel_trade_no'], 'extra' => $pay['ext_json']];
+            // init 只装配参数。只有进入 refund 动作后，异常才可能意味着平台已受理。
+            $invoked = true;
+            $result = $plugin->refund($input);
             if (($result['refund_no'] ?? null) !== $refund['refund_no'] || ($result['pay_no'] ?? null) !== $pay['pay_no']
                 || ($result['refund_amount'] ?? null) !== $amount || !array_key_exists('chan_refund_no', $result)
                 || ($result['chan_refund_no'] !== null && (!is_string($result['chan_refund_no']) || $result['chan_refund_no'] === '' || strlen($result['chan_refund_no']) > 128))
                 || !in_array($result['status'] ?? null, ['success', 'pending', 'unknown', 'failed'], true)) {
-                throw new \UnexpectedValueException('插件退款结果与原请求不一致');
+                throw new UnexpectedValueException('插件退款结果与原请求不一致');
             }
             $status = match ($result['status']) {'success' => State::SUCCESS, 'failed' => State::FAILED, 'pending' => State::PROCESSING, default => State::UNKNOWN};
             $channelNumber = $result['chan_refund_no'];
@@ -97,9 +105,14 @@ final class RefundService extends BaseService
             $status = State::FAILED; $reason = Result::REFUND_REJECTED;
         } catch (PaymentUncertainException) {
             $reason = Result::REFUND_UNKNOWN;
-        } catch (\Throwable $error) {
-            // 不把 SDK/程序异常文本存进公开退款信息；不明结果继续占用额度并保留原异常供统一日志处理。
+        } catch (Throwable $error) {
+            // 不把 SDK/程序异常文本存进公开退款信息；持久化分类后仍抛原异常供统一日志处理。
             $reason = Result::REFUND_FAULT; $fault = $error;
+        }
+        if (!$invoked) {
+            // 快照读取、配置校验和初始化失败时尚未执行退款，不占用“结果未知”的待核实额度。
+            $status = State::FAILED;
+            $reason = Result::REFUND_NOT_EXECUTED;
         }
         $this->transactionRetry(function () use ($pay, $refund, $status, $channelNumber, $reason): void {
             $this->business->lock($pay['biz_no']);
@@ -107,6 +120,6 @@ final class RefundService extends BaseService
             $this->refunds->finish($refund['refund_no'], $status, $channelNumber, $reason, $this->clock->now()->format('Y-m-d H:i:s'));
         });
         if ($fault !== null) { throw $fault; }
-        return $this->refunds->find($refund['refund_no']) ?? throw new \RuntimeException('退款记录缺失');
+        return $this->refunds->find($refund['refund_no']) ?? throw new RuntimeException('退款记录缺失');
     }
 }

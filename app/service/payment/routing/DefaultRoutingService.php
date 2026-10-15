@@ -66,8 +66,8 @@ final class DefaultRoutingService extends BaseService
     }
 
     /**
-     * 通道编辑前先锁旧/新方式及默认组，与下单的方式→组→配置→通道方向一致。
-     * @param list<string> $codes
+     * 通道编辑前先按方式 ID 锁方式及默认组，与下单的方式→组→配置→通道方向一致。
+     * @param list<string> $codes 本次用例会触及的完整方式集合；登记插件范围时包含其全部支持方式。
      */
     public function lockTypes(array $codes): void
     {

@@ -33,8 +33,8 @@ final class PayCallbackLogRepository extends BaseRepository
     }
 
     /**
-     * @param string|null $payNo 插件未选出订单时为 null，审计层不能自行选择支付号。
-     * @param array{flow_id:string, incoming_digest?:string, original_digest?:string,
+     * @param string|null $payNo 关联支付单编号；到账确认由调用方提供流水最终绑定的 pay_no，审计层不选择订单。
+     * @param array{flow_id:string,
      *     config_version?:int, before_status?:int,
      *     source_reference?:array{plugin_code:string,plugin_version:string,api_config_id:string,config_revision_id:int}
      * } $summary 只接收脱敏核对标识，来源引用不包含配置正文或秘密。

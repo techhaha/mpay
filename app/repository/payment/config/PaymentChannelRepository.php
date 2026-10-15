@@ -117,13 +117,6 @@ final class PaymentChannelRepository extends BaseRepository
     }
 
     /** 调用方已核对待付款订单、轮询组及目标配置；切换引用不改写旧订单的快照。 */
-    /** 配置服务已核对在途订单并锁定通道后调整新单范围；旧快照不变。 */
-    public function changeScope(string $id, string $key): void
-    {
-        $this->requireTransaction();
-        $this->model->where('id', $id)->update(['receipt_scope_key'=>$key]);
-    }
-
     public function changeConfiguration(string $id, string $configurationId, string $pluginCode): void
     {
         $this->requireTransaction();

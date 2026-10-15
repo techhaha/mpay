@@ -56,7 +56,9 @@ final class PaymentConfigurationController extends BaseAdminController
 
     public function channels(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
     {
-        return $this->listing('channels', $validator, $query);
+        $input = $validator->channels($this->request->get());
+        $data = $query->channels($input['filters'], $input['page'], $input['limit']);
+        return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
     }
 
     public function configuration(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
@@ -120,13 +122,6 @@ final class PaymentConfigurationController extends BaseAdminController
         $data = $validator->validate('channel-delete', $this->jsonBody());
         $service->delete($data, $this->actor());
         return $this->success(['id' => $data['id']], '通道已删除');
-    }
-
-    private function listing(string $kind, ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
-    {
-        $input = $validator->listing($kind, $this->request->get());
-        $data = $query->listing($kind, $input['filters'], $input['page'], $input['limit']);
-        return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
     }
 
     /** 管理审计只采用服务器实际连接 IP；代理部署必须在 Web 服务端设置 REMOTE_ADDR。 */

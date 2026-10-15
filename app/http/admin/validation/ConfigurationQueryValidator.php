@@ -5,7 +5,6 @@ namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
-use InvalidArgumentException;
 use think\Validate;
 
 /** 配置管理只读参数：显式场景、字符串 ID 和有界分页，不把请求键用作数据库字段或排序表达式。 */
@@ -13,7 +12,6 @@ final class ConfigurationQueryValidator extends Validate
 {
     protected $rule = [
         'id' => ['string', 'recordId'], 'configuration_id' => ['string', 'recordId'],
-        'plugin_code' => ['string', 'regex' => '/^[a-z][a-z0-9_]{0,63}$/D'],
         'enabled' => ['string', 'in' => ['0', '1']],
     ];
     protected $scene = [
@@ -29,12 +27,12 @@ final class ConfigurationQueryValidator extends Validate
      * @param array<string,mixed> $input
      * @return array{filters:array<string,string|int>,page:int,limit:int}
      */
-    public function listing(string $kind, array $input): array
+    public function channels(array $input): array
     {
-        $fields = $this->scene[$kind] ?? throw new InvalidArgumentException('未知配置列表场景');
+        $fields = $this->scene['channels'];
         $this->known($input, [...$fields, 'page', 'limit']);
         $filters = array_filter(array_intersect_key($input, array_flip($fields)), static fn (mixed $value): bool => $value !== '');
-        $validator = (clone $this)->scene($kind)->failException(false);
+        $validator = (clone $this)->scene('channels')->failException(false);
         $validator->append(array_fill_keys(array_keys($filters), 'require'));
         if (!$validator->check($filters)) { throw new BusinessException('配置筛选无效', ApiResponseConstant::VALIDATION_FAILED); }
         if (array_key_exists('enabled', $filters)) { $filters['enabled'] = (int) $filters['enabled']; }

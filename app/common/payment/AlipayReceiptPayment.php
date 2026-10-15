@@ -228,7 +228,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
                 if ($amount > $upper) { throw new BusinessException('当前通道识别金额已用尽', ApiResponseConstant::SERVICE_UNAVAILABLE); }
             }
             $ext['personal_receipt'] = array_replace($ext['personal_receipt'] ?? [], [
-                'original_amount' => $original, 'receipt_amount' => $amount, 'offset_amount' => $amount - $original,
+                'original_amount' => $original, 'receipt_amount' => $amount,
                 'match_mode' => $mode, 'remark' => $remark,
             ]);
             $this->orders->saveReceiptContext($payNo, $amount, $ext, $expiresAt, $now);

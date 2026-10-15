@@ -25,7 +25,7 @@ final class PaymentWorkCommand extends Command
             ->addOption('max-seconds', null, Option::VALUE_REQUIRED, '可选运行期限（60～86400 秒）；不指定则持续运行，到期后由守护续启');
     }
 
-    /** 数据库/程序故障非零退出；网络失败由派发服务记录重试，不吞异常后无限空转。 */
+    /** 单笔恢复业务拒绝由维护服务记录并跳过；数据库/程序故障仍非零退出，通知网络失败按原策略重试。 */
     protected function execute(Input $input, Output $output): int
     {
         $control = new CliWorkerControl();
@@ -43,7 +43,7 @@ final class PaymentWorkCommand extends Command
             $maintenance = $this->app->make(PaymentRuntimeMaintenanceService::class);
             $started = hrtime(true); $round = 0; $idleRounds = 0; $nextPrune = 30;
             $counts = ['acknowledged' => 0, 'retry' => 0, 'exhausted' => 0, 'quarantined' => 0, 'lease_lost' => 0, 'idle' => 0];
-            $maintenanceCounts = ['expired' => 0, 'executions_checked' => 0];
+            $maintenanceCounts = ['expired' => 0, 'executions_checked' => 0, 'executions_rejected' => 0];
             $phases = ['expire', 'execution'];
             while (!$control->stopping() && (!$once || $round < $limit)) {
                 $elapsed = (hrtime(true) - $started) / 1000000000;
@@ -54,8 +54,8 @@ final class PaymentWorkCommand extends Command
                 if (!array_key_exists($result, $counts)) { throw new \LogicException('通知派发返回未知状态'); }
                 $counts[$result]++;
                 $batch = $maintenance->runOnce(5, 1, $phases[$round % count($phases)]);
-                $actions = 0;
-                foreach ($maintenanceCounts as $key => $unused) { $maintenanceCounts[$key] += $batch[$key]; $actions += $batch[$key]; }
+                $actions = $batch['expired'] + $batch['executions_checked'];
+                foreach ($maintenanceCounts as $key => $unused) { $maintenanceCounts[$key] += $batch[$key]; }
                 $idleRounds = $result === 'idle' && $actions === 0 ? $idleRounds + 1 : 0;
                 // 仅通知暂时空闲时进行小批次文件保留清理；交易/流水/审计不在清理范围。
                 if ($result === 'idle' && $elapsed >= $nextPrune) {

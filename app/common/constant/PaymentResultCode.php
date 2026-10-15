@@ -41,6 +41,7 @@ final class PaymentResultCode
     public const REFUND_PENDING = 'refund_pending';
     public const REFUND_UNKNOWN = 'refund_unknown';
     public const REFUND_FAILED = 'refund_failed';
+    public const REFUND_NOT_EXECUTED = 'refund_not_executed';
     public const REFUND_UNSUPPORTED = 'refund_unsupported';
     public const REFUND_REJECTED = 'refund_rejected';
     public const REFUND_FAULT = 'refund_fault';
@@ -85,6 +86,7 @@ final class PaymentResultCode
             self::REFUND_PENDING => '平台退款处理中',
             self::REFUND_UNKNOWN => '退款结果待核实',
             self::REFUND_FAILED => '平台拒绝退款',
+            self::REFUND_NOT_EXECUTED => '退款准备失败，尚未执行',
             self::REFUND_UNSUPPORTED => '此插件不支持接口退款',
             self::REFUND_REJECTED => '平台明确拒绝退款',
             self::REFUND_FAULT => '退款调用异常，结果待核实',

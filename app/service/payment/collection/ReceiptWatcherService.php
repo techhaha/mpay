@@ -82,8 +82,13 @@ final class ReceiptWatcherService
                 if ($batch['error'] === null) {
                     $selected = array_filter($orders, static fn (array $pay): bool => isset($covered[$pay['channel_revision_id']]));
                     if ($selected === []) { throw new UnexpectedValueException('采集批次没有原单来源'); }
-                    $result = $this->callbacks->receiveCollected($plugin, $covered, $selected, $batch['records'], bin2hex(random_bytes(16)));
-                    $matched = $result['matched'];
+                    $matched = $this->callbacks->receiveCollected(
+                        $plugin,
+                        $covered,
+                        $selected,
+                        $batch['records'],
+                        bin2hex(random_bytes(16))
+                    );
                     $counts['queried']++;
                     $counts['matched'] += $matched;
                 } else { $counts['failed']++; }

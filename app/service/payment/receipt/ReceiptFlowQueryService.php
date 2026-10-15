@@ -15,10 +15,10 @@ use app\repository\payment\trade\PayCallbackLogRepository;
 use app\repository\payment\trade\ChannelNotifyLogRepository;
 
 /**
- * 到账及接收审计的只读视图；只展示既有绑定/旁证，不按同金额或相近时间猜测所属订单。
+ * 到账及接收审计的只读视图；每条已保存流水按 pay_no 读取最终订单，不猜测所属订单。
  * @phpstan-type ReceiptView array{id:string,scope_key:string,plugin_code:string,
  *     reason_code:?string,reason_label:string,amount:string,paid_at:?string,received_at:string,
- *     platform_trade_no:?string,pay_no:?string,linked_pay_no:?string,biz_no:?string}
+ *     platform_trade_no:?string,pay_no:string,biz_no:?string}
  */
 final class ReceiptFlowQueryService extends BaseService
 {
@@ -35,10 +35,10 @@ final class ReceiptFlowQueryService extends BaseService
     {
         return $this->transaction(function () use ($filters, $page, $limit): array {
             $data = $this->flows->adminPage($filters, $page, $limit);
-            $numbers = array_values(array_filter(array_map(fn (ReceiptFlow $flow): ?string => $this->linkedNumber($flow), $data['items'])));
+            $numbers = array_map(static fn (ReceiptFlow $flow): string => $flow['pay_no'], $data['items']);
             $payments = $this->orders->forNumbers($numbers);
             $items = [];
-            foreach ($data['items'] as $flow) { $items[] = $this->summary($flow, $payments[$this->linkedNumber($flow) ?? ''] ?? null); }
+            foreach ($data['items'] as $flow) { $items[] = $this->summary($flow, $payments[$flow['pay_no']] ?? null); }
             return ['items' => $items, 'total' => $data['total'], 'page' => $page, 'limit' => $limit];
         });
     }
@@ -48,8 +48,7 @@ final class ReceiptFlowQueryService extends BaseService
     {
         return $this->transaction(function () use ($id): array {
             $flow = $this->flow($id);
-            $number = $this->linkedNumber($flow);
-            $result = $this->summary($flow, $number === null ? null : $this->orders->find($number));
+            $result = $this->summary($flow, $this->orders->find($flow['pay_no']));
             $proof = is_array($flow['evidence_json']) ? $flow['evidence_json'] : [];
             $reference = is_array($proof['source_reference'] ?? null) ? $proof['source_reference'] : [];
             foreach (['plugin_code', 'plugin_version'] as $field) {
@@ -69,7 +68,7 @@ final class ReceiptFlowQueryService extends BaseService
         });
     }
 
-    /** @return array{items:list<array>,total:int,page:int,limit:int} 包含首次入库、重投及冲突摘要，不输出整个 summary_json。 */
+    /** @return array{items:list<array>,total:int,page:int,limit:int} 返回首次确认及幂等重报的审计，不输出整个 summary_json。 */
     public function history(string $id, int $page, int $limit): array
     {
         return $this->transaction(function () use ($id, $page, $limit): array {
@@ -77,15 +76,9 @@ final class ReceiptFlowQueryService extends BaseService
             $data = $this->callbacks->pageForFlow($id, $page, $limit);
             $items = [];
             foreach ($data['items'] as $record) {
-                $row = ['id' => $record['id'], 'request_id' => $record['request_id'], 'created_at' => $record['created_at'],
+                $items[] = ['id' => $record['id'], 'request_id' => $record['request_id'], 'created_at' => $record['created_at'],
                     'pay_no' => $record['pay_no'], 'result_code' => $this->reasonCode($record['result_code']),
                     'result_label' => $this->reasonLabel($this->reasonCode($record['result_code']))];
-                $summary = is_array($record['summary_json']) ? $record['summary_json'] : [];
-                foreach (['incoming_digest', 'original_digest'] as $key) {
-                    $value = $summary[$key] ?? null;
-                    $row[$key] = is_string($value) && preg_match('/^[a-f0-9]{64}$/D', $value) ? $value : null;
-                }
-                $items[] = $row;
             }
             return ['items' => $items, 'total' => $data['total'], 'page' => $page, 'limit' => $limit];
         });
@@ -130,20 +123,16 @@ final class ReceiptFlowQueryService extends BaseService
         return $this->flows->find($id) ?? throw new BusinessException('到账记录不存在', ApiResponseConstant::NOT_FOUND);
     }
 
-    /** 每条持久流水均有唯一最终订单，不再存在待匹配或旁证导航分支。 */
-    private function linkedNumber(ReceiptFlow $flow): string { return $flow['pay_no']; }
-
     /** @return ReceiptView 与订单详情共用公开投影，不另开事务；ID 保留字符串，amount 为元字符串。 */
     public function summary(ReceiptFlow $flow, ?PayOrder $pay): array
     {
         if ($pay !== null && $pay['receipt_scope_key'] !== $flow['receipt_scope_key']) { throw new \RuntimeException('流水绑定指向其他收款范围'); }
-        $proof = is_array($flow['evidence_json']) ? $flow['evidence_json'] : [];
         return ['id' => $flow['id'], 'scope_key' => $flow['receipt_scope_key'], 'plugin_code' => $flow['plugin_code'],
             'reason_code' => $this->reasonCode($flow['reason_code']), 'reason_label' => $this->reasonLabel($this->reasonCode($flow['reason_code'])),
             'amount' => Money::format((int) $flow['amount']), 'paid_at' => $flow['paid_at'], 'received_at' => $flow['received_at'],
             'platform_trade_no' => $flow['platform_trade_no'], 'pay_no' => $flow['pay_no'],
-            'linked_pay_no' => $this->linkedNumber($flow), 'biz_no' => $pay === null ? null : $pay['biz_no'],
-];
+            'biz_no' => $pay === null ? null : $pay['biz_no'],
+        ];
     }
 
     /** 原始异常文本不能被误当作固定原因码返回；保留未知标记，不把坏数据解释成等待处理。 */

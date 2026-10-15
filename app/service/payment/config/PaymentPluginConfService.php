@@ -32,6 +32,7 @@ final class PaymentPluginConfService extends BaseService
 
     /**
      * 在通道统一创建事务内保存插件参数，不独立提交或执行外部请求。
+     * Editor 已按支付方式 ID 取齐插件支持方式及默认组锁，登记范围只重入已有方式锁。
      * @param array<string,mixed> $settings
      * @return array{id:string,config_version:int,enabled:bool}
      */
@@ -55,6 +56,7 @@ final class PaymentPluginConfService extends BaseService
 
     /**
      * 组合编辑保存完整插件配置，并复核版本与范围；调用方负责唯一外层事务。
+     * 调用方先锁插件支持的全部方式及默认组，再锁当前配置和通道，禁止在此补取新的方式锁。
      * 参数或插件版本改变时创建新快照并停用当前通道；存量快照不改写。
      * @param array<string,mixed> $settings
      * @return array{id:string,config_version:int,enabled:bool}
@@ -88,14 +90,7 @@ final class PaymentPluginConfService extends BaseService
         $now = $this->clock->now()->format('Y-m-d H:i:s');
         $version = $this->configurations->replace($configuration, $name, json_encode((object) $settings, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), $definition->version, $now);
         $this->channels->disableForConfiguration($id, $now);
-        // 新快照使用当前配置的业务范围；旧快照及旧单不改写。
-        foreach ($this->channels->lockForConfiguration($id) as $channel) {
-            foreach ($keys as $key) {
-                if ($this->catalog->typeCode($this->scopes->find($key)['pay_type_id']) === $channel['pay_types'][0]) {
-                    $this->channels->changeScope($channel['id'], $key);
-                }
-            }
-        }
+        // 参数修改不改变配置 ID 与支付方式，通道范围沿用原关联；接入切换由 Editor 保存通道规则。
         $this->audit->record($actor, 'configuration.save', 'payment_plugin_conf', $id, 'updated', ['old_version' => $expectedVersion, 'new_version' => $version]);
         return ['id' => $id, 'config_version' => $version, 'enabled' => (int) $configuration['enabled'] === 1];
     }

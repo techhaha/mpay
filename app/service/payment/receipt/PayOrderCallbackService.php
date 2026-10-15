@@ -102,10 +102,15 @@ final class PayOrderCallbackService extends BaseService
      * @param array<string,array> $channels 本次查询实际覆盖的通道版本。
      * @param array<string,array> $orders 服务读取的原单快照，不接受插件新增候选。
      * @param list<array> $records 最多 200 条归一化流水。
-     * @return array{matched:int,ignored:int}
+     * @return int 本批经生命周期确认的笔数，供监听进程汇总运行状态。
      */
-    public function receiveCollected(ReceiptCollectorInterface $plugin, array $channels, array $orders, array $records, string $requestId): array
-    {
+    public function receiveCollected(
+        ReceiptCollectorInterface $plugin,
+        array $channels,
+        array $orders,
+        array $records,
+        string $requestId
+    ): int {
         if (!array_is_list($records) || count($records) > 200) { throw new UnexpectedValueException('采集批次数量无效'); }
         $evidence = []; $trades = [];
         foreach ($records as $raw) {
@@ -153,7 +158,7 @@ final class PayOrderCallbackService extends BaseService
                 $channel['configuration'], $this->clock->now());
             $matched += (int) $this->confirmResult($result, $context, $requestId)['matched'];
         }
-        return ['matched' => $matched, 'ignored' => count($records) - $matched];
+        return $matched;
     }
 
     /**

@@ -1,0 +1,6 @@
+# Paste into the MPAY site's BaoTa Nginx rewrite editor (server context).
+# Keep the panel-managed PHP-FPM configuration and set the run directory to /public.
+# Preserve the original query string; do not append a trailing question mark.
+if (!-e $request_filename) {
+    rewrite ^(.*)$ /index.php?s=$1 last;
+}

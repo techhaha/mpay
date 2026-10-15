@@ -10,6 +10,7 @@
 </p>
 <p align="center">
   <a href="docs/wiki/V1-01-开始阅读.md"><strong>新手上手路线</strong></a> ·
+  <a href="#online-demo"><strong>在线演示</strong></a> ·
   <a href="#web-install"><strong>网页安装</strong></a> ·
   <a href="#screenshots">界面预览</a> ·
   <a href="https://gitee.com/technical-laohu/mpay/wikis/Home">Gitee 文档</a> ·
@@ -29,6 +30,20 @@
 | 网页安装，默认应用与轮询组自动创建；配置一个通道即可开始接入 | 四个内置监听插件，通道参数独立；后续再配置限额、时段和轮询策略 | 从原订单查看到账依据、通知响应与人工处理记录，方便定位问题 |
 
 > **版本说明**：本文对应 `v1` 分支的 ThinkPHP 重构版，目前为开发版本。旧版发行包、MPAY V2 与本版的安装和数据结构不同，请先核对版本。真实设备及平台接入仍需按自己的账号、权限和客户端完成联调。
+
+<a id="online-demo"></a>
+
+## 🌐 在线演示
+
+无需安装，可先登录演示站点体验管理后台。
+
+| 项目 | 内容 |
+| --- | --- |
+| 演示地址 | [https://mpay-v1.qcjy.cc](https://mpay-v1.qcjy.cc) |
+| 登录账号 | `admin` |
+| 登录密码 | `Aa12345678910` |
+
+以上账号仅用于演示站点；自行安装时，在网页安装向导中设置自己的管理员账号和密码。
 
 ## 📍 从哪里开始
 

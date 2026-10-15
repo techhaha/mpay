@@ -4,7 +4,8 @@ MpayAdmin.ready(function () {
     const UI = MpayAdmin, E = UI.escape, grid = document.getElementById('apps-list');
     if (!grid) return;
     const filters = document.getElementById('apps-filters'), feedback = document.getElementById('admin-feedback');
-    let apps = [], origin = '', routing = null, plugins = [], loading = false;
+    const origin = location.origin;
+    let apps = [], routing = null, plugins = [], loading = false;
     const modes = {1:'顺序轮询',2:'权重随机',3:'默认优先'};
     const reason = () => UI.field('操作原因',UI.input('reason','','required maxlength="500" placeholder="简要说明本次操作"'),{full:true,required:true});
     const post = (action,input) => MpayHttp.request('/adminapi/applications/' + action,{method:'POST',data:input});
@@ -46,7 +47,7 @@ MpayAdmin.ready(function () {
             // 配置摘要读取失败不隐藏已经成功读取的应用，也不把未读取绑定显示成未配置。
             const results = await Promise.allSettled([MpayHttp.request('/adminapi/applications'),MpayHttp.request('/adminapi/poll-groups'),MpayHttp.request('/adminapi/configuration/plugins')]);
             if (results[0].status === 'rejected') throw results[0].reason;
-            apps = results[0].value.data.items; origin = results[0].value.data.origin;
+            apps = results[0].value.data.items;
             routing = results[1].status === 'fulfilled' ? results[1].value.data : null;
             plugins = results[2].status === 'fulfilled' ? results[2].value.data.items : [];
             renderCards();
@@ -60,7 +61,7 @@ MpayAdmin.ready(function () {
                 + UI.field('应用名称',UI.input('name',app?.name || '','required maxlength="128"'),{required:true})
                 + UI.field('PID',UI.input('pid',app?.pid || '','maxlength="32" pattern="[1-9][0-9]{0,31}"' + (app ? ' required' : ' placeholder="留空自动生成"')),{help:'应用在业务网站中的接入标识。修改后，新请求应使用新的 PID。'})
                 + (app ? UI.field('接入状态','<input name="enabled" type="checkbox" lay-skin="switch" lay-text="启用|停用"' + (app.enabled ? ' checked':'') + '>') : '')
-                + UI.field('允许的通知及回跳域名',UI.textarea('allowed_hosts',(app?.allowed_hosts || []).join('\n'),'placeholder="每行一个域名，如 shop.example.com"'),{full:true,help:'填写域名，不带协议、端口或路径。已有订单保留创建时的回调目标和凭证。'})
+                + UI.field('允许的通知及回跳域名',UI.textarea('allowed_hosts',(app?.allowed_hosts || []).join('\n'),'placeholder="每行一个域名，如 shop.example.com"'),{full:true,hint:'每行一个域名；留空或填写 * 表示不限制域名。',help:'填写完整域名，不带协议、端口或路径，不支持 *.example.com。已有订单保留创建时的回调目标和凭证。'})
                 + '</div>',
             async onSubmit(form,handle) {
                 const f = form.elements, data = {name:f.name.value,pid:f.pid.value,allowed_hosts:f.allowed_hosts.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean)};
@@ -92,7 +93,7 @@ MpayAdmin.ready(function () {
     function detail(app,section=null) {
         UI.open({title:'应用详情',drawer:true,form:true,width:850,content:'<div class="admin-app-summary"><span class="admin-app-icon">' + E(Array.from(app.name)[0]) + '</span><div><h2>' + E(app.name) + '</h2><span class="admin-muted">PID ' + E(app.pid) + '</span> ' + UI.badge(app.enabled?'已启用':'已停用',app.enabled?'green':'gray') + '</div></div>'
             + UI.tabs([
-                {title:'基本信息',content:UI.facts({'应用名称':app.name,'PID':app.pid,'接入状态':app.enabled?'启用':'停用','允许的回调域名':(app.allowed_hosts || []).join('\n') || '尚未配置，不能创建新订单','KEY 版本':app.key_version ?? '未设置'}) + '<button type="button" class="layui-btn layui-btn-primary app-edit-current">编辑应用</button>'},
+                {title:'基本信息',content:UI.facts({'应用名称':app.name,'PID':app.pid,'接入状态':app.enabled?'启用':'停用','允许的回调域名':!app.allowed_hosts?.length||app.allowed_hosts.includes('*')?'不限域名':app.allowed_hosts.join('\n'),'KEY 版本':app.key_version ?? '未设置'}) + '<button type="button" class="layui-btn layui-btn-primary app-edit-current">编辑应用</button>'},
                 {title:'收款路由',content:routing ? '<div class="admin-route-mode"><div><strong>'+(app.use_default_route?'默认收款':'自定义路由')+'</strong>'+UI.help(app.use_default_route?'新增通道自动加入对应默认组。仅参与默认收款且符合当前限额、时段的通道可被选中。':'可以为各支付方式单独选择轮询组或停用绑定。恢复默认会替换此应用的全部绑定。')+'</div><button type="button" class="layui-btn layui-btn-primary layui-btn-sm app-route-mode">'+(app.use_default_route?'自定义路由':'恢复默认收款')+'</button></div><div class="admin-route-grid">'+Object.keys(UI.paymentLabels).map(type=>routeForm(app,type)).join('')+'</div>' : UI.notice('路由信息未能读取，请关闭详情并刷新。')},
                 {title:'接入信息',content:['页面下单|/submit.php','API 下单|/mapi.php','订单查询|/api.php'].map(value=>{const [name,path]=value.split('|');return '<div class="admin-section-title">'+name+'</div><div class="admin-code">'+E(origin+path)+' <button type="button" class="admin-link" data-copy="'+E(origin+path)+'">复制</button></div>';}).join('') + '<div class="admin-section-title">易支付 V1</div><p class="admin-help">PID：' + E(app.pid) + '。KEY 在凭证管理中查看。</p>'},
                 {title:'凭证管理',content:UI.facts({'当前 KEY 版本':app.key_version ?? '未设置'}) + '<div class="admin-actions"><button type="button" class="layui-btn layui-btn-primary app-reveal">查看 KEY</button><button type="button" class="layui-btn layui-btn-danger app-rotate">重置 KEY</button></div>'}

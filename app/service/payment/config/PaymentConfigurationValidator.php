@@ -68,9 +68,20 @@ final class PaymentConfigurationValidator extends Validate
                 'available_from' => [fn (mixed $value): bool => $value === null || (is_string($value) && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', $value))],
                 'available_to' => [fn (mixed $value): bool => $value === null || (is_string($value) && preg_match('/^(?:[01][0-9]|2[0-3]):[0-5][0-9]$/D', $value))]];
             $result['channel'] = $this->nested($input['channel'], $rules, 'channel');
+            $channel = $result['channel'];
+            if ($channel['minimum_amount'] > $channel['maximum_amount']) {
+                throw new BusinessException('单笔最大金额不能小于最小金额', ApiResponseConstant::VALIDATION_FAILED,
+                    ['channel.maximum_amount' => ['不能小于单笔最小金额']]);
+            }
+            if (($channel['available_from'] === null) !== ($channel['available_to'] === null)
+                || ($channel['available_from'] !== null && $channel['available_from'] === $channel['available_to'])) {
+                throw new BusinessException('可用时段须同时填写不同的开始和结束时间，或全部留空', ApiResponseConstant::VALIDATION_FAILED,
+                    ['channel.available_to' => ['请填写完整且起止不同的可用时段']]);
+            }
         }
         if (isset($input['settings'])) {
-            $result['settings'] = json_decode(json_encode($input['settings'], JSON_THROW_ON_ERROR), true, 64, JSON_THROW_ON_ERROR);
+            // 只转换根对象；字段类型交给插件 schema，不通过 JSON 往返把对象误转换为列表。
+            $result['settings'] = get_object_vars($input['settings']);
         }
         return $result;
     }

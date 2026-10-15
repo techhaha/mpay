@@ -56,7 +56,7 @@ final class MerchantNotifyDispatcherService extends BaseService
             $url = $this->messages->targetUrl($claim->target, $claim->parameters);
             // 预留两秒提交结果；慢 DNS 结束后 HTTP 客户端会再次检查这个绝对截止时间。
             $started = hrtime(true);
-            $response = $this->http->get($url, $claim->leaseUntil->modify('-2 seconds'), [HttpTargetPolicy::uri($claim->target)->getHost()]);
+            $response = $this->http->get($url, $claim->leaseUntil->modify('-2 seconds'));
             $durationMs = (int) min(4294967295, (hrtime(true) - $started) / 1000000);
             $acknowledged = $this->policy->acknowledged($response);
             $status = $response->getStatusCode();

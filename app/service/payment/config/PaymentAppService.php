@@ -66,7 +66,7 @@ final class PaymentAppService extends BaseService
         $this->transaction(function () use ($id, $revision, $name, $pid, $enabled, $hosts, $actor): void {
             $this->audit->authorize($actor);
             $app = $this->apps->lock($id);
-            if ((int) $app['revision'] !== $revision) { throw new BusinessException('应用已被修改，请刷新', ApiResponseConstant::CONFLICT); }
+            if ((int) $app['revision'] !== $revision) { throw new BusinessException('应用已被修改，请刷新', ApiResponseConstant::STALE_VERSION); }
             $this->assertPidAvailable($pid, $id);
             $this->apps->update($app, $pid, $name, $enabled, $hosts, $this->clock->now()->format('Y-m-d H:i:s'));
             $this->audit->record($actor, 'application.save', 'payment_app', $id, 'updated', ['enabled' => $enabled]);
@@ -80,7 +80,7 @@ final class PaymentAppService extends BaseService
         return $this->transaction(function () use ($id, $expectedId, $actor): array {
             $this->audit->authorize($actor);
             $app = $this->apps->lock($id);
-            if ($app['active_key_id'] !== $expectedId) { throw new BusinessException('KEY 已改变，请刷新', ApiResponseConstant::CONFLICT); }
+            if ($app['active_key_id'] !== $expectedId) { throw new BusinessException('KEY 已改变，请刷新', ApiResponseConstant::STALE_VERSION); }
             $version = $this->credentials->active($app) ?? throw new \RuntimeException('活动 KEY 缺失');
             $this->audit->record($actor, 'application.key_reveal', 'payment_app', $id, 'viewed', ['credential_version' => (int) $version['version']]);
             return ['id' => $expectedId, 'version' => (int) $version['version'], 'key' => $this->credentials->secretForVersion($id, $expectedId)];
@@ -107,10 +107,10 @@ final class PaymentAppService extends BaseService
     }
 
     /**
-     * 精确域名，不允许通配符或路径；没有域名时应用暂不能创建新订单。
+     * 可选域名限制：空列表或单独的 * 表示不限域名，其余条目精确匹配，不接受子域通配或路径。
      *
      * @param list<string> $hosts 管理员输入。
-     * @return list<string> 小写、去重后的域名。
+     * @return list<string> 小写、去重后的域名；存在 * 时统一保存为 ['*']。
      */
     private function hosts(array $hosts): array
     {
@@ -118,14 +118,18 @@ final class PaymentAppService extends BaseService
         $normalized = [];
         foreach ($hosts as $host) {
             if (!is_string($host) || $host === '' || trim($host) !== $host) { throw new BusinessException('回调域名格式无效', ApiResponseConstant::VALIDATION_FAILED); }
+            if ($host === '*') { $normalized[] = '*'; continue; }
             $host = strtolower($host);
-            $uri = HttpTargetPolicy::uri('https://' . $host);
+            try { $uri = HttpTargetPolicy::uri('https://' . $host); }
+            catch (BusinessException) {
+                throw new BusinessException('每行填写一个完整域名，不带协议、端口或路径；不限域名请留空或填写 *', ApiResponseConstant::VALIDATION_FAILED);
+            }
             if ($uri->getHost() !== $host || $uri->getPort() !== null || $uri->getPath() !== '' || $uri->getQuery() !== '' || $uri->getFragment() !== '') {
                 throw new BusinessException('只填写域名，不带协议、端口或路径', ApiResponseConstant::VALIDATION_FAILED);
             }
             $normalized[] = $host;
         }
-        return array_values(array_unique($normalized));
+        return in_array('*', $normalized, true) ? ['*'] : array_values(array_unique($normalized));
     }
 
     private function assertPidAvailable(string $pid, ?string $except = null): void
@@ -149,7 +153,7 @@ final class PaymentAppService extends BaseService
         $this->transaction(function () use ($id, $revision, $useDefault, $actor): void {
             $this->audit->authorize($actor);
             $app = $this->apps->lock($id);
-            if ((int) $app['revision'] !== $revision) { throw new BusinessException('应用已修改，请刷新', ApiResponseConstant::CONFLICT); }
+            if ((int) $app['revision'] !== $revision) { throw new BusinessException('应用已修改，请刷新', ApiResponseConstant::STALE_VERSION); }
             if ($useDefault) { $this->defaults->applyToApp($id); }
             if ((int) $app['use_default_route'] !== (int) $useDefault) {
                 $this->apps->setDefaultRoute($app, $useDefault, $this->clock->now()->format('Y-m-d H:i:s'));

@@ -100,18 +100,13 @@ final class PaymentConfigurationQueryService extends BaseService
             $configuration = $this->configurations->find($channel['api_config_id']) ?? throw new RuntimeException('通道配置缺失');
             $types = $channel['pay_types'];
             if (!is_array($types) || count($types) !== 1) { throw new RuntimeException('通道必须有一个明确支付方式'); }
-            $revision = $channel['current_revision_id'] === null ? null : $this->channels->revision($id, $channel['current_revision_id']);
-            if ($channel['current_revision_id'] !== null && $revision === null) { throw new RuntimeException('通道快照缺失'); }
-            $configurationRevision = $this->configurations->revision($configuration['id'], (int) $configuration['config_version'])
-                ?? throw new RuntimeException('通道配置版本缺失');
-            $definition = $this->plugins->definition($configuration['plugin_code']);
-            $scope = $this->scopes->find($channel['receipt_scope_key']) ?? throw new RuntimeException('通道收款范围缺失');
+            // 详情只读取展示和编辑需要的数据；快照/范围一致性由保存及支付执行入口核对。
             $plugin = $this->plugins->make($configuration['plugin_code']);
             $push = $plugin instanceof ChannelNotifyInterface;
             $polling = $plugin instanceof ReceiptCollectorInterface;
             return ['id' => $id, 'plugin_code' => $channel['plugin_code'], 'configuration_id' => $channel['api_config_id'],
                 'configuration_version' => (int) $configuration['config_version'], 'enabled' => (int) $channel['enabled'] === 1,
-                // 只返回当前已配置来源的固定路径；HTTP 入口按当前请求生成域名，不存入通道快照。
+                // 只返回通知路径；后台按浏览器当前站点展示完整地址，不存入通道快照。
                 'notification' => ['mode' => $push ? 'push' : ($polling ? 'polling' : 'unavailable'),
                     'method' => $push ? 'POST' : null,
                     'path' => $push ? '/api/pay/' . $id . '/notify' : null],

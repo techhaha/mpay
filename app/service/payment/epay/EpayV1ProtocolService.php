@@ -7,7 +7,6 @@ use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
-use app\common\util\HttpTargetPolicy;
 use app\exception\BusinessException;
 use app\exception\PaymentDefinitiveException;
 use app\model\payment\BizOrder;
@@ -38,7 +37,6 @@ final class EpayV1ProtocolService extends BaseService
         private readonly BizOrderRepository $bizOrders,
         private readonly PayOrderRepository $payOrders,
         private readonly EpayV1MessageService $messages,
-        private readonly HttpTargetPolicy $targets,
         private readonly Clock $clock,
         private readonly CashierService $cashier,
     ) {
@@ -158,9 +156,7 @@ final class EpayV1ProtocolService extends BaseService
             if ($biz['return_url'] === null) {
                 throw new BusinessException('此订单未设置回跳地址，请留在结果页', ApiResponseConstant::CONFLICT);
             }
-            // 已授权订单的冻结目标不随应用后续修改失效；仍检查地址格式与网络边界。
-            $host = HttpTargetPolicy::uri($biz['return_url'])->getHost();
-            $this->targets->forHosts([$host])->validate($biz['return_url']);
+            // 使用原单冻结目标，格式由签名/编码方法核验；浏览器回跳不执行服务器出站检查。
             $parameters = $this->messages->signForTarget($biz['return_url'],
                 $this->messages->successParameters($biz, $pay, $biz['pid']),
                 $this->credentials->secretForVersion($biz['app_id'], $biz['credential_version_id']));

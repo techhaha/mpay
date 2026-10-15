@@ -54,7 +54,7 @@ final class PaymentChannelService extends BaseService
             $channel = $this->channels->lock($id);
             if ($channel['deleted_at'] !== null) { throw new BusinessException('通道已删除', ApiResponseConstant::NOT_FOUND); }
             if ($channel['api_config_id'] !== $configurationId || $channel['current_revision_id'] !== $expectedRevision) {
-                throw new BusinessException('通道已改变，请刷新后再保存', ApiResponseConstant::CONFLICT);
+                throw new BusinessException('通道已改变，请刷新后再保存', ApiResponseConstant::STALE_VERSION);
             }
             // 通道组合入口在事务内再次保护接入切换，不能绕过组合表单的在途订单/组类型检查。
             if ($channel['pay_types'] !== [$input->payType] || $channel['receipt_scope_key'] !== $input->scopeKey) {
@@ -107,7 +107,7 @@ final class PaymentChannelService extends BaseService
         $this->assertVersion($configuration, $expectedConfigurationVersion);
         if ($channel['api_config_id'] !== $configuration['id']
             || $channel['plugin_code'] !== $configuration['plugin_code'] || $channel['current_revision_id'] !== $expectedRevision) {
-            throw new BusinessException('通道已改变，请刷新后再操作', ApiResponseConstant::CONFLICT);
+            throw new BusinessException('通道已改变，请刷新后再操作', ApiResponseConstant::STALE_VERSION);
         }
         if ($enabled) {
             $this->management->assertNew($configuration['plugin_code']);
@@ -134,7 +134,7 @@ final class PaymentChannelService extends BaseService
     private function assertVersion(PaymentPluginConf $configuration, int $expected): void
     {
         if ($expected < 1 || (int) $configuration['config_version'] !== $expected) {
-            throw new BusinessException('收款配置已改变，请刷新后再操作', ApiResponseConstant::CONFLICT);
+            throw new BusinessException('收款配置已改变，请刷新后再操作', ApiResponseConstant::STALE_VERSION);
         }
     }
 

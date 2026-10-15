@@ -17,7 +17,6 @@ use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\routing\DefaultRoutingService;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
-use InvalidArgumentException;
 
 /**
  * 通道表单的完整用例：配置关联、插件参数、通道快照在一个服务事务中保存。
@@ -211,14 +210,13 @@ final class PaymentChannelEditorService extends BaseService
     {
         if ($channel['deleted_at'] !== null) { throw new BusinessException('通道已删除', Code::NOT_FOUND); }
         if ($channel['api_config_id'] !== $configuration['id'] || $channel['current_revision_id'] !== $input['expected_revision']
-            || (int) $configuration['config_version'] !== $input['expected_configuration_version']) { throw new BusinessException('通道配置已改变，请刷新后再操作', Code::CONFLICT); }
+            || (int) $configuration['config_version'] !== $input['expected_configuration_version']) { throw new BusinessException('通道配置已改变，请刷新后再操作', Code::STALE_VERSION); }
     }
 
     /** @param array<string,int|string|null> $values 已校验通道表单；金额为分。 */
     private function rules(array $values, string $scope, string $type, ?bool $participates): PaymentChannelInput
     {
-        try { return new PaymentChannelInput($values['name'], $scope, $type,
-            $values['minimum_amount'], $values['maximum_amount'], $values['daily_limit_amount'], $values['daily_limit_count'], $values['available_from'], $values['available_to'], $participates); }
-        catch (InvalidArgumentException) { throw new BusinessException('请核对通道名称、限额和可用时段', Code::VALIDATION_FAILED); }
+        return new PaymentChannelInput($values['name'], $scope, $type,
+            $values['minimum_amount'], $values['maximum_amount'], $values['daily_limit_amount'], $values['daily_limit_count'], $values['available_from'], $values['available_to'], $participates);
     }
 }

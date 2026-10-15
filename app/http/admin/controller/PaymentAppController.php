@@ -14,7 +14,7 @@ final class PaymentAppController extends BaseAdminController
 {
     public function index(PaymentAppService $service): Response
     {
-        return $this->success(['items' => $service->listing(), 'origin' => $this->request->domain()])->header(['Cache-Control' => 'no-store']);
+        return $this->success(['items' => $service->listing()]);
     }
 
     public function create(PaymentAppValidator $validator, PaymentAppService $service): Response

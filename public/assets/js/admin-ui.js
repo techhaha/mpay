@@ -73,14 +73,14 @@
             const text = (Array.isArray(messages) ? messages : [messages]).filter(value => typeof value === 'string').join('，');
             return text ? (label && !text.startsWith(label) ? label + '：' : '') + text : '';
         }).filter(Boolean).join('；') : '';
-        const message = exception instanceof TypeError ? '连接中断，请检查网络后重新读取；如刚提交过修改，请先核对保存结果' : exception.message || '操作未完成，请稍后重试';
+        const message = exception instanceof TypeError ? '页面处理异常，请重新读取' : exception.message || '操作未完成，请稍后重试';
         feedback(target, message + (detail ? '：' + detail : ''));
     }
     function message(text) { layui.layer.msg(escape(text), {time:2300}); }
     /**
      * 无输入操作使用官方 confirm/异步按钮；content、description 和按钮文案均按文本转义。
      * onConfirm 只提交操作，刷新放在返回 true 之后，避免刷新失败导致重复写入。
-     * 冲突或结果不确定时保留错误并禁止重投，必须重新读取；取消、遮罩、Esc 均返回 false。
+     * 版本冲突或写入结果未知须重新读取；普通业务拒绝保留操作入口。
      * @param {{title: string, content: string, description?: string, confirmText: string, danger?: boolean,
      *   onConfirm?: () => Promise<unknown>, onError?: (error: Error, feedback: HTMLElement) => void}} options
      * @returns {Promise<boolean>} 弹层关闭后返回是否已确认且提交成功。
@@ -132,7 +132,7 @@
                 const target = layerNode.querySelector('.admin-feedback'); feedback(target,'');
                 try { await options.onConfirm?.(); accepted = true; return true; }
                 catch (exception) {
-                    stale = exception.code === 40900 || exception.code === 0 || exception.code >= 50000 || exception instanceof TypeError;
+                    stale = exception.code === 40910 || exception.outcomeUnknown === true;
                     error(target,exception);
                     if (stale) {
                         target.append('。请关闭弹窗，重新读取并核对结果后再操作。');
@@ -289,8 +289,9 @@
                     handle.run(async () => {
                         try { await options.onSubmit(element,handle,event.submitter?.dataset.submitAction || 'primary'); }
                         catch(exception) {
-                            // 默认禁止重投陈旧表单；retrySafe 只允许已实现服务端幂等且冻结提交参数的用例使用。
-                            if(!options.retrySafe && (exception.code===40900 || exception.code===0 || exception.code>=50000 || exception instanceof TypeError)){
+                            // 只有版本过期或写入结果未知才阻止重投；普通业务拒绝允许原地修正。
+                            // retrySafe 只用于服务端幂等且冻结提交参数的用例，不能绕过版本冲突。
+                            if(exception.code===40910 || (!options.retrySafe && exception.outcomeUnknown===true)){
                                 stale=true;handle.node.querySelectorAll('[data-admin-submit]').forEach(button=>{button.disabled=true;button.dataset.keepDisabled='1';});
                                 handle.error(exception);handle.node.querySelector('.admin-feedback').append('。请关闭表单，重新读取并核对结果后再操作。');
                             }else throw exception;

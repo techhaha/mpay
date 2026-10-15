@@ -45,7 +45,7 @@ final class EpayV1MessageService
 
     /**
      * 固定协议字段由已确认订单覆盖，其他目标 query 原样参与签名，避免拼两次问号或漏签已有字段。
-     * 这里只做确定性编码；输入时/连接时的允许列表检查分别由协议入口和派发器负责。
+     * 这里只做格式检查与确定性编码；新订单的域名限制在建单处理，通知连接的网络检查在 HTTP 层处理。
      *
      * @param array<string,string> $parameters successParameters 返回的固定参数。
      * @return array<string|int,string> 完整冻结参数，可重复编码为同一请求。

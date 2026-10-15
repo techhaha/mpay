@@ -135,7 +135,7 @@ final class PaymentPluginConfService extends BaseService
 
     private function assertVersion(int $current, int $expected): void
     {
-        if ($current !== $expected) { throw new BusinessException('插件配置已修改，请刷新', ApiResponseConstant::CONFLICT); }
+        if ($current !== $expected) { throw new BusinessException('插件配置已修改，请刷新', ApiResponseConstant::STALE_VERSION); }
     }
 
     /** 配置对象键顺序不构成修改；字段值严格比较，列表的顺序仍有意义。 */

@@ -131,7 +131,7 @@ final class PaymentCatalogService extends BaseService
         $this->transaction(function () use ($input, $actor): void {
             $this->audit->authorize($actor);
             $plugin = $this->records->find($input['code'], true) ?? throw new BusinessException('请先刷新插件列表', Code::CONFLICT);
-            if ((int) $plugin['revision'] !== $input['revision']) { throw new BusinessException('插件状态已变化，请刷新', Code::CONFLICT); }
+            if ((int) $plugin['revision'] !== $input['revision']) { throw new BusinessException('插件状态已变化，请刷新', Code::STALE_VERSION); }
             $this->records->setEnabled($plugin, $input['enabled'], $this->clock->now()->format('Y-m-d H:i:s'));
             $this->audit->record($actor, 'plugin.enabled', 'payment_plugin', $plugin['id'], $input['enabled'] ? 'enabled' : 'disabled', ['enabled' => $input['enabled']]);
         });
@@ -145,7 +145,7 @@ final class PaymentCatalogService extends BaseService
             $this->audit->authorize($actor);
             $row = $input['id'] === null ? null : $this->types->find($input['id'], true);
             if ($input['id'] !== null && $row === null) { throw new BusinessException('支付方式不存在', Code::NOT_FOUND); }
-            if ($row !== null && (int) $row['revision'] !== $input['revision']) { throw new BusinessException('支付方式已修改，请刷新', Code::CONFLICT); }
+            if ($row !== null && (int) $row['revision'] !== $input['revision']) { throw new BusinessException('支付方式已修改，请刷新', Code::STALE_VERSION); }
             $duplicate = $this->types->findCode($input['code']);
             if ($duplicate !== null && ($row === null || $duplicate['id'] !== $row['id'])) { throw new BusinessException('支付方式编码已存在', Code::CONFLICT); }
             if ($row !== null && $row['code'] !== $input['code'] && $this->types->referenced($row['id'], $row['default_poll_group_id'])) {
@@ -165,7 +165,7 @@ final class PaymentCatalogService extends BaseService
         $this->transaction(function () use ($id, $revision, $actor): void {
             $this->audit->authorize($actor);
             $row = $this->types->find($id, true) ?? throw new BusinessException('支付方式不存在', Code::NOT_FOUND);
-            if ((int) $row['revision'] !== $revision) { throw new BusinessException('支付方式已修改，请刷新', Code::CONFLICT); }
+            if ((int) $row['revision'] !== $revision) { throw new BusinessException('支付方式已修改，请刷新', Code::STALE_VERSION); }
             if ($this->types->referenced($id, $row['default_poll_group_id'])) { throw new BusinessException('支付方式已有引用，请使用停用操作', Code::CONFLICT); }
             if ($row['default_poll_group_id'] !== null) { $this->groups->deleteForType($id, $row['default_poll_group_id']); }
             $this->types->delete($row);

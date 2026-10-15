@@ -44,7 +44,8 @@ final class PaymentConfigurationController extends BaseAdminController
             'biz_no' => $order->bizNo,
             'pay_no' => $order->payNo,
             'reused' => $order->reused,
-            'cashier_url' => (string) url('/cashier/pay', ['biz_no' => $order->bizNo, 'token' => $order->accessToken])->suffix(false)->domain(true)->root('')
+            // 后台内跳转使用相对地址，沿用浏览器当前站点，不依赖代理回源时观察到的协议或域名。
+            'cashier_url' => (string) url('/cashier/pay', ['biz_no' => $order->bizNo, 'token' => $order->accessToken])->suffix(false)->domain(false)->root('')
         ], '测试订单已创建');
     }
 
@@ -68,10 +69,7 @@ final class PaymentConfigurationController extends BaseAdminController
 
     public function channel(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
     {
-        $data = $query->channel($validator->identity($this->request->get()));
-        $path = $data['notification']['path'];
-        $data['notification']['url'] = $path === null ? null : (string) url($path)->suffix(false)->domain(true)->root('');
-        return $this->success($data);
+        return $this->success($query->channel($validator->identity($this->request->get())));
     }
 
     /** 上传仅登记图片及审计；通道表单后续显式保存资产 ID，旧订单继续引用旧图片。 */

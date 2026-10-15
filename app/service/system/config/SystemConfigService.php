@@ -57,7 +57,7 @@ final class SystemConfigService extends BaseService
 
             $row = $this->settings->lock($key);
             $previous = $this->describe($group, $row);
-            if ($previous['version'] !== $expectedVersion) { throw new BusinessException('系统设置已改变，请重新读取后再保存', ApiResponseConstant::CONFLICT); }
+            if ($previous['version'] !== $expectedVersion) { throw new BusinessException('系统设置已改变，请重新读取后再保存', ApiResponseConstant::STALE_VERSION); }
             $changed = $previous['values'] != $values;
             // 首次保存即使等于默认值也显式固定到数据库；之后才可把同值请求记为 unchanged。
             $version = $row !== null && !$changed ? $expectedVersion

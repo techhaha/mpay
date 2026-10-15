@@ -100,17 +100,12 @@ layui.use('layer', function () {
     function complete(data) {
         if (!data || data.biz_no !== identity.biz_no || typeof data.status !== 'number') throw new Error('商户确认响应异常');
         if (data.action === 'payment') { phase = 'payment'; deadline = null; pending = 'order'; return; }
-        if (data.status !== 2) throw new Error('订单尚未确认支付成功');
         if (['return','success'].includes(data.action)) {
-            if (data.required && data.confirmed !== true) throw new Error('商户尚未确认');
-            if (data.action === 'return' && data.confirmed !== true) throw new Error('商户尚未确认');
-            const target = new URL(data.next_url, location.origin);
-            if (target.origin !== location.origin || target.pathname !== '/cashier/' + data.action
-                || target.searchParams.get('biz_no') !== identity.biz_no || target.searchParams.get('token') !== identity.token) throw new Error('完成页面地址无效');
+            // 完成动作与站内地址由服务端给出；目标入口仍核对订单、凭证及商户确认。
             phase = 'done'; clearTimeout(timer); disposePage();
             showResult('paid', {label:'已支付',icon:'ok-circle',title:'支付已完成',message:'付款已完成，请勿重复付款。',
                 detail:data.action === 'return' ? '商户已确认，正在返回商户页面。' : '正在查看支付结果。'});
-            location.replace(target.href); return;
+            location.replace(data.next_url); return;
         }
         if (data.action === 'attention') {
             phase = 'attention'; deadline = null;

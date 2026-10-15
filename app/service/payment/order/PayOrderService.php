@@ -55,9 +55,6 @@ final class PayOrderService extends BaseService
     {
         $this->requireTransaction();
         $validSeconds = $this->settings->values('payment_defaults')['order_valid_seconds'];
-        if (!is_int($validSeconds) || $validSeconds < 1 || $validSeconds > 86400) {
-            throw new RuntimeException('业务单有效期配置无效');
-        }
         // 同一应用的创建与凭证变更共用应用锁，防止验签后改 PID/KEY 仍以旧身份新建单。
         $app = $this->apps->lock($input->appId);
         if ((int) $app['status'] !== 1) {
@@ -71,7 +68,7 @@ final class PayOrderService extends BaseService
         if ($biz === null) {
             // 域名授权只决定新订单；已验签的同单重投仍使用冻结目标，下面继续核对完整业务指纹。
             $targets = $this->targets->forHosts($app['allowed_hosts']);
-            if ($input->notifyUrl !== null) { $targets->validate($input->notifyUrl); }
+            if ($input->notifyUrl !== null) { $targets->validateNotification($input->notifyUrl); }
             if ($input->returnUrl !== null) { $targets->validate($input->returnUrl); }
             $accessToken = bin2hex(random_bytes(32));
             $bizNo = $this->numbers->insert('B', $now, fn (string $bizNo) => $this->bizOrders->create([

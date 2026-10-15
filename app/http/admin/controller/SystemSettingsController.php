@@ -23,7 +23,7 @@ final class SystemSettingsController extends BaseAdminController
     public function index(SystemSettingsValidator $validator, SystemConfigService $settings, Config $config): Response
     {
         $validator->emptyQuery($this->request->get());
-        return $this->success(['groups' => $settings->all(), 'current_origin' => $this->request->domain(),
+        return $this->success(['groups' => $settings->all(),
             'notification_ports' => $config->get('http.allowed_ports', [80, 443])]);
     }
 

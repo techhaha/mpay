@@ -32,6 +32,8 @@ schema 是有序字段列表，最多 128 项；顺序决定显示顺序。字�
 
 每个 `upload` 字段还会在付款初始化时派生同名加 `_url` 的同源图片地址。例如 `proof` 保存资产 ID，`proof_url` 提供图片地址；同一 schema 不能再声明 `proof_url`，无论声明顺序如何。`receipt_qrcode_image_url` 同样是 `receipt_qrcode_image` 的派生字段，不是系统猜测的固定二维码参数。冲突在插件发现/刷新时直接报错。
 
+配置提交的根节点必须是 JSON 对象；入口直接提取对象字段，再按 schema 校验原生类型，不用 JSON 编码/解码将对象转换成列表。`list` 必须提交 JSON 数组，不能用数字属性名组成的对象代替。
+
 付款和退款初始化只补充 `channel_id`、`api_config_id`、`receipt_scope_key`、`pay_type_code` 等明确约定的运行参数，不把整行通道记录合入插件设置。插件自定义的 `name`、`id` 等字段保持原值；通道通知只补充其所需的通道、配置和范围标识。配置与运行参数同名时拒绝执行，不以覆盖方式解决冲突。
 
 | type | 保存的 JSON 类型 | 控件与限制 |

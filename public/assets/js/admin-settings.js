@@ -9,7 +9,7 @@ MpayAdmin.ready(function () {
     function display(group){const form=forms.find(item=>item.dataset.settingsGroup===group.group);if(!form)return;current.set(group.group,group);stale.delete(group.group);dirty.delete(group.group);fields[group.group].forEach(name=>form.elements[name].value=group.values[name]);form.querySelector('[data-version]').textContent=group.source==='deployment'?'使用默认值':'已保存 · 版本 '+group.version;}
     async function load(){
         if(loading||saving.size)return;loading=true;controls();UI.feedback(feedback,'正在读取设置…','loading');
-        try{const data=(await MpayHttp.request('/adminapi/settings')).data;data.groups.forEach(display);document.getElementById('settings-origin').textContent=data.current_origin;UI.feedback(feedback,'');}
+        try{const data=(await MpayHttp.request('/adminapi/settings')).data;data.groups.forEach(display);document.getElementById('settings-origin').textContent=location.origin;UI.feedback(feedback,'');}
         catch(exception){UI.error(feedback,exception);}finally{loading=false;controls();}
     }
     forms.forEach(form=>{
@@ -23,7 +23,7 @@ MpayAdmin.ready(function () {
                 saving.add(group);controls();UI.feedback(feedback,'正在保存…','loading');
                 const result=await MpayHttp.request('/adminapi/settings/save',{method:'POST',data:{group,expected_version:current.get(group).version,values,}});
                 display(result.data);UI.feedback(feedback,'');UI.message('设置已保存');
-            }catch(exception){if(exception.code===40900||exception.code===0||exception.code>=50000||exception instanceof TypeError)stale.add(group);UI.error(feedback,exception);if(stale.has(group))feedback.textContent+='。当前输入已保留，请重新读取核对结果后继续。';}
+            }catch(exception){if(exception.code===40910||exception.outcomeUnknown===true)stale.add(group);UI.error(feedback,exception);if(stale.has(group))feedback.textContent+='。当前输入已保留，请重新读取核对结果后继续。';}
             finally{saving.delete(group);controls();}
         });
     });

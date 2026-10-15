@@ -12,6 +12,7 @@ use GuzzleHttp\Psr7\FnStream;
 use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Utils;
 use GuzzleHttp\TransferStats;
+use InvalidArgumentException;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use think\Config;
@@ -36,17 +37,16 @@ class HttpClient
      * 发送已冻结签名的通知 URL，不重新签名或改写 query。响应不等于商户业务 ACK。
      *
      * @param \DateTimeImmutable $deadline 早于持久租约到期的绝对截止，包含本次 DNS 时间。
-     * @param list<string>|null $allowedHosts 从冻结通知目标取得的域名；null 使用构造时的策略。
      * @throws HttpRequestException 目标拒绝、解析/网络失败、预算或响应大小超限。
      */
-    public function get(string $url, \DateTimeImmutable $deadline, ?array $allowedHosts = null): ResponseInterface
+    public function get(string $url, \DateTimeImmutable $deadline): ResponseInterface
     {
         $started = hrtime(true);
         $this->assertDeadline($deadline, $started);
         try {
-            $policy = $allowedHosts === null ? $this->targets : $this->targets->forHosts($allowedHosts);
-            $uri = $policy->validate($url, true);
-            $addresses = $policy->resolve($uri);
+            // 使用已冻结的目标；完整格式/端口/IP 检查只执行一次，随后核验 DNS 并绑定连接地址。
+            $uri = $this->targets->validateNotification($url, true);
+            $addresses = $this->targets->resolve($uri);
         } catch (BusinessException $exception) {
             throw $this->targetFailure($exception, $started);
         }
@@ -57,19 +57,27 @@ class HttpClient
 
     /**
      * SDK 使用原生 PSR-7 请求；正文应由平台协议显式编码，禁止传入任意 Guzzle/cURL 选项。
-     * 登录、刷新和分页共用同一 deadline。超时只表示结果不确定，不证明远端未受理。
+     * 登录、刷新和本轮查单共用同一 deadline。超时只表示结果不确定，不证明远端未受理。
      *
      * @param int $maximumBytes 解码后正文上限，最大 4 MiB。
      * @param int $maximumHeaderBytes 响应头上限，最大 64 KiB。
      * @throws HttpRequestException 固定安全分类，不包含凭证、原始 URL 或平台响应。
-     * @throws \InvalidArgumentException 请求违反项目合同；SDK 编程错误不能伪装成远端拒绝。
+     * @throws InvalidArgumentException 请求或响应大小上限无效；不能伪装成远端拒绝。
      */
     public function send(RequestInterface $request, PlatformTargetPolicy $policy, \DateTimeImmutable $deadline,
         int $maximumBytes = 65536, int $maximumHeaderBytes = 16384): ResponseInterface
     {
         $started = hrtime(true);
         $this->assertDeadline($deadline, $started);
-        $this->assertRequest($request);
+        // SDK 负责构造平台请求，PSR-7/Guzzle 处理 HTTP 语法；公共层只保留请求体积限制。
+        $size = $request->getBody()->getSize();
+        $headerBytes = 0;
+        foreach ($request->getHeaders() as $name => $values) {
+            foreach ($values as $value) { $headerBytes += strlen($name) + strlen($value) + 4; }
+        }
+        if ($size === null || $size > 4194304 || count($request->getHeaders()) > 64 || $headerBytes > 32768) {
+            throw new InvalidArgumentException('SDK 请求正文或请求头大小超限');
+        }
         try {
             $uri = HttpTargetPolicy::uri((string) $request->getUri(), 16384, false);
             $addresses = $this->addresses->resolve(trim($uri->getHost(), '[]'), $policy->validate($uri));
@@ -168,34 +176,6 @@ class HttpClient
             $sink->close();
             throw $exception;
         }
-    }
-
-    /** PSR-7 校验 HTTP 语法；这里禁止绕过目标地址、正文大小与连接策略的 SDK 请求。 */
-    private function assertRequest(RequestInterface $request): void
-    {
-        $uri = $request->getUri();
-        $target = ($uri->getPath() === '' ? '/' : $uri->getPath()) . ($uri->getQuery() === '' ? '' : '?' . $uri->getQuery());
-        $hosts = $request->getHeader('Host');
-        $port = $uri->getPort() ?? ($uri->getScheme() === 'https' ? 443 : 80);
-        $size = $request->getBody()->getSize();
-        if (!in_array($request->getMethod(), ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD'], true)
-            || $request->getRequestTarget() !== $target || count($hosts) !== 1
-            || !in_array(strtolower($hosts[0]), [strtolower($uri->getAuthority()), strtolower($uri->getHost()) . ':' . $port], true)
-            || $size === null || $size > 4194304 || ($size > 0 && (!$request->hasHeader('Content-Type')
-                || in_array($request->getMethod(), ['GET', 'HEAD'], true)))) {
-            throw new \InvalidArgumentException('SDK 请求目标、方法或正文不符合合同');
-        }
-        foreach (['transfer-encoding', 'connection', 'proxy-authorization', 'proxy-connection', 'expect', 'upgrade', 'trailer', 'te', 'accept-encoding'] as $name) {
-            if ($request->hasHeader($name)) { throw new \InvalidArgumentException('SDK 不能覆盖连接控制头'); }
-        }
-        if ($request->hasHeader('Content-Length') && $request->getHeader('Content-Length') !== [(string) $size]) {
-            throw new \InvalidArgumentException('SDK 正文长度与声明不符');
-        }
-        $bytes = 0;
-        foreach ($request->getHeaders() as $name => $values) {
-            foreach ($values as $value) { $bytes += strlen($name) + strlen($value) + 4; }
-        }
-        if (count($request->getHeaders()) > 64 || $bytes > 32768) { throw new \InvalidArgumentException('SDK 请求头超限'); }
     }
 
     private function assertDeadline(\DateTimeImmutable $deadline, int $started): void

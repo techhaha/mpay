@@ -233,7 +233,7 @@ MpayAdmin.ready(function () {
             });
             const content=UI.facts({'通道名称':detail.channel.name,'支付方式':UI.paymentLabels[detail.channel.pay_type],'插件':configuration.plugin.name,'单笔最小金额（元）':UI.money(detail.channel.minimum_amount),'单笔最大金额（元）':UI.money(detail.channel.maximum_amount),'每日限额（元）':detail.channel.daily_limit_amount?UI.money(detail.channel.daily_limit_amount):'不限','每日限笔':detail.channel.daily_limit_count||'不限','可用时段':detail.channel.available_from?detail.channel.available_from+'～'+detail.channel.available_to+'（上海时区）':'全天'})
                 +UI.tabs([{title:'插件参数',content:'<dl class="admin-facts">'+rows.join('')+'</dl>'+images.map(image=>'<section id="'+E(image.targetId)+'" tabindex="-1" aria-label="'+E(image.title)+'"><div class="admin-section-title">'+E(image.title)+'</div><img class="admin-qr-preview" alt="'+E(image.title)+'"></section>').join('')},
-                    {title:'接入信息',content:detail.notification.url?'<div class="admin-code">'+E(detail.notification.url)+'</div><button class="layui-btn layui-btn-primary" data-copy="'+E(detail.notification.url)+'">复制通知地址</button>':UI.notice(detail.notification.mode==='polling'?'由后台采集任务查询到账流水。':'当前插件没有通知地址。')}]);
+                    {title:'接入信息',content:detail.notification.path?'<div class="admin-code">'+E(location.origin+detail.notification.path)+'</div><button class="layui-btn layui-btn-primary" data-copy="'+E(location.origin+detail.notification.path)+'">复制通知地址</button>':UI.notice(detail.notification.mode==='polling'?'由后台采集任务查询到账流水。':'当前插件没有通知地址。')}]);
             handle.node.querySelector('.channel-detail').innerHTML=UI.state(detail.enabled?'已启用':'已停用')+content;UI.render(handle.node);handle.feedback('');
             handle.node.querySelectorAll('[data-plugin-image]').forEach(button=>button.addEventListener('click',()=>{
                 const target=handle.node.querySelector('#'+CSS.escape(button.dataset.pluginImage));
@@ -276,10 +276,9 @@ MpayAdmin.ready(function () {
                 const paymentWindow=window.open('about:blank','_blank');if(paymentWindow)paymentWindow.opener=null;
                 try{
                     const result=(await post('channel-test',{app_id:appId,channel_id:channel.id,money,request_key:requestKey})).data;
-                    const target=new URL(result.cashier_url,location.origin);
-                    if(target.origin!==location.origin||target.pathname!=='/cashier/pay')throw new Error('收银台地址无效');
                     handle.clean();handle.close();
-                    if(paymentWindow&&!paymentWindow.closed)paymentWindow.location.replace(target.href);else location.assign(target.href);
+                    // 本站接口生成收银台相对地址；访问凭证由收银台入口校验。
+                    if(paymentWindow&&!paymentWindow.closed)paymentWindow.location.replace(result.cashier_url);else location.assign(result.cashier_url);
                 }catch(error){
                     paymentWindow?.close();
                     // 字段校验拒绝尚未建单，可修正金额；未知结果必须保留原参数重投同一请求。

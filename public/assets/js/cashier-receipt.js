@@ -26,9 +26,7 @@ const mount = function (host, order, params, context, autoTransfer = false) {
         // 上传的码牌可能是长方形，样式保留原图比例，不裁切或重新装饰其内部内容。
         host.querySelector('.cashier-qr').classList.add('cashier-qr-upload');
         if (typeof params.qrcode_image_url !== 'string') throw new Error('二维码图片地址无效');
-        const url = new URL(params.qrcode_image_url, location.origin);
-        if (url.origin !== location.origin || !url.pathname.startsWith('/storage/')) throw new Error('二维码图片地址无效');
-        image.src = url.href;
+        image.src = params.qrcode_image_url;
     } else {
         // 编码规格属于页面实现，不由业务服务随每笔快照重复注入。
         const encoding = {mode:'Byte',error_correction:'M',max_text_bytes:2331};
@@ -62,7 +60,8 @@ const mount = function (host, order, params, context, autoTransfer = false) {
         host.querySelector('.cashier-scan-guide .cashier-hint').textContent = '手机端也可直接打开支付宝付款页面。';
         if (typeof params.transfer_url !== 'string') throw new Error('支付宝付款地址无效');
         const url = new URL(params.transfer_url);
-        if (url.protocol !== 'https:' || url.host !== 'render.alipay.com' || url.pathname !== '/p/c/mdeduct-landing') {
+        // 链接由插件生成；展示端只拒绝可执行脚本等非网页协议，不复制平台域名和路径规则。
+        if (!['https:', 'http:'].includes(url.protocol)) {
             throw new Error('支付宝付款地址无效');
         }
         const link = document.createElement('a');

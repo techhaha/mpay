@@ -16,6 +16,8 @@ final class ApiResponseConstant
     public const NOT_FOUND = 40400;
     public const METHOD_NOT_ALLOWED = 40500;
     public const CONFLICT = 40900;
+    // 已读取的配置版本过期，前端须重新读取；普通业务冲突仍允许修正后提交。
+    public const STALE_VERSION = 40910;
     public const VALIDATION_FAILED = 42200;
     public const OPERATION_UNSUPPORTED = 42210;
     public const PAYMENT_REJECTED = 42220;

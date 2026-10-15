@@ -195,12 +195,6 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
         return $meta;
     }
 
-    /** 单条手机/内部通知只定位和返回证据；金额恢复与成功状态由生命周期在同一事务定稿。 */
-    public function notifyPayload(array $payload): array
-    {
-        return $this->receiptResult($this->locateReceipt($payload['record']), $payload['record']);
-    }
-
     /** @return array<string,mixed> 仅表达插件所选订单与来源证据，不代表订单已在数据库确认。 */
     private function receiptResult(PayOrder $pay, array $record): array
     {
@@ -264,7 +258,11 @@ final class WechatReceiptPayment implements ChannelNotifyInterface
         return '400：' . mb_strcut($message, 0, 4000, 'UTF-8');
     }
 
-    public function notify(Request $request): array { return $this->notifyPayload(['record' => $this->receipt($request)]); }
+    public function notify(Request $request): array
+    {
+        $record = $this->receipt($request);
+        return $this->receiptResult($this->locateReceipt($record), $record);
+    }
 
     /** @return array<string,mixed> 已按明确消息来源解析的标准流水，不携带平台原文。 */
     private function receipt(Request $request): array

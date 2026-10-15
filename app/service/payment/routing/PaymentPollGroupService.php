@@ -75,9 +75,9 @@ final class PaymentPollGroupService extends BaseService
                 if (!$enabled) { throw new BusinessException('默认轮询组不能单独停用，可停用支付方式或成员', ApiResponseConstant::CONFLICT); }
                 $currentIds = array_column(array_map(static fn ($row): array => $row->toArray(), $this->groups->members($id, true)), 'channel_id');
                 $nextIds = array_column($members, 'channel_id'); sort($currentIds); sort($nextIds);
-                if ($currentIds !== $nextIds) { throw new BusinessException('默认组成员随通道自动维护，请刷新后调整参与开关', ApiResponseConstant::CONFLICT); }
+                if ($currentIds !== $nextIds) { throw new BusinessException('默认组成员随通道自动维护，请刷新后调整参与开关', ApiResponseConstant::STALE_VERSION); }
             }
-            if ((int) $group['revision'] !== $revision) { throw new BusinessException('轮询组已修改，请刷新', ApiResponseConstant::CONFLICT); }
+            if ((int) $group['revision'] !== $revision) { throw new BusinessException('轮询组已修改，请刷新', ApiResponseConstant::STALE_VERSION); }
             $type = $this->catalog->typeCode($group['pay_type_id']) ?? throw new \RuntimeException('轮询组支付方式缺失');
             $this->assertMembers($members, $type);
             $this->groups->replaceMembers($id, $members);
@@ -95,7 +95,7 @@ final class PaymentPollGroupService extends BaseService
             $type = $this->catalog->lockType($payType) ?? throw new BusinessException('支付方式不存在', ApiResponseConstant::VALIDATION_FAILED);
             $binding = $this->groups->binding($appId, $type['id'], true);
             if (($binding === null ? 0 : (int) $binding['revision']) !== $expectedRevision) {
-                throw new BusinessException('应用绑定已修改，请刷新', ApiResponseConstant::CONFLICT);
+                throw new BusinessException('应用绑定已修改，请刷新', ApiResponseConstant::STALE_VERSION);
             }
             $group = $this->groups->lock($groupId);
             if ($group['pay_type_id'] !== $type['id']) { throw new BusinessException('轮询组支付方式不一致', ApiResponseConstant::VALIDATION_FAILED); }

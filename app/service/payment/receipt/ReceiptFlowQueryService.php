@@ -22,10 +22,12 @@ use app\repository\payment\trade\ChannelNotifyLogRepository;
  */
 final class ReceiptFlowQueryService extends BaseService
 {
-    public function __construct(private readonly ReceiptFlowRepository $flows, private readonly PayOrderRepository $orders,
-        private readonly PayCallbackLogRepository $callbacks, private readonly ChannelNotifyLogRepository $ingress)
-    {
-    }
+    public function __construct(
+        private readonly ReceiptFlowRepository $flows,
+        private readonly PayOrderRepository $orders,
+        private readonly PayCallbackLogRepository $callbacks,
+        private readonly ChannelNotifyLogRepository $ingress,
+    ) {}
 
     /**
      * @param array{from?:string,until?:string,id?:string,scope_key?:string,plugin_code?:string,pay_no?:string} $filters 日期缺省时查询全部已确认流水。
@@ -35,11 +37,21 @@ final class ReceiptFlowQueryService extends BaseService
     {
         return $this->transaction(function () use ($filters, $page, $limit): array {
             $data = $this->flows->adminPage($filters, $page, $limit);
-            $numbers = array_map(static fn (ReceiptFlow $flow): string => $flow['pay_no'], $data['items']);
+            $numbers = array_map(
+                static fn(ReceiptFlow $flow): string => $flow['pay_no'],
+                $data['items'],
+            );
             $payments = $this->orders->forNumbers($numbers);
             $items = [];
-            foreach ($data['items'] as $flow) { $items[] = $this->summary($flow, $payments[$flow['pay_no']] ?? null); }
-            return ['items' => $items, 'total' => $data['total'], 'page' => $page, 'limit' => $limit];
+            foreach ($data['items'] as $flow) {
+                $items[] = $this->summary($flow, $payments[$flow['pay_no']] ?? null);
+            }
+            return [
+                'items' => $items,
+                'total' => $data['total'],
+                'page' => $page,
+                'limit' => $limit,
+            ];
         });
     }
 
@@ -50,7 +62,9 @@ final class ReceiptFlowQueryService extends BaseService
             $flow = $this->flow($id);
             $result = $this->summary($flow, $this->orders->find($flow['pay_no']));
             $proof = is_array($flow['evidence_json']) ? $flow['evidence_json'] : [];
-            $reference = is_array($proof['source_reference'] ?? null) ? $proof['source_reference'] : [];
+            $reference = is_array($proof['source_reference'] ?? null)
+                ? $proof['source_reference']
+                : [];
             foreach (['plugin_code', 'plugin_version'] as $field) {
                 $value = $reference[$field] ?? null;
                 $result[$field] = is_string($value) && strlen($value) <= 64 ? $value : null;
@@ -58,9 +72,13 @@ final class ReceiptFlowQueryService extends BaseService
             $configuration = $reference['api_config_id'] ?? null;
             $revision = $reference['config_revision_id'] ?? null;
             $digest = $proof['source_payload_digest'] ?? null;
-            $result['api_config_id'] = is_string($configuration) && preg_match('/^[1-9][0-9]{0,19}$/D', $configuration) ? $configuration : null;
+            $result['api_config_id'] =
+                is_string($configuration) && preg_match('/^[1-9][0-9]{0,19}$/D', $configuration)
+                    ? $configuration
+                    : null;
             $result['config_revision_id'] = is_int($revision) && $revision > 0 ? $revision : null;
-            $result['source_payload_digest'] = is_string($digest) && preg_match('/^[a-f0-9]{64}$/D', $digest) ? $digest : null;
+            $result['source_payload_digest'] =
+                is_string($digest) && preg_match('/^[a-f0-9]{64}$/D', $digest) ? $digest : null;
             $result['event_key'] = $flow['event_key'];
             $result['payload_digest'] = $flow['payload_digest'];
             $result['remark'] = $flow['remark'];
@@ -76,11 +94,21 @@ final class ReceiptFlowQueryService extends BaseService
             $data = $this->callbacks->pageForFlow($id, $page, $limit);
             $items = [];
             foreach ($data['items'] as $record) {
-                $items[] = ['id' => $record['id'], 'request_id' => $record['request_id'], 'created_at' => $record['created_at'],
-                    'pay_no' => $record['pay_no'], 'result_code' => $this->reasonCode($record['result_code']),
-                    'result_label' => $this->reasonLabel($this->reasonCode($record['result_code']))];
+                $items[] = [
+                    'id' => $record['id'],
+                    'request_id' => $record['request_id'],
+                    'created_at' => $record['created_at'],
+                    'pay_no' => $record['pay_no'],
+                    'result_code' => $this->reasonCode($record['result_code']),
+                    'result_label' => $this->reasonLabel($this->reasonCode($record['result_code'])),
+                ];
             }
-            return ['items' => $items, 'total' => $data['total'], 'page' => $page, 'limit' => $limit];
+            return [
+                'items' => $items,
+                'total' => $data['total'],
+                'page' => $page,
+                'limit' => $limit,
+            ];
         });
     }
 
@@ -96,41 +124,76 @@ final class ReceiptFlowQueryService extends BaseService
             $items = [];
             foreach ($data['items'] as $record) {
                 $count = $record['summary_json']['count'] ?? null;
-                $items[] = ['id' => $record['id'], 'channel_id' => $record['channel_id'], 'plugin_code' => $record['plugin_code'],
-                    'request_id' => $record['request_id'], 'result_code' => $this->reasonCode($record['result_code']), 'payload_digest' => $record['payload_digest'],
+                $items[] = [
+                    'id' => $record['id'],
+                    'channel_id' => $record['channel_id'],
+                    'plugin_code' => $record['plugin_code'],
+                    'request_id' => $record['request_id'],
+                    'result_code' => $this->reasonCode($record['result_code']),
+                    'payload_digest' => $record['payload_digest'],
                     'result_label' => $this->reasonLabel($this->reasonCode($record['result_code'])),
-                    'created_at' => $record['created_at'], 'flow_count' => is_int($count) && $count >= 0 ? $count : null];
+                    'created_at' => $record['created_at'],
+                    'flow_count' => is_int($count) && $count >= 0 ? $count : null,
+                ];
             }
-            return ['items' => $items, 'total' => $data['total'], 'page' => $page, 'limit' => $limit];
+            return [
+                'items' => $items,
+                'total' => $data['total'],
+                'page' => $page,
+                'limit' => $limit,
+            ];
         });
     }
 
     /** @return array{items:list<array{id:string}>,total:int,page:int,limit:int} 一个接收请求的全部持久流水引用可分页查看。 */
     public function ingressFlows(string $id, int $page, int $limit): array
     {
-        $record = $this->ingress->find($id) ?? throw new BusinessException('接收记录不存在', ApiResponseConstant::NOT_FOUND);
+        $record =
+            $this->ingress->find($id) ??
+            throw new BusinessException('接收记录不存在', ApiResponseConstant::NOT_FOUND);
         $ids = $record['summary_json']['flow_ids'] ?? null;
-        if (!is_array($ids) || !array_is_list($ids)) { throw new \RuntimeException('接收记录缺少完整流水引用'); }
-        foreach ($ids as $value) {
-            if (!is_string($value) || !preg_match('/^[1-9][0-9]{0,19}$/D', $value)) { throw new \RuntimeException('接收记录流水引用无效'); }
+        if (!is_array($ids) || !array_is_list($ids)) {
+            throw new \RuntimeException('接收记录缺少完整流水引用');
         }
-        return ['items' => array_map(static fn (string $value): array => ['id' => $value], array_slice($ids, ($page - 1) * $limit, $limit)),
-            'total' => count($ids), 'page' => $page, 'limit' => $limit];
+        foreach ($ids as $value) {
+            if (!is_string($value) || !preg_match('/^[1-9][0-9]{0,19}$/D', $value)) {
+                throw new \RuntimeException('接收记录流水引用无效');
+            }
+        }
+        return [
+            'items' => array_map(
+                static fn(string $value): array => ['id' => $value],
+                array_slice($ids, ($page - 1) * $limit, $limit),
+            ),
+            'total' => count($ids),
+            'page' => $page,
+            'limit' => $limit,
+        ];
     }
 
     private function flow(string $id): ReceiptFlow
     {
-        return $this->flows->find($id) ?? throw new BusinessException('到账记录不存在', ApiResponseConstant::NOT_FOUND);
+        return $this->flows->find($id) ??
+            throw new BusinessException('到账记录不存在', ApiResponseConstant::NOT_FOUND);
     }
 
     /** @return ReceiptView 与订单详情共用公开投影，不另开事务；ID 保留字符串，amount 为元字符串。 */
     public function summary(ReceiptFlow $flow, ?PayOrder $pay): array
     {
-        if ($pay !== null && $pay['receipt_scope_key'] !== $flow['receipt_scope_key']) { throw new \RuntimeException('流水绑定指向其他收款范围'); }
-        return ['id' => $flow['id'], 'scope_key' => $flow['receipt_scope_key'], 'plugin_code' => $flow['plugin_code'],
-            'reason_code' => $this->reasonCode($flow['reason_code']), 'reason_label' => $this->reasonLabel($this->reasonCode($flow['reason_code'])),
-            'amount' => Money::format((int) $flow['amount']), 'paid_at' => $flow['paid_at'], 'received_at' => $flow['received_at'],
-            'platform_trade_no' => $flow['platform_trade_no'], 'pay_no' => $flow['pay_no'],
+        if ($pay !== null && $pay['receipt_scope_key'] !== $flow['receipt_scope_key']) {
+            throw new \RuntimeException('流水绑定指向其他收款范围');
+        }
+        return [
+            'id' => $flow['id'],
+            'scope_key' => $flow['receipt_scope_key'],
+            'plugin_code' => $flow['plugin_code'],
+            'reason_code' => $this->reasonCode($flow['reason_code']),
+            'reason_label' => $this->reasonLabel($this->reasonCode($flow['reason_code'])),
+            'amount' => Money::format((int) $flow['amount']),
+            'paid_at' => $flow['paid_at'],
+            'received_at' => $flow['received_at'],
+            'platform_trade_no' => $flow['platform_trade_no'],
+            'pay_no' => $flow['pay_no'],
             'biz_no' => $pay === null ? null : $pay['biz_no'],
         ];
     }
@@ -138,7 +201,9 @@ final class ReceiptFlowQueryService extends BaseService
     /** 原始异常文本不能被误当作固定原因码返回；保留未知标记，不把坏数据解释成等待处理。 */
     private function reasonCode(?string $value): ?string
     {
-        if ($value === null) { return null; }
+        if ($value === null) {
+            return null;
+        }
         return preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $value) ? $value : 'unknown';
     }
 

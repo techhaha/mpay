@@ -11,9 +11,7 @@ use think\Session;
  */
 final class AdminSessionService
 {
-    public function __construct(private readonly Session $session)
-    {
-    }
+    public function __construct(private readonly Session $session) {}
 
     /** 后台与同源收银台复用会话 token，不为收银台建立管理员身份，也不使其他标签页表单失效。 */
     public function csrfToken(): string
@@ -35,9 +33,13 @@ final class AdminSessionService
     public function identity(): ?array
     {
         $identity = $this->session->get('admin');
-        if (!is_array($identity) || !is_string($identity['id'] ?? null)
-            || !preg_match('/^[1-9][0-9]{0,19}$/D', $identity['id'])
-            || !is_int($identity['session_version'] ?? null) || $identity['session_version'] < 1) {
+        if (
+            !is_array($identity) ||
+            !is_string($identity['id'] ?? null) ||
+            !preg_match('/^[1-9][0-9]{0,19}$/D', $identity['id']) ||
+            !is_int($identity['session_version'] ?? null) ||
+            $identity['session_version'] < 1
+        ) {
             return null;
         }
         return ['id' => $identity['id'], 'session_version' => $identity['session_version']];

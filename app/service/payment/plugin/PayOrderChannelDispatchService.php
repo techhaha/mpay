@@ -37,8 +37,7 @@ final class PayOrderChannelDispatchService
         private readonly Config $config,
         private readonly Clock $clock,
         private readonly PaymentPluginPayResultValidator $results,
-    ) {
-    }
+    ) {}
 
     /**
      * 重复调用复用已有材料或等待原执行；只有明确声明安全的静态构造可在租约到期后重建。
@@ -49,18 +48,28 @@ final class PayOrderChannelDispatchService
     public function dispatch(string $payNo, DateTimeImmutable $now, string $requestId): PayOrder
     {
         $pay = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
-        if (!in_array((int) $pay['status'], [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true)) {
+        if (
+            !in_array(
+                (int) $pay['status'],
+                [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING],
+                true,
+            )
+        ) {
             return $pay;
         }
         $time = $now->format('Y-m-d H:i:s');
         if ($pay['expire_at'] <= $time) {
             $this->lifecycle->expire($pay['biz_no']);
-            return $this->payOrders->find($payNo) ?? throw new RuntimeException('到期后的支付单不可读取');
+            return $this->payOrders->find($payNo) ??
+                throw new RuntimeException('到期后的支付单不可读取');
         }
         $execution = $pay['ext_json']['payment_context']['execution'] ?? null;
-        if (is_array($execution) && (($execution['phase'] ?? null) === 'presented'
-            || ($execution['replay_safe'] ?? null) === false
-            || (is_string($execution['lease_until'] ?? null) && $execution['lease_until'] > $time))) {
+        if (
+            is_array($execution) &&
+            (($execution['phase'] ?? null) === 'presented' ||
+                ($execution['replay_safe'] ?? null) === false ||
+                (is_string($execution['lease_until'] ?? null) && $execution['lease_until'] > $time))
+        ) {
             // 已展示或原执行仍在处理中时直接复用，避免刷新依赖重新读取配置或重读二维码文件。
             return $pay;
         }
@@ -85,32 +94,56 @@ final class PayOrderChannelDispatchService
             if ($field['type'] === 'upload') {
                 $asset = $context->configuration[$field['field']] ?? '';
                 // 错误类型交给统一配置验证，避免在验证前触发资产方法的类型错误。
-                if (is_string($asset)) { $runtime[$field['field'] . '_url'] = $this->files->publicImagePath($asset === '' ? null : $asset); }
+                if (is_string($asset)) {
+                    $runtime[$field['field'] . '_url'] = $this->files->publicImagePath(
+                        $asset === '' ? null : $asset,
+                    );
+                }
             }
         }
         // init 仅装配配置；配置或素材错误在认领之前暴露，不记录为已请求平台。
-        $plugin = $this->plugins->initialize($pay['plugin_code'], $context->configuration, $runtime);
+        $plugin = $this->plugins->initialize(
+            $pay['plugin_code'],
+            $context->configuration,
+            $runtime,
+        );
         $lease = $this->config->get('payment.execution_lease_seconds', 30);
         if (!is_int($lease)) {
             throw new RuntimeException('执行认领期限必须为整数秒');
         }
         // 插件明确声明重放边界；有外部副作用的插件默认不得因租约到期再次发起交易。
-        $claim = $this->lifecycle->beginExecution($payNo, $plugin->canRetryPay(), $lease, $requestId);
+        $claim = $this->lifecycle->beginExecution(
+            $payNo,
+            $plugin->canRetryPay(),
+            $lease,
+            $requestId,
+        );
         if (!$claim['execute']) {
             return $claim['pay'];
         }
         $token = $claim['token'];
         try {
             // 生命周期的认领事务已经提交；任何 SDK 网络请求均发生在此边界之外。
-            $order = ['pay_no' => $payNo, 'biz_no' => $context->bizNo, 'pay_type_code' => $context->payType,
-                'amount' => $context->payAmount, 'expire_at' => $context->expiresAt->format('Y-m-d H:i:s'), 'extra' => $claim['pay']['ext_json']];
+            $order = [
+                'pay_no' => $payNo,
+                'biz_no' => $context->bizNo,
+                'pay_type_code' => $context->payType,
+                'amount' => $context->payAmount,
+                'expire_at' => $context->expiresAt->format('Y-m-d H:i:s'),
+                'extra' => $claim['pay']['ext_json'],
+            ];
             $result = $this->results->validateResult($plugin->pay($order));
-            if ($result['pay_no'] !== $payNo || ($result['status'] === 'success' && $result['paid_amount'] !== $context->payAmount)) {
+            if (
+                $result['pay_no'] !== $payNo ||
+                ($result['status'] === 'success' && $result['paid_amount'] !== $context->payAmount)
+            ) {
                 throw new UnexpectedValueException('插件结果与当前订单不一致');
             }
             $presentation = null;
             if ($result['status'] === 'pending') {
-                if ($result['pay_type'] !== $context->payType) { throw new UnexpectedValueException('插件支付方式不一致'); }
+                if ($result['pay_type'] !== $context->payType) {
+                    throw new UnexpectedValueException('插件支付方式不一致');
+                }
                 $presentation = $result['presentation'];
             }
         } catch (PaymentDefinitiveException) {
@@ -123,12 +156,26 @@ final class PayOrderChannelDispatchService
         }
         $finishedAt = $this->clock->now();
         if ($result['status'] === 'pending') {
-            return $this->lifecycle->finishExecution($payNo, $token, 'presented', $presentation, $requestId, $result['chan_order_no']);
+            return $this->lifecycle->finishExecution(
+                $payNo,
+                $token,
+                'presented',
+                $presentation,
+                $requestId,
+                $result['chan_order_no'],
+            );
         }
-        $callback = new ChannelNotifyContext($pay['channel_id'], $context->channel['api_config_id'],
-            $context->configVersion, $pay['plugin_code'], $version,
-            $context->scopeKey, $context->payType,
-            $context->configuration, $finishedAt);
+        $callback = new ChannelNotifyContext(
+            $pay['channel_id'],
+            $context->channel['api_config_id'],
+            $context->configVersion,
+            $pay['plugin_code'],
+            $version,
+            $context->scopeKey,
+            $context->payType,
+            $context->configuration,
+            $finishedAt,
+        );
         $this->callbacks->acceptPluginResult($result, $callback, $requestId);
         // 返回生命周期已经提交的实际状态，不能仅依据插件字符串向客户端宣称支付成功。
         return $this->payOrders->find($payNo) ?? throw new RuntimeException('回调后支付单不可读取');
@@ -140,15 +187,19 @@ final class PayOrderChannelDispatchService
         $snapshot = $this->revisions->snapshot($pay['channel_id'], $pay['channel_revision_id']);
         $receipt = $pay['ext_json']['personal_receipt'] ?? [];
         $payment = $pay['ext_json']['payment_context'] ?? [];
-        if (($snapshot['channel']['id'] ?? null) !== $pay['channel_id']
-            || ($snapshot['channel']['receipt_scope_key'] ?? null) !== $pay['receipt_scope_key']
-            || ($snapshot['config_version'] ?? null) !== ($receipt['config_version'] ?? null)
-            || !is_string($payment['pay_type'] ?? null)) {
+        if (
+            ($snapshot['channel']['id'] ?? null) !== $pay['channel_id'] ||
+            ($snapshot['channel']['receipt_scope_key'] ?? null) !== $pay['receipt_scope_key'] ||
+            ($snapshot['config_version'] ?? null) !== ($receipt['config_version'] ?? null) ||
+            !is_string($payment['pay_type'] ?? null)
+        ) {
             throw new RuntimeException('原支付上下文与通道快照不一致');
         }
         $receiptAmount = (int) $pay->receiptAmount();
         Money::assertRange($receiptAmount);
-        if ($receiptAmount < $pay->originalAmount()) { throw new RuntimeException('原付款金额小于订单金额'); }
+        if ($receiptAmount < $pay->originalAmount()) {
+            throw new RuntimeException('原付款金额小于订单金额');
+        }
         return new PaymentContext(
             bizNo: $pay['biz_no'],
             payType: $payment['pay_type'],
@@ -160,5 +211,4 @@ final class PayOrderChannelDispatchService
             configuration: $snapshot['configuration'],
         );
     }
-
 }

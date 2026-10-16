@@ -28,5 +28,4 @@ final class ReceiptScope extends BaseModel
             ],
         ];
     }
-
 }

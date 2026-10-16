@@ -22,28 +22,41 @@ final class PaymentPluginFactoryService
     /** @var array<class-string<PaymentInterface>,PluginDefinition> 代码定义只核验一次；不缓存带通道配置的执行实例。 */
     private array $definitions = [];
 
-    public function __construct(private readonly App $app, private readonly Config $config, private readonly PluginConfigValidator $validator) {}
+    public function __construct(
+        private readonly App $app,
+        private readonly Config $config,
+        private readonly PluginConfigValidator $validator,
+    ) {}
 
     /** @return list<string> 只列随本程序交付的插件，不从数据库或请求加载类名。 */
-    public function codes(): array { return array_keys($this->registrations()); }
+    public function codes(): array
+    {
+        return array_keys($this->registrations());
+    }
 
     public function make(string $code): PaymentInterface
     {
         $class = $this->registrations()[$code] ?? null;
-        if (!is_string($class)) { throw new BusinessException('插件未安装', ApiResponseConstant::SERVICE_UNAVAILABLE); }
+        if (!is_string($class)) {
+            throw new BusinessException('插件未安装', ApiResponseConstant::SERVICE_UNAVAILABLE);
+        }
         if (!is_a($class, PaymentInterface::class, true)) {
             throw new LogicException('插件必须实现元信息与支付动作接口');
         }
         /** @var PaymentInterface $plugin 容器按已核对接口的动态类名创建，供静态分析追踪返回类型。 */
         $plugin = $this->app->make($class, [], true);
-        if ($plugin->getCode() !== $code) { throw new LogicException('插件编码与注册表不一致'); }
+        if ($plugin->getCode() !== $code) {
+            throw new LogicException('插件编码与注册表不一致');
+        }
         return $plugin;
     }
 
     public function definition(string $code): PluginDefinition
     {
         $class = $this->registrations()[$code] ?? null;
-        if (is_string($class) && isset($this->definitions[$class])) { return $this->definitions[$class]; }
+        if (is_string($class) && isset($this->definitions[$class])) {
+            return $this->definitions[$class];
+        }
         return $this->describe($this->make($code));
     }
 
@@ -58,11 +71,20 @@ final class PaymentPluginFactoryService
 
     public function describe(PaymentInterface $plugin): PluginDefinition
     {
-        if (isset($this->definitions[$plugin::class])) { return $this->definitions[$plugin::class]; }
+        if (isset($this->definitions[$plugin::class])) {
+            return $this->definitions[$plugin::class];
+        }
         // 发现/刷新时即核对采集声明，避免错误类型等到后台任务执行才暴露。
         $this->preloginEnabled($plugin);
-        return $this->definitions[$plugin::class] = new PluginDefinition($plugin->getCode(), $plugin->getVersion(), $plugin->getName(),
-            $plugin->getEnabledPayTypes(), $plugin->getConfigSchema(), $plugin::class, $plugin->getDescription());
+        return $this->definitions[$plugin::class] = new PluginDefinition(
+            $plugin->getCode(),
+            $plugin->getVersion(),
+            $plugin->getName(),
+            $plugin->getEnabledPayTypes(),
+            $plugin->getConfigSchema(),
+            $plugin::class,
+            $plugin->getDescription(),
+        );
     }
 
     /**
@@ -90,20 +112,34 @@ final class PaymentPluginFactoryService
             // 只扫描交付代码目录的主类，不递归 SDK，也不执行数据库/请求提供的任意文件名。
             foreach (glob($this->app->getAppPath() . 'common/payment/*.php') ?: [] as $file) {
                 $class = 'app\\common\\payment\\' . pathinfo($file, PATHINFO_FILENAME);
-                if (!is_a($class, PaymentInterface::class, true)
-                    || !(new ReflectionClass($class))->isInstantiable()) { continue; }
+                if (
+                    !is_a($class, PaymentInterface::class, true) ||
+                    !(new ReflectionClass($class))->isInstantiable()
+                ) {
+                    continue;
+                }
                 $plugin = $this->app->make($class, [], true);
                 $definition = $this->describe($plugin);
-                if (isset($this->installed[$definition->code])) { throw new LogicException('插件编码重复'); }
+                if (isset($this->installed[$definition->code])) {
+                    throw new LogicException('插件编码重复');
+                }
                 $this->installed[$definition->code] = $class;
             }
             ksort($this->installed);
         }
         $plugins = $this->installed;
-        $isolated = (PHP_SAPI === 'cli' || (PHP_SAPI === 'cli-server' && defined('MPAY_ISOLATED_HTTP') && MPAY_ISOLATED_HTTP === true))
-            && defined('MPAY_ISOLATED_TEST') && MPAY_ISOLATED_TEST === true && $this->config->get('mpay.environment') === 'testing';
+        $isolated =
+            (PHP_SAPI === 'cli' ||
+                (PHP_SAPI === 'cli-server' &&
+                    defined('MPAY_ISOLATED_HTTP') &&
+                    MPAY_ISOLATED_HTTP === true)) &&
+            defined('MPAY_ISOLATED_TEST') &&
+            MPAY_ISOLATED_TEST === true &&
+            $this->config->get('mpay.environment') === 'testing';
         $tests = $isolated ? $this->config->get('payment.test_plugins', []) : [];
-        if (!is_array($plugins) || !is_array($tests) || array_intersect_key($plugins, $tests)) { throw new LogicException('插件注册表格式或隔离边界无效'); }
+        if (!is_array($plugins) || !is_array($tests) || array_intersect_key($plugins, $tests)) {
+            throw new LogicException('插件注册表格式或隔离边界无效');
+        }
         return $plugins + $tests;
     }
 }

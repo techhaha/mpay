@@ -18,8 +18,10 @@ final class RuntimeController extends BaseAdminController
         return $this->success($query->overview());
     }
 
-    public function collections(RuntimeQueryValidator $validator, RuntimeQueryService $query): Response
-    {
+    public function collections(
+        RuntimeQueryValidator $validator,
+        RuntimeQueryService $query,
+    ): Response {
         $input = $validator->collections($this->request->get());
         $data = $query->collections($input['filters'], $input['page'], $input['limit']);
         return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);

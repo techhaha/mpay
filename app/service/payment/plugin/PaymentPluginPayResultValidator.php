@@ -27,14 +27,36 @@ final class PaymentPluginPayResultValidator extends Validate
         }
         if ($result['status'] === 'pending') {
             $view = $result['presentation'] ?? null;
-            if (!is_array($view) || array_diff(array_keys($view), ['pay_page', 'pay_params']) !== []) {
+            if (
+                !is_array($view) ||
+                array_diff(array_keys($view), ['pay_page', 'pay_params']) !== []
+            ) {
                 throw new UnexpectedValueException('插件支付展示结构无效');
             }
-            $result['presentation'] = self::presentation($view + [
-                'pay_type' => $result['pay_type'] ?? null, 'pay_product' => $result['pay_product'] ?? null, 'pay_action' => $result['pay_action'] ?? null,
-            ]);
+            $result['presentation'] = self::presentation(
+                $view + [
+                    'pay_type' => $result['pay_type'] ?? null,
+                    'pay_product' => $result['pay_product'] ?? null,
+                    'pay_action' => $result['pay_action'] ?? null,
+                ],
+            );
         }
-        return array_intersect_key($result, array_flip(['status', 'pay_no', 'paid_amount', 'chan_order_no', 'chan_trade_no', 'pay_type', 'pay_product', 'pay_action', 'presentation', 'receipt', 'paid_at']));
+        return array_intersect_key(
+            $result,
+            array_flip([
+                'status',
+                'pay_no',
+                'paid_amount',
+                'chan_order_no',
+                'chan_trade_no',
+                'pay_type',
+                'pay_product',
+                'pay_action',
+                'presentation',
+                'receipt',
+                'paid_at',
+            ]),
+        );
     }
 
     /**
@@ -55,39 +77,60 @@ final class PaymentPluginPayResultValidator extends Validate
             'pay_product' => $identifier,
             'pay_action' => $identifier,
             // 参数可为空对象；闭包仍检查 null/缺失，不能用 require 拒绝合法空数组。
-            'pay_params' => [static fn (mixed $value): bool => is_array($value) && ($value === [] || !array_is_list($value))],
+            'pay_params' => [
+                static fn(mixed $value): bool => is_array($value) &&
+                    ($value === [] || !array_is_list($value)),
+            ],
         ];
-        if (array_diff(array_keys($view), array_keys($rules)) !== []
-            || !(new Validate())->rule($rules)->failException(false)->check($view)) {
+        if (
+            array_diff(array_keys($view), array_keys($rules)) !== [] ||
+            !(new Validate())->rule($rules)->failException(false)->check($view)
+        ) {
             throw new UnexpectedValueException('插件支付展示结构无效');
         }
         $params = $view['pay_params'];
-        if ($view['pay_page'] === 'page' && !(new Validate())->rule(['_page' => $identifier])->failException(false)->check($params)) {
+        if (
+            $view['pay_page'] === 'page' &&
+            !(new Validate())
+                ->rule(['_page' => $identifier])
+                ->failException(false)
+                ->check($params)
+        ) {
             throw new UnexpectedValueException('插件支付页面参数无效');
         }
         // 限制为纯 JSON，禁止对象序列化副作用；深度和大小由 JSON 编码器集中检查。
         self::assertJson($params);
-        try { $json = json_encode($params, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE, 32); }
-        catch (JsonException $error) { throw new UnexpectedValueException('插件支付页面参数不是有效 JSON', 0, $error); }
-        if (strlen($json) > 65536) { throw new UnexpectedValueException('插件支付页面参数超过 64 KiB'); }
+        try {
+            $json = json_encode($params, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE, 32);
+        } catch (JsonException $error) {
+            throw new UnexpectedValueException('插件支付页面参数不是有效 JSON', 0, $error);
+        }
+        if (strlen($json) > 65536) {
+            throw new UnexpectedValueException('插件支付页面参数超过 64 KiB');
+        }
         return $view;
     }
 
     /** 字段必须存在；待付款为 null，成功时才允许正整数分，不根据展示材料猜金额。 */
     protected function requirePaidAmount(mixed $value, mixed $rule, array $data): bool
     {
-        return array_key_exists('paid_amount', $data) && match ($data['status'] ?? null) {
-            'pending' => $value === null,
-            'success' => is_int($value) && $value > 0,
-            default => false,
-        };
+        return array_key_exists('paid_amount', $data) &&
+            match ($data['status'] ?? null) {
+                'pending' => $value === null,
+                'success' => is_int($value) && $value > 0,
+                default => false,
+            };
     }
 
     /** require 前缀让框架检查 null 和缺失；渠道未返回引用时必须显式给 null。 */
     protected function requireReference(mixed $value, mixed $rule, array $data, string $field): bool
     {
-        return array_key_exists($field, $data) && ($value === null
-            || (is_string($value) && $value !== '' && strlen($value) <= 128 && mb_check_encoding($value, 'UTF-8')));
+        return array_key_exists($field, $data) &&
+            ($value === null ||
+                (is_string($value) &&
+                    $value !== '' &&
+                    strlen($value) <= 128 &&
+                    mb_check_encoding($value, 'UTF-8')));
     }
 
     /** 在遍历对象/资源前拒绝；先限制深度，也能停止循环引用的数组。 */
@@ -97,7 +140,9 @@ final class PaymentPluginPayResultValidator extends Validate
             throw new UnexpectedValueException('插件支付页面参数必须是有界纯 JSON');
         }
         if (is_array($value)) {
-            foreach ($value as $item) { self::assertJson($item, $depth + 1); }
+            foreach ($value as $item) {
+                self::assertJson($item, $depth + 1);
+            }
         }
     }
 }

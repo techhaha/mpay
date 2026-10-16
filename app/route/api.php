@@ -17,7 +17,9 @@ Route::group('api/cashier', function (): void {
     // 高频订单查询不读写 Session；订单随机凭证由入口及服务校验。
     Route::rule('order', [CashierController::class, 'order'], 'GET|HEAD')->name('cashier.order');
     Route::rule('status', [CashierController::class, 'status'], 'GET|HEAD')->name('cashier.status');
-    Route::rule('completion', [CashierController::class, 'completion'], 'GET|HEAD')->name('cashier.completion');
+    Route::rule('completion', [CashierController::class, 'completion'], 'GET|HEAD')->name(
+        'cashier.completion',
+    );
     Route::group(function (): void {
         Route::post('select', [CashierController::class, 'selectType'])->name('cashier.select');
         Route::post('prepare', [CashierController::class, 'prepare'])->name('cashier.prepare');
@@ -26,6 +28,6 @@ Route::group('api/cashier', function (): void {
 // 通道通知使用独立组；只允许 POST，原始正文由插件验签，来源与通道由服务核对。
 Route::group('api/pay', function (): void {
     Route::post(':channelId/notify', [PaymentNotifyController::class, 'notify'])
-        ->pattern(['channelId' => '[1-9][0-9]{0,19}'])->name('payment.channel-notify');
-
+        ->pattern(['channelId' => '[1-9][0-9]{0,19}'])
+        ->name('payment.channel-notify');
 });

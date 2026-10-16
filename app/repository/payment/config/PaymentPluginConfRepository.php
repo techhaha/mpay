@@ -11,8 +11,10 @@ use RuntimeException;
 /** @extends BaseRepository<PaymentPluginConf> 通道专属参数及不可变版本，不登记平台登录或采集任务。 */
 final class PaymentPluginConfRepository extends BaseRepository
 {
-    public function __construct(PaymentPluginConf $model, private readonly PaymentPluginConfRevision $revisions)
-    {
+    public function __construct(
+        PaymentPluginConf $model,
+        private readonly PaymentPluginConfRevision $revisions,
+    ) {
         parent::__construct($model);
     }
 
@@ -26,25 +28,39 @@ final class PaymentPluginConfRepository extends BaseRepository
     public function lock(string $id): PaymentPluginConf
     {
         $this->requireTransaction();
-        return $this->model->where('id', $id)->lock(true)->find() ?? throw new RuntimeException('收款配置不存在');
+        return $this->model->where('id', $id)->lock(true)->find() ??
+            throw new RuntimeException('收款配置不存在');
     }
 
-    public function find(string $id): ?PaymentPluginConf { return $this->model->find($id); }
+    public function find(string $id): ?PaymentPluginConf
+    {
+        return $this->model->find($id);
+    }
 
     /** @return array<string,PaymentPluginConf> 批量装配，避免每个订单重复读取凭证。 */
     public function forIds(array $ids): array
     {
-        if ($ids === []) { return []; }
+        if ($ids === []) {
+            return [];
+        }
         $result = [];
-        foreach ($this->model->whereIn('id', array_values(array_unique($ids)))->select() as $row) { $result[$row['id']] = $row; }
+        foreach ($this->model->whereIn('id', array_values(array_unique($ids)))->select() as $row) {
+            $result[$row['id']] = $row;
+        }
         return $result;
     }
 
     /** 缺失版本明确返回 null，不以当前配置补造原单快照。 */
-    public function revision(string $id, int $version, bool $currentRead = false): ?PaymentPluginConfRevision
-    {
+    public function revision(
+        string $id,
+        int $version,
+        bool $currentRead = false,
+    ): ?PaymentPluginConfRevision {
         $query = $this->revisions->where('api_config_id', $id)->where('config_version', $version);
-        if ($currentRead) { $this->requireTransaction(); $query->lock(true); }
+        if ($currentRead) {
+            $this->requireTransaction();
+            $query->lock(true);
+        }
         return $query->find();
     }
 
@@ -52,20 +68,46 @@ final class PaymentPluginConfRepository extends BaseRepository
     public function appendRevision(PaymentPluginConf $configuration, string $pluginVersion): void
     {
         $this->requireTransaction();
-        $this->insert(['api_config_id' => $configuration['id'], 'config_version' => (int) $configuration['config_version'],
-            'plugin_version' => $pluginVersion, 'config_json' => json_encode((object) $configuration['config_json'], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE)],
-            ['api_config_id', 'config_version', 'plugin_version', 'config_json'], model: $this->revisions);
+        $this->insert(
+            [
+                'api_config_id' => $configuration['id'],
+                'config_version' => (int) $configuration['config_version'],
+                'plugin_version' => $pluginVersion,
+                'config_json' => json_encode(
+                    (object) $configuration['config_json'],
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+                ),
+            ],
+            ['api_config_id', 'config_version', 'plugin_version', 'config_json'],
+            model: $this->revisions,
+        );
     }
 
     /** 活动参数与新版本在调用方事务中一并提交，旧版本不变化。 */
-    public function replace(PaymentPluginConf $configuration, string $name, string $json, string $pluginVersion, string $now): int
-    {
+    public function replace(
+        PaymentPluginConf $configuration,
+        string $name,
+        string $json,
+        string $pluginVersion,
+        string $now,
+    ): int {
         $this->requireTransaction();
         $version = (int) $configuration['config_version'];
-        if ($version >= 4294967295) { throw new RuntimeException('配置版本号已用尽'); }
-        $updated = $this->model->where('id', $configuration['id'])->where('config_version', $version)
-            ->update(['name' => $name, 'config_json' => $json, 'config_version' => $version + 1, 'updated_at' => $now]);
-        if ($updated !== 1) { throw new RuntimeException('配置当前版本已改变'); }
+        if ($version >= 4294967295) {
+            throw new RuntimeException('配置版本号已用尽');
+        }
+        $updated = $this->model
+            ->where('id', $configuration['id'])
+            ->where('config_version', $version)
+            ->update([
+                'name' => $name,
+                'config_json' => $json,
+                'config_version' => $version + 1,
+                'updated_at' => $now,
+            ]);
+        if ($updated !== 1) {
+            throw new RuntimeException('配置当前版本已改变');
+        }
         $this->appendRevision($this->lock($configuration['id']), $pluginVersion);
         return $version + 1;
     }

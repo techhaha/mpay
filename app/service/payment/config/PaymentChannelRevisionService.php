@@ -23,8 +23,7 @@ final class PaymentChannelRevisionService extends BaseService
         private readonly PaymentPluginConfRepository $configurations,
         private readonly PaymentPluginFactoryService $plugins,
         private readonly ReceiptScopeService $scopeAccess,
-    ) {
-    }
+    ) {}
 
     /**
      * 正式通道写用例复用外层事务：调用方已先锁配置、再锁通道；本方法随后核对目录及范围。
@@ -34,13 +33,19 @@ final class PaymentChannelRevisionService extends BaseService
      */
     public function freezeLocked(PaymentPluginConf $configuration, PaymentChannel $channel): string
     {
-        if ((string) $channel['api_config_id'] !== $configuration['id']
-            || $channel['plugin_code'] !== $configuration['plugin_code']) {
+        if (
+            (string) $channel['api_config_id'] !== $configuration['id'] ||
+            $channel['plugin_code'] !== $configuration['plugin_code']
+        ) {
             throw new RuntimeException('通道与收款配置不一致');
         }
         // 连凭证正文一起冻结，仅保存 config_version 指针无法恢复已被覆盖的活动配置。
-        $configurationRevision = $this->configurations->revision($configuration['id'], (int) $configuration['config_version'], true)
-            ?? throw new RuntimeException('收款配置版本缺失');
+        $configurationRevision =
+            $this->configurations->revision(
+                $configuration['id'],
+                (int) $configuration['config_version'],
+                true,
+            ) ?? throw new RuntimeException('收款配置版本缺失');
         $definition = $this->plugins->definition($configuration['plugin_code']);
         if ($configurationRevision['config_json'] !== $configuration['config_json']) {
             throw new RuntimeException('配置版本正文不一致');
@@ -51,17 +56,32 @@ final class PaymentChannelRevisionService extends BaseService
         }
         // 快照只冻结已保存参数；保存、启用及插件执行负责校验，不在持久化时重复解释 schema。
         $config = $configuration['config_json'];
-        if (!is_array($config)) { throw new RuntimeException('插件配置正文无效'); }
+        if (!is_array($config)) {
+            throw new RuntimeException('插件配置正文无效');
+        }
         $channelData = $channel->toArray();
         // 排除活动版本指针与维护时间，避免快照自引用和混入非支付规则字段。
-        unset($channelData['current_revision_id'], $channelData['created_at'], $channelData['updated_at']);
+        unset(
+            $channelData['current_revision_id'],
+            $channelData['created_at'],
+            $channelData['updated_at'],
+        );
         // 账号身份随配置一起固定；旧单的采集来源不能因活动账号重命名而被重新解释。
-        $snapshot = json_encode([
-            'channel' => $channelData,
-            'config_version' => (int) $configuration['config_version'], 'configuration' => $config,
-            'plugin_version' => $definition->version,
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-        return $this->channels->appendRevision($channel, (int) $configuration['config_version'], $snapshot, hash('sha256', $snapshot));
+        $snapshot = json_encode(
+            [
+                'channel' => $channelData,
+                'config_version' => (int) $configuration['config_version'],
+                'configuration' => $config,
+                'plugin_version' => $definition->version,
+            ],
+            JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+        );
+        return $this->channels->appendRevision(
+            $channel,
+            (int) $configuration['config_version'],
+            $snapshot,
+            hash('sha256', $snapshot),
+        );
     }
 
     /**
@@ -72,9 +92,14 @@ final class PaymentChannelRevisionService extends BaseService
      *     plugin_version?:string} 配置快照不可变，插件版本只用于追踪。
      * @throws RuntimeException 历史版本缺失或配置正文无效；禁止回退到活动配置。
      */
-    public function snapshot(string $channelId, string $revisionId, bool $currentRead = false): array
-    {
-        $revision = $this->channels->revision($channelId, $revisionId, $currentRead) ?? throw new RuntimeException('通道版本不存在');
+    public function snapshot(
+        string $channelId,
+        string $revisionId,
+        bool $currentRead = false,
+    ): array {
+        $revision =
+            $this->channels->revision($channelId, $revisionId, $currentRead) ??
+            throw new RuntimeException('通道版本不存在');
         return $revision['snapshot_json'];
     }
 
@@ -85,13 +110,26 @@ final class PaymentChannelRevisionService extends BaseService
      */
     public function rulesMatch(PaymentChannel $channel, array $snapshot): bool
     {
-        foreach (['id', 'plugin_code', 'api_config_id', 'pay_types', 'receipt_scope_key',
-            'min_amount', 'max_amount', 'daily_limit_amount', 'daily_limit_count', 'available_from', 'available_to'] as $field) {
+        foreach (
+            [
+                'id',
+                'plugin_code',
+                'api_config_id',
+                'pay_types',
+                'receipt_scope_key',
+                'min_amount',
+                'max_amount',
+                'daily_limit_amount',
+                'daily_limit_count',
+                'available_from',
+                'available_to',
+            ]
+            as $field
+        ) {
             if (!array_key_exists($field, $snapshot) || $channel[$field] !== $snapshot[$field]) {
                 return false;
             }
         }
         return true;
     }
-
 }

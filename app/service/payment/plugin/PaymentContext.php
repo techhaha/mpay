@@ -30,9 +30,13 @@ final readonly class PaymentContext
         public array $configuration,
     ) {
         Money::assertRange($payAmount);
-        if ($payAmount < 1 || !PaymentTypeCode::valid($payType)
-            || $bizNo === '' || $scopeKey === ''
-            || $configVersion < 1) {
+        if (
+            $payAmount < 1 ||
+            !PaymentTypeCode::valid($payType) ||
+            $bizNo === '' ||
+            $scopeKey === '' ||
+            $configVersion < 1
+        ) {
             throw new InvalidArgumentException('支付执行上下文无效');
         }
     }

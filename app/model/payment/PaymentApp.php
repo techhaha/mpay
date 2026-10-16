@@ -10,10 +10,21 @@ final class PaymentApp extends BaseModel
 {
     protected function getOptions(): array
     {
-        return ['table' => 'ma_payment_app', 'schema' => [
-            'id' => 'string', 'pid' => 'string', 'name' => 'string', 'status' => 'int',
-            'use_default_route' => 'int', 'active_key_id' => 'string', 'revision' => 'int', 'allowed_hosts' => 'json',
-            'created_at' => 'string', 'updated_at' => 'string',
-        ], 'json' => ['allowed_hosts']];
+        return [
+            'table' => 'ma_payment_app',
+            'schema' => [
+                'id' => 'string',
+                'pid' => 'string',
+                'name' => 'string',
+                'status' => 'int',
+                'use_default_route' => 'int',
+                'active_key_id' => 'string',
+                'revision' => 'int',
+                'allowed_hosts' => 'json',
+                'created_at' => 'string',
+                'updated_at' => 'string',
+            ],
+            'json' => ['allowed_hosts'],
+        ];
     }
 }

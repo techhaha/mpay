@@ -24,7 +24,9 @@ final class TradeConstant
     public static function confirmationLabel(?int $source): string
     {
         return match ($source) {
-            null => '尚未确认', self::CONFIRMATION_RECEIPT => '插件确认', self::CONFIRMATION_MANUAL => '人工确认',
+            null => '尚未确认',
+            self::CONFIRMATION_RECEIPT => '插件确认',
+            self::CONFIRMATION_MANUAL => '人工确认',
             default => throw new \UnexpectedValueException('未知收款确认来源'),
         };
     }

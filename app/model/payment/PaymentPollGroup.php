@@ -10,16 +10,19 @@ final class PaymentPollGroup extends BaseModel
 {
     protected function getOptions(): array
     {
-        return ['table' => 'ma_payment_poll_group', 'schema' => [
-            'id' => 'string',
-            'name' => 'string',
-            'pay_type_id' => 'string',
-            'route_mode' => 'int',
-            'status' => 'int',
-            'revision' => 'int',
-            'remark' => 'string',
-            'created_at' => 'string',
-            'updated_at' => 'string',
-        ]];
+        return [
+            'table' => 'ma_payment_poll_group',
+            'schema' => [
+                'id' => 'string',
+                'name' => 'string',
+                'pay_type_id' => 'string',
+                'route_mode' => 'int',
+                'status' => 'int',
+                'revision' => 'int',
+                'remark' => 'string',
+                'created_at' => 'string',
+                'updated_at' => 'string',
+            ],
+        ];
     }
 }

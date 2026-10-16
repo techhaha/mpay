@@ -13,7 +13,9 @@ final class SystemDoctorCommand extends Command
 {
     protected function configure(): void
     {
-        $this->setName('system:doctor')->setDescription('只读诊断依赖、站点、密钥、数据库/迁移及工作者近期心跳');
+        $this->setName('system:doctor')->setDescription(
+            '只读诊断依赖、站点、密钥、数据库/迁移及工作者近期心跳',
+        );
     }
 
     /** 0 为本次检查无异常，1 为检查失败，2 为警告；都不能代替真实收款和部署验收。 */
@@ -21,7 +23,9 @@ final class SystemDoctorCommand extends Command
     {
         $code = 0;
         foreach ($this->app->make(SystemDoctorService::class)->inspect() as $check) {
-            $output->writeln('[' . $check['status'] . '] ' . $check['id'] . '：' . $check['message']);
+            $output->writeln(
+                '[' . $check['status'] . '] ' . $check['id'] . '：' . $check['message'],
+            );
             if ($check['status'] === 'error') {
                 $code = 1;
             } elseif ($check['status'] === 'warning' && $code === 0) {

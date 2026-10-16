@@ -18,6 +18,5 @@ final readonly class NotificationClaim
         public \DateTimeImmutable $leaseUntil,
         // 人工授权只覆盖本次网络尝试；失败或崩溃后不重新开启一轮自动重试。
         public bool $manual = false,
-    ) {
-    }
+    ) {}
 }

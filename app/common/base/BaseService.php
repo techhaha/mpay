@@ -49,8 +49,11 @@ abstract class BaseService
      * @param int $sleepMs 两次执行之间等待的毫秒数，0～500。
      * @return T
      */
-    protected function transactionRetry(callable $callback, int $attempts = 3, int $sleepMs = 50): mixed
-    {
+    protected function transactionRetry(
+        callable $callback,
+        int $attempts = 3,
+        int $sleepMs = 50,
+    ): mixed {
         if ($attempts < 1 || $attempts > 5 || $sleepMs < 0 || $sleepMs > 500) {
             throw new \InvalidArgumentException('事务重试次数或间隔超出边界');
         }
@@ -58,8 +61,12 @@ abstract class BaseService
             try {
                 return $this->transaction($callback);
             } catch (\Throwable $exception) {
-                if ($attempt >= $attempts || !$this->retryableDatabaseError($exception)) { throw $exception; }
-                if ($sleepMs > 0) { usleep($sleepMs * 1000); }
+                if ($attempt >= $attempts || !$this->retryableDatabaseError($exception)) {
+                    throw $exception;
+                }
+                if ($sleepMs > 0) {
+                    usleep($sleepMs * 1000);
+                }
             }
         }
     }
@@ -78,7 +85,7 @@ abstract class BaseService
         } else {
             return false;
         }
-        return ($state === '40001' && (int) $driver === 1213)
-            || ($state === 'HY000' && (int) $driver === 1205);
+        return ($state === '40001' && (int) $driver === 1213) ||
+            ($state === 'HY000' && (int) $driver === 1205);
     }
 }

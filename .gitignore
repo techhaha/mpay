@@ -26,3 +26,6 @@ __pycache__/
 !/runtime/.gitignore
 /public/storage/
 /.playwright-mcp/
+/node_modules
+package.json
+package-lock.json

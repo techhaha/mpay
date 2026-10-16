@@ -18,8 +18,7 @@ final class EpayV1Controller
         private readonly Request $request,
         private readonly RequestContext $context,
         private readonly EpayV1ProtocolService $protocol,
-    ) {
-    }
+    ) {}
 
     /** GET/POST 页面下单返回本地收银台；HTML 错误交给统一异常处理器安全展示。 */
     public function submit(): Response
@@ -27,7 +26,13 @@ final class EpayV1Controller
         if (!in_array($this->request->method(true), ['GET', 'POST'], true)) {
             throw new \think\exception\HttpException(405, '', null, ['Allow' => 'GET, POST']);
         }
-        $result = $this->protocol->create($this->parameters(), 'submit', $this->request->ip(), $this->device(), $this->context->id());
+        $result = $this->protocol->create(
+            $this->parameters(),
+            'submit',
+            $this->request->ip(),
+            $this->device(),
+            $this->context->id(),
+        );
         return redirect($result['payurl'], 303);
     }
 
@@ -35,9 +40,19 @@ final class EpayV1Controller
     public function mapi(): Response
     {
         try {
-            $result = $this->protocol->create($this->parameters(), 'mapi', $this->request->ip(), $this->device(), $this->context->id());
-            return json(['code' => 1, 'msg' => $result['reused'] ? '返回原订单' : '订单已受理',
-                'trade_no' => $result['trade_no'], 'payurl' => $result['payurl']]);
+            $result = $this->protocol->create(
+                $this->parameters(),
+                'mapi',
+                $this->request->ip(),
+                $this->device(),
+                $this->context->id(),
+            );
+            return json([
+                'code' => 1,
+                'msg' => $result['reused'] ? '返回原订单' : '订单已受理',
+                'trade_no' => $result['trade_no'],
+                'payurl' => $result['payurl'],
+            ]);
         } catch (BusinessException $exception) {
             return json(['code' => 0, 'msg' => $exception->getMessage()]);
         }
@@ -61,17 +76,24 @@ final class EpayV1Controller
     {
         // 原始访问 URL 保留待签名参数；不把服务器伪静态补入的路由参数混进验签。
         $rawQuery = parse_url($this->request->url(), PHP_URL_QUERY);
-        if ($rawQuery === false) { throw new BusinessException('请求地址格式无效', ApiResponseConstant::BAD_REQUEST); }
+        if ($rawQuery === false) {
+            throw new BusinessException('请求地址格式无效', ApiResponseConstant::BAD_REQUEST);
+        }
         $query = UrlEncodedForm::parse($rawQuery ?? '');
         if ($this->request->method(true) === 'GET' || $this->request->method(true) === 'HEAD') {
             return $query;
         }
         $header = (string) $this->request->header('Content-Type', '');
         $contentType = strtolower(trim(explode(';', $header)[0]));
-        if ($contentType !== 'application/x-www-form-urlencoded'
-            || (preg_match('/(?:^|;)\s*charset\s*=\s*"?([^;"\s]+)/i', $header, $match)
-                && !in_array(strtolower($match[1]), ['utf-8', 'utf8'], true))) {
-            throw new BusinessException('易支付入口只接受 UTF-8 表单', ApiResponseConstant::BAD_REQUEST);
+        if (
+            $contentType !== 'application/x-www-form-urlencoded' ||
+            (preg_match('/(?:^|;)\s*charset\s*=\s*"?([^;"\s]+)/i', $header, $match) &&
+                !in_array(strtolower($match[1]), ['utf-8', 'utf8'], true))
+        ) {
+            throw new BusinessException(
+                '易支付入口只接受 UTF-8 表单',
+                ApiResponseConstant::BAD_REQUEST,
+            );
         }
         return UrlEncodedForm::merge($query, UrlEncodedForm::parse($this->request->getInput()));
     }

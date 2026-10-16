@@ -42,9 +42,17 @@ final class UrlEncodedForm
             [$key, $value] = array_pad(explode('=', $pair, 2), 2, '');
             $key = urldecode($key);
             $value = urldecode($value);
-            if ($key === '' || strlen($key) > 128 || preg_match('/[\[\]\x00-\x1f\x7f]/', $key)
-                || !mb_check_encoding([$key, $value], 'UTF-8') || array_key_exists($key, $result)) {
-                throw new BusinessException('表单必须使用不重复的 UTF-8 标量字段', ApiResponseConstant::BAD_REQUEST);
+            if (
+                $key === '' ||
+                strlen($key) > 128 ||
+                preg_match('/[\[\]\x00-\x1f\x7f]/', $key) ||
+                !mb_check_encoding([$key, $value], 'UTF-8') ||
+                array_key_exists($key, $result)
+            ) {
+                throw new BusinessException(
+                    '表单必须使用不重复的 UTF-8 标量字段',
+                    ApiResponseConstant::BAD_REQUEST,
+                );
             }
             $result[$key] = $value;
         }
@@ -61,7 +69,10 @@ final class UrlEncodedForm
     public static function merge(array $query, array $body): array
     {
         if (array_intersect_key($query, $body) !== [] || count($query) + count($body) > 128) {
-            throw new BusinessException('查询与正文包含重复字段或字段过多', ApiResponseConstant::BAD_REQUEST);
+            throw new BusinessException(
+                '查询与正文包含重复字段或字段过多',
+                ApiResponseConstant::BAD_REQUEST,
+            );
         }
         return $query + $body;
     }

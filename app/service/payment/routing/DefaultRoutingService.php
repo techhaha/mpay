@@ -17,8 +17,12 @@ use app\repository\payment\config\PaymentPollGroupRepository;
  */
 final class DefaultRoutingService extends BaseService
 {
-    public function __construct(private readonly PaymentCatalogRepository $types, private readonly PaymentPollGroupRepository $groups,
-        private readonly PaymentAppRepository $apps, private readonly Clock $clock) {}
+    public function __construct(
+        private readonly PaymentCatalogRepository $types,
+        private readonly PaymentPollGroupRepository $groups,
+        private readonly PaymentAppRepository $apps,
+        private readonly Clock $clock,
+    ) {}
 
     /** 支付方式行须已锁定；重复执行保留组名称、策略和所有运营配置。 */
     public function ensureGroup(PaymentType $type): string
@@ -26,7 +30,12 @@ final class DefaultRoutingService extends BaseService
         $this->requireTransaction();
         $id = $type['default_poll_group_id'];
         if ($id === null) {
-            $id = $this->groups->create('默认' . $type['name'] . '组', $type['id'], RouteConstant::ORDER, '');
+            $id = $this->groups->create(
+                '默认' . $type['name'] . '组',
+                $type['id'],
+                RouteConstant::ORDER,
+                '',
+            );
             $this->types->setDefaultGroup($type['id'], $id);
         }
         $group = $this->groups->lock($id);
@@ -44,10 +53,15 @@ final class DefaultRoutingService extends BaseService
     {
         $this->requireTransaction();
         foreach ($this->orderedTypes() as $row) {
-            $type = $this->types->find($row['id'], true) ?? throw new \RuntimeException('支付方式缺失');
+            $type =
+                $this->types->find($row['id'], true) ?? throw new \RuntimeException('支付方式缺失');
             $groupId = $this->ensureGroup($type);
             $binding = $this->groups->binding($appId, $type['id'], true);
-            if ($binding === null || $binding['poll_group_id'] !== $groupId || (int) $binding['status'] !== 1) {
+            if (
+                $binding === null ||
+                $binding['poll_group_id'] !== $groupId ||
+                (int) $binding['status'] !== 1
+            ) {
                 $this->groups->bind($appId, $type['id'], $groupId, true, $this->now());
             }
         }
@@ -74,21 +88,30 @@ final class DefaultRoutingService extends BaseService
         $this->requireTransaction();
         foreach ($this->orderedTypes() as $row) {
             if (in_array($row['code'], $codes, true)) {
-                $type = $this->types->find($row['id'], true) ?? throw new \RuntimeException('支付方式缺失');
+                $type =
+                    $this->types->find($row['id'], true) ??
+                    throw new \RuntimeException('支付方式缺失');
                 $this->ensureGroup($type);
             }
         }
     }
 
     /** 自动成员始终保留；参与开关复用成员 status，通道自身停用不会丢失排序、权重和参与选择。 */
-    public function syncChannel(string $channelId, string $payType, ?bool $participates = null): void
-    {
+    public function syncChannel(
+        string $channelId,
+        string $payType,
+        ?bool $participates = null,
+    ): void {
         $this->requireTransaction();
         $type = $this->types->findCode($payType) ?? throw new \RuntimeException('通道支付方式缺失');
-        $target = $type['default_poll_group_id'] ?? throw new \RuntimeException('默认轮询组未初始化');
+        $target =
+            $type['default_poll_group_id'] ?? throw new \RuntimeException('默认轮询组未初始化');
         $defaults = $this->types->defaultGroupIds();
         foreach ($this->groups->groupsUsingChannel($channelId) as $group) {
-            if (in_array((string) $group['id'], $defaults, true) && (string) $group['id'] !== $target) {
+            if (
+                in_array((string) $group['id'], $defaults, true) &&
+                (string) $group['id'] !== $target
+            ) {
                 $this->groups->removeChannel((string) $group['id'], $channelId, $this->now());
             }
         }
@@ -99,8 +122,12 @@ final class DefaultRoutingService extends BaseService
     public function customGroupsUsingChannel(string $id): array
     {
         $defaults = $this->types->defaultGroupIds();
-        return array_values(array_filter($this->groups->groupsUsingChannel($id),
-            static fn (array $group): bool => !in_array((string) $group['id'], $defaults, true)));
+        return array_values(
+            array_filter(
+                $this->groups->groupsUsingChannel($id),
+                static fn(array $group): bool => !in_array((string) $group['id'], $defaults, true),
+            ),
+        );
     }
 
     /** 通道删除已核对无待付款和自定义组引用；调用方预先持方式/组锁。 */
@@ -109,7 +136,9 @@ final class DefaultRoutingService extends BaseService
         $this->requireTransaction();
         $defaults = $this->types->defaultGroupIds();
         foreach ($this->groups->groupsUsingChannel($id) as $group) {
-            if (in_array((string) $group['id'], $defaults, true)) { $this->groups->removeChannel((string) $group['id'], $id, $this->now()); }
+            if (in_array((string) $group['id'], $defaults, true)) {
+                $this->groups->removeChannel((string) $group['id'], $id, $this->now());
+            }
         }
     }
 
@@ -117,9 +146,13 @@ final class DefaultRoutingService extends BaseService
     public function participates(string $channelId, string $typeCode): bool
     {
         $type = $this->types->findCode($typeCode);
-        if ($type === null || $type['default_poll_group_id'] === null) { return false; }
+        if ($type === null || $type['default_poll_group_id'] === null) {
+            return false;
+        }
         foreach ($this->groups->members($type['default_poll_group_id']) as $member) {
-            if ($member['channel_id'] === $channelId) { return (int) $member['status'] === 1; }
+            if ($member['channel_id'] === $channelId) {
+                return (int) $member['status'] === 1;
+            }
         }
         return false;
     }
@@ -128,9 +161,17 @@ final class DefaultRoutingService extends BaseService
     private function orderedTypes(): array
     {
         $types = $this->types->all();
-        usort($types, static fn (PaymentType $a, PaymentType $b): int => strlen($a['id']) <=> strlen($b['id']) ?: strcmp($a['id'], $b['id']));
+        usort(
+            $types,
+            static fn(PaymentType $a, PaymentType $b): int => strlen($a['id']) <=>
+            strlen($b['id']) ?:
+            strcmp($a['id'], $b['id']),
+        );
         return $types;
     }
 
-    private function now(): string { return $this->clock->now()->format('Y-m-d H:i:s'); }
+    private function now(): string
+    {
+        return $this->clock->now()->format('Y-m-d H:i:s');
+    }
 }

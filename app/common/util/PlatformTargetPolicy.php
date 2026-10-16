@@ -19,18 +19,28 @@ final readonly class PlatformTargetPolicy
     /** @param list<string> $origins 代码声明的完整 origin，不能带路径（根路径除外）、query 或 fragment。 */
     private function __construct(array $origins, private bool $isolated)
     {
-        if (!array_is_list($origins) || $origins === [] || count($origins) > 16) { throw new \InvalidArgumentException('平台来源站点集合无效'); }
+        if (!array_is_list($origins) || $origins === [] || count($origins) > 16) {
+            throw new \InvalidArgumentException('平台来源站点集合无效');
+        }
         $normalized = [];
         foreach ($origins as $origin) {
-            if (!is_string($origin)) { throw new \InvalidArgumentException('平台来源站点必须为字符串'); }
+            if (!is_string($origin)) {
+                throw new \InvalidArgumentException('平台来源站点必须为字符串');
+            }
             $target = HttpTargetPolicy::uri($origin, 2048, false);
-            if ((!$isolated && $target->getScheme() !== 'https') || $target->getQuery() !== '' || $target->getFragment() !== ''
-                || !in_array($target->getPath(), ['', '/'], true)) {
+            if (
+                (!$isolated && $target->getScheme() !== 'https') ||
+                $target->getQuery() !== '' ||
+                $target->getFragment() !== '' ||
+                !in_array($target->getPath(), ['', '/'], true)
+            ) {
                 throw new \InvalidArgumentException('平台来源必须为明确的 HTTPS origin');
             }
             $normalized[] = self::origin($target);
         }
-        if (count(array_unique($normalized)) !== count($normalized)) { throw new \InvalidArgumentException('平台来源不能重复'); }
+        if (count(array_unique($normalized)) !== count($normalized)) {
+            throw new \InvalidArgumentException('平台来源不能重复');
+        }
         $this->origins = $normalized;
     }
 
@@ -56,14 +66,24 @@ final readonly class PlatformTargetPolicy
      */
     public function validate(UriInterface $target): bool
     {
-        if ($target->getFragment() !== '' || !in_array(self::origin($target), $this->origins, true)) {
-            throw new BusinessException('请求目标不属于此平台的受控来源', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            $target->getFragment() !== '' ||
+            !in_array(self::origin($target), $this->origins, true)
+        ) {
+            throw new BusinessException(
+                '请求目标不属于此平台的受控来源',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         return $this->isolated;
     }
 
     private static function origin(UriInterface $target): string
     {
-        return $target->getScheme() . '://' . $target->getHost() . ':' . ($target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80));
+        return $target->getScheme() .
+            '://' .
+            $target->getHost() .
+            ':' .
+            ($target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80));
     }
 }

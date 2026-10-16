@@ -24,30 +24,66 @@ final class InstallValidator extends Validate
     public function database(array $input): array
     {
         $fields = array_keys($this->rule);
-        if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) { $this->invalid(); }
+        if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) {
+            $this->invalid();
+        }
         $check = clone $this;
         // 数据库允许空密码，但 null 不能被框架按可选空值跳过类型检查。
-        $check->rule('pass', [static fn (mixed $value): bool => is_string($value), ...$this->rule['pass']]);
-        if (!$check->failException(false)->check($input)) { $this->invalid(); }
+        $check->rule('pass', [
+            static fn(mixed $value): bool => is_string($value),
+            ...$this->rule['pass'],
+        ]);
+        if (!$check->failException(false)->check($input)) {
+            $this->invalid();
+        }
         return $input;
     }
 
     /** @return array{database:array,administrator:array} 嵌套 JSON 必须为对象，不接受列表或额外安装开关。 */
     public function installation(array $input): array
     {
-        if (count($input) !== 2 || !(($input['database'] ?? null) instanceof stdClass) || !(($input['administrator'] ?? null) instanceof stdClass)) { $this->invalid(); }
+        if (
+            count($input) !== 2 ||
+            !(($input['database'] ?? null) instanceof stdClass) ||
+            !(($input['administrator'] ?? null) instanceof stdClass)
+        ) {
+            $this->invalid();
+        }
         $administrator = get_object_vars($input['administrator']);
-        if (array_diff(array_keys($administrator), ['username', 'password', 'password_confirmation'])) { $this->invalid(); }
+        if (
+            array_diff(array_keys($administrator), [
+                'username',
+                'password',
+                'password_confirmation',
+            ])
+        ) {
+            $this->invalid();
+        }
         $administrator['app_name'] = '默认应用';
-        return ['database' => $this->database(get_object_vars($input['database'])),
-            'administrator' => (new InitializationValidator())->validateInput($administrator)];
+        return [
+            'database' => $this->database(get_object_vars($input['database'])),
+            'administrator' => (new InitializationValidator())->validateInput($administrator),
+        ];
     }
 
     protected function databaseHost(string $value): bool
     {
-        return filter_var($value, FILTER_VALIDATE_IP) !== false || filter_var($value, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
+        return filter_var($value, FILTER_VALIDATE_IP) !== false ||
+            filter_var($value, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
     }
-    protected function integerJson(mixed $value): bool { return is_int($value); }
-    protected function singleLine(string $value): bool { return mb_check_encoding($value, 'UTF-8') && !preg_match('/[\x00-\x1f\x7f]/', $value); }
-    private function invalid(): never { throw new BusinessException('请检查数据库地址、端口、库名、账号和输入格式', ApiResponseConstant::VALIDATION_FAILED); }
+    protected function integerJson(mixed $value): bool
+    {
+        return is_int($value);
+    }
+    protected function singleLine(string $value): bool
+    {
+        return mb_check_encoding($value, 'UTF-8') && !preg_match('/[\x00-\x1f\x7f]/', $value);
+    }
+    private function invalid(): never
+    {
+        throw new BusinessException(
+            '请检查数据库地址、端口、库名、账号和输入格式',
+            ApiResponseConstant::VALIDATION_FAILED,
+        );
+    }
 }

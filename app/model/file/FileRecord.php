@@ -34,5 +34,4 @@ final class FileRecord extends BaseModel
             ],
         ];
     }
-
 }

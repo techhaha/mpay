@@ -26,30 +26,81 @@ final class PayOrderValidator extends Validate
         'channel_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'pay_type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
         'status' => ['string', 'in' => ['0', '1', '2', '3', '4', '5']],
-        'notification_status' => ['string', 'regex' => '/^(?:none|acknowledged|[0-9])$/D', 'in' => ['none', 'acknowledged', NotifyConstant::STATUS_PENDING,
-            NotifyConstant::STATUS_SENDING, NotifyConstant::STATUS_SUCCESS, NotifyConstant::STATUS_EXHAUSTED, NotifyConstant::STATUS_HELD]],
+        'notification_status' => [
+            'string',
+            'regex' => '/^(?:none|acknowledged|[0-9])$/D',
+            'in' => [
+                'none',
+                'acknowledged',
+                NotifyConstant::STATUS_PENDING,
+                NotifyConstant::STATUS_SENDING,
+                NotifyConstant::STATUS_SUCCESS,
+                NotifyConstant::STATUS_EXHAUSTED,
+                NotifyConstant::STATUS_HELD,
+            ],
+        ],
         'biz_no' => ['string', 'regex' => '/^B[A-Za-z0-9]{1,63}$/D'],
         'pay_no' => ['string', 'regex' => '/^P[A-Za-z0-9]{1,63}$/D'],
         'merchant_order_no' => ['string', 'max' => 64],
         'kind' => ['require', 'string', 'in' => ['operations', 'callbacks', 'notifications']],
         'reason' => ['require', 'string', 'max' => 512, 'nonBlank'],
-        'received_amount' => ['require', 'string', 'regex' => '/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/D'],
-        'paid_at' => ['require', 'string', 'regex' => '/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D', 'dateFormat' => 'Y-m-d H:i:s'],
+        'received_amount' => [
+            'require',
+            'string',
+            'regex' => '/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/D',
+        ],
+        'paid_at' => [
+            'require',
+            'string',
+            'regex' => '/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D',
+            'dateFormat' => 'Y-m-d H:i:s',
+        ],
         'reference' => ['require', 'string', 'max' => 1024, 'nonBlank'],
         'platform_trade_no' => ['string', 'max' => 128],
         'current_password' => ['require', 'string', 'regex' => '/^[^\x00]{1,72}$/D'],
         'notify_merchant' => ['require', 'booleanJson'],
-        'expected_attempts' => ['require', 'counter', 'regex' => '/^(?:0|[1-9][0-9]{0,9})$/D', 'between' => [0, 4294967294]],
+        'expected_attempts' => [
+            'require',
+            'counter',
+            'regex' => '/^(?:0|[1-9][0-9]{0,9})$/D',
+            'between' => [0, 4294967294],
+        ],
     ];
     protected $scene = [
-        'filters' => ['start_date', 'end_date', 'app_id', 'pid', 'poll_group_id', 'channel_id', 'pay_type', 'status', 'notification_status', 'biz_no', 'pay_no', 'merchant_order_no'],
-        'identity' => ['biz_no'], 'history' => ['biz_no', 'kind'], 'close' => ['biz_no', 'reason'],
-        'confirm' => ['biz_no', 'reason', 'received_amount', 'paid_at', 'reference', 'platform_trade_no', 'current_password', 'notify_merchant'],
+        'filters' => [
+            'start_date',
+            'end_date',
+            'app_id',
+            'pid',
+            'poll_group_id',
+            'channel_id',
+            'pay_type',
+            'status',
+            'notification_status',
+            'biz_no',
+            'pay_no',
+            'merchant_order_no',
+        ],
+        'identity' => ['biz_no'],
+        'history' => ['biz_no', 'kind'],
+        'close' => ['biz_no', 'reason'],
+        'confirm' => [
+            'biz_no',
+            'reason',
+            'received_amount',
+            'paid_at',
+            'reference',
+            'platform_trade_no',
+            'current_password',
+            'notify_merchant',
+        ],
         'retry' => ['biz_no', 'reason', 'expected_attempts'],
     ];
 
-    public function __construct(private readonly DateRangeValidator $dates, private readonly PaginationValidator $pagination)
-    {
+    public function __construct(
+        private readonly DateRangeValidator $dates,
+        private readonly PaginationValidator $pagination,
+    ) {
         parent::__construct();
     }
 
@@ -64,16 +115,30 @@ final class PayOrderValidator extends Validate
     {
         $this->known($input, [...$this->scene['filters'], 'page', 'limit']);
         $values = array_diff_key($input, array_flip(['page', 'limit']));
-        foreach ($values as $key => $value) { if ($value === '') { unset($values[$key]); } }
+        foreach ($values as $key => $value) {
+            if ($value === '') {
+                unset($values[$key]);
+            }
+        }
         $range = $this->dates->range($values, $export ? 31 : 366);
         $values += ['start_date' => $range['start_date'], 'end_date' => $range['end_date']];
         $this->checkInput('filters', $values);
-        return ['filters' => ['from' => $range['from'], 'until' => $range['until'],
-            'status' => isset($values['status']) ? (int) $values['status'] : null, 'biz_no' => $values['biz_no'] ?? null,
-            'notification_status' => $values['notification_status'] ?? null,
-            'app_id' => $values['app_id'] ?? null, 'pid' => $values['pid'] ?? null,
-            'poll_group_id' => $values['poll_group_id'] ?? null, 'channel_id' => $values['channel_id'] ?? null, 'pay_type' => $values['pay_type'] ?? null,
-            'pay_no' => $values['pay_no'] ?? null, 'merchant_order_no' => $values['merchant_order_no'] ?? null]] + $this->pagination->validate($input);
+        return [
+            'filters' => [
+                'from' => $range['from'],
+                'until' => $range['until'],
+                'status' => isset($values['status']) ? (int) $values['status'] : null,
+                'biz_no' => $values['biz_no'] ?? null,
+                'notification_status' => $values['notification_status'] ?? null,
+                'app_id' => $values['app_id'] ?? null,
+                'pid' => $values['pid'] ?? null,
+                'poll_group_id' => $values['poll_group_id'] ?? null,
+                'channel_id' => $values['channel_id'] ?? null,
+                'pay_type' => $values['pay_type'] ?? null,
+                'pay_no' => $values['pay_no'] ?? null,
+                'merchant_order_no' => $values['merchant_order_no'] ?? null,
+            ],
+        ] + $this->pagination->validate($input);
     }
 
     /** @param array<string,mixed> $input */
@@ -92,7 +157,8 @@ final class PayOrderValidator extends Validate
     {
         $this->known($input, ['biz_no', 'kind', 'page', 'limit']);
         $this->checkInput('history', $input);
-        return ['biz_no' => $input['biz_no'], 'kind' => $input['kind']] + $this->pagination->validate($input);
+        return ['biz_no' => $input['biz_no'], 'kind' => $input['kind']] +
+            $this->pagination->validate($input);
     }
 
     /**
@@ -101,27 +167,43 @@ final class PayOrderValidator extends Validate
      */
     public function action(string $action, array $input): array
     {
-        if (!in_array($action, ['confirm', 'close', 'retry'], true)) { throw new LogicException('未知订单操作场景'); }
+        if (!in_array($action, ['confirm', 'close', 'retry'], true)) {
+            throw new LogicException('未知订单操作场景');
+        }
         $this->known($input, $this->scene[$action]);
         foreach (['platform_trade_no'] as $optional) {
-            if (($input[$optional] ?? null) === '') { unset($input[$optional]); }
+            if (($input[$optional] ?? null) === '') {
+                unset($input[$optional]);
+            }
         }
         $this->checkInput($action, $input);
-        if ($action === 'retry') { $input['expected_attempts'] = (int) $input['expected_attempts']; }
+        if ($action === 'retry') {
+            $input['expected_attempts'] = (int) $input['expected_attempts'];
+        }
         return $input;
     }
 
     /** 通知选择必须是 JSON 布尔值，不能把字符串 false 当成真值。 */
-    protected function booleanJson(mixed $value): bool { return is_bool($value); }
+    protected function booleanJson(mixed $value): bool
+    {
+        return is_bool($value);
+    }
 
     /** @param array<string,mixed> $input confirm 场景已通过，构造真实金额/时间/引用，绝不自动填期望金额作为到账证据。 */
     public function evidence(array $input): ManualReceiptEvidence
     {
         try {
-            return new ManualReceiptEvidence(Money::parse($input['received_amount']), new DateTimeImmutable($input['paid_at']),
-                $input['platform_trade_no'] ?? null, $input['reference']);
+            return new ManualReceiptEvidence(
+                Money::parse($input['received_amount']),
+                new DateTimeImmutable($input['paid_at']),
+                $input['platform_trade_no'] ?? null,
+                $input['reference'],
+            );
         } catch (InvalidArgumentException) {
-            throw new BusinessException('收款证据的金额、时间或引用格式无效', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '收款证据的金额、时间或引用格式无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
     }
 
@@ -129,13 +211,23 @@ final class PayOrderValidator extends Validate
     private function checkInput(string $scene, array $input): void
     {
         $validator = (clone $this)->scene($scene)->batch()->failException(false);
-        if ($scene !== 'filters') { $validator->append('biz_no', 'require'); }
-        foreach (array_keys(array_intersect_key($input, $this->rule)) as $field) { $validator->append($field, 'require'); }
+        if ($scene !== 'filters') {
+            $validator->append('biz_no', 'require');
+        }
+        foreach (array_keys(array_intersect_key($input, $this->rule)) as $field) {
+            $validator->append($field, 'require');
+        }
         if (!$validator->check($input)) {
             // 不使用含动态规则值的默认文案，更不把密码或原始证据拼到响应中。
             $errors = [];
-            foreach (array_keys($validator->getError(true)) as $field) { $errors[$field] = ['字段格式或范围无效']; }
-            throw new BusinessException('请检查筛选或操作字段', ApiResponseConstant::VALIDATION_FAILED, $errors);
+            foreach (array_keys($validator->getError(true)) as $field) {
+                $errors[$field] = ['字段格式或范围无效'];
+            }
+            throw new BusinessException(
+                '请检查筛选或操作字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+                $errors,
+            );
         }
     }
 
@@ -145,12 +237,17 @@ final class PayOrderValidator extends Validate
      */
     private function known(array $input, array $allowed): void
     {
-        if (array_diff(array_keys($input), $allowed) !== []) { throw new BusinessException('包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED); }
+        if (array_diff(array_keys($input), $allowed) !== []) {
+            throw new BusinessException('包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED);
+        }
     }
 
     protected function nonBlank(mixed $value): bool
     {
-        return is_string($value) && trim($value) !== '' && mb_check_encoding($value, 'UTF-8') && !str_contains($value, "\0");
+        return is_string($value) &&
+            trim($value) !== '' &&
+            mb_check_encoding($value, 'UTF-8') &&
+            !str_contains($value, "\0");
     }
 
     protected function counter(mixed $value): bool

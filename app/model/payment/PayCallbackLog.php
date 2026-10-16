@@ -34,5 +34,4 @@ final class PayCallbackLog extends BaseModel
             ],
         ];
     }
-
 }

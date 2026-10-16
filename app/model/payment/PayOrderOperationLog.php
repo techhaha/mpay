@@ -36,5 +36,4 @@ final class PayOrderOperationLog extends BaseModel
             ],
         ];
     }
-
 }

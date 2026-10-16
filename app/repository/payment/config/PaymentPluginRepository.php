@@ -13,17 +13,28 @@ use app\model\payment\PayOrder;
 /** @extends BaseRepository<PaymentPlugin> 插件目录查询/持久化；不加载 PHP 文件或决定停用业务策略。 */
 final class PaymentPluginRepository extends BaseRepository
 {
-    public function __construct(PaymentPlugin $model, private readonly PaymentChannel $channels,
+    public function __construct(
+        PaymentPlugin $model,
+        private readonly PaymentChannel $channels,
         private readonly PaymentPluginConf $configurations,
-        private readonly PayOrder $orders) { parent::__construct($model); }
+        private readonly PayOrder $orders,
+    ) {
+        parent::__construct($model);
+    }
 
     /** @return list<PaymentPlugin> 包含代码已经移除的目录记录，管理页应明确显示未安装。 */
-    public function all(): array { return $this->model->order('id')->select()->all(); }
+    public function all(): array
+    {
+        return $this->model->order('id')->select()->all();
+    }
 
     public function find(string $code, bool $lock = false): ?PaymentPlugin
     {
         $query = $this->model->where('code', $code);
-        if ($lock) { $this->requireTransaction(); $query->lock(true); }
+        if ($lock) {
+            $this->requireTransaction();
+            $query->lock(true);
+        }
         return $query->find();
     }
 
@@ -36,7 +47,7 @@ final class PaymentPluginRepository extends BaseRepository
     public function synchronize(array $definition): void
     {
         $this->requireTransaction();
-        $fields = ['name','version','pay_types','class_name','config_schema','description'];
+        $fields = ['name', 'version', 'pay_types', 'class_name', 'config_schema', 'description'];
         $row = $this->find($definition['code'], true);
         $values = array_intersect_key($definition, array_flip($fields));
         if ($row !== null) {
@@ -45,15 +56,28 @@ final class PaymentPluginRepository extends BaseRepository
                 $same = is_array($value)
                     ? PluginDefinition::sameSchema($value, $row[$field])
                     : $row[$field] === $value;
-                if (!$same) { $changed = true; break; }
+                if (!$same) {
+                    $changed = true;
+                    break;
+                }
             }
-            if (!$changed) { return; }
+            if (!$changed) {
+                return;
+            }
         }
-        foreach (['pay_types','config_schema'] as $field) {
-            $values[$field] = json_encode($values[$field], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        foreach (['pay_types', 'config_schema'] as $field) {
+            $values[$field] = json_encode(
+                $values[$field],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+            );
         }
-        if ($row === null) { $this->insert(['code' => $definition['code']] + $values, ['code', ...$fields]); }
-        else { $this->model->where('id', $row['id'])->update($values + ['revision' => (int) $row['revision'] + 1]); }
+        if ($row === null) {
+            $this->insert(['code' => $definition['code']] + $values, ['code', ...$fields]);
+        } else {
+            $this->model
+                ->where('id', $row['id'])
+                ->update($values + ['revision' => (int) $row['revision'] + 1]);
+        }
     }
 
     /** 清理已移除且没有任何业务引用的插件定义；有关联的缺失插件留供管理页定位问题。 */
@@ -61,10 +85,14 @@ final class PaymentPluginRepository extends BaseRepository
     {
         $this->requireTransaction();
         foreach ($this->all() as $row) {
-            if (in_array($row['code'], $installed, true)
-                || $this->channels->where('plugin_code', $row['code'])->count() > 0
-                || $this->configurations->where('plugin_code', $row['code'])->count() > 0
-                || $this->orders->where('plugin_code', $row['code'])->count() > 0) { continue; }
+            if (
+                in_array($row['code'], $installed, true) ||
+                $this->channels->where('plugin_code', $row['code'])->count() > 0 ||
+                $this->configurations->where('plugin_code', $row['code'])->count() > 0 ||
+                $this->orders->where('plugin_code', $row['code'])->count() > 0
+            ) {
+                continue;
+            }
             $this->model->where('id', $row['id'])->delete();
         }
     }
@@ -73,7 +101,13 @@ final class PaymentPluginRepository extends BaseRepository
     public function setEnabled(PaymentPlugin $plugin, bool $enabled, string $now): void
     {
         $this->requireTransaction();
-        $this->model->where('id', $plugin['id'])->where('revision', $plugin['revision'])
-            ->update(['enabled' => (int) $enabled, 'revision' => (int) $plugin['revision'] + 1, 'updated_at' => $now]);
+        $this->model
+            ->where('id', $plugin['id'])
+            ->where('revision', $plugin['revision'])
+            ->update([
+                'enabled' => (int) $enabled,
+                'revision' => (int) $plugin['revision'] + 1,
+                'updated_at' => $now,
+            ]);
     }
 }

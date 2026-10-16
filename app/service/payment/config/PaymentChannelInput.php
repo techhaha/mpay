@@ -19,17 +19,22 @@ final readonly class PaymentChannelInput
         public int $dailyLimitCount = 0,
         public ?string $availableFrom = null,
         public ?string $availableTo = null,
-        public ?bool $participatesDefaultRoute = null
-    ) {
-    }
+        public ?bool $participatesDefaultRoute = null,
+    ) {}
 
     /** @return array<string,int|string|null> 日限制 0 表示不限，时段 null 表示全天；金额均为分。 */
     public function record(): array
     {
-        return ['name' => $this->name, 'receipt_scope_key' => $this->scopeKey,
+        return [
+            'name' => $this->name,
+            'receipt_scope_key' => $this->scopeKey,
             'pay_types' => json_encode([$this->payType], JSON_THROW_ON_ERROR),
-            'min_amount' => $this->minimumAmount, 'max_amount' => $this->maximumAmount,
-            'daily_limit_amount' => $this->dailyLimitAmount, 'daily_limit_count' => $this->dailyLimitCount,
-            'available_from' => $this->availableFrom, 'available_to' => $this->availableTo];
+            'min_amount' => $this->minimumAmount,
+            'max_amount' => $this->maximumAmount,
+            'daily_limit_amount' => $this->dailyLimitAmount,
+            'daily_limit_count' => $this->dailyLimitCount,
+            'available_from' => $this->availableFrom,
+            'available_to' => $this->availableTo,
+        ];
     }
 }

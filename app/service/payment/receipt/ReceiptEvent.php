@@ -43,20 +43,32 @@ final readonly class ReceiptEvent
         public string $payNo,
     ) {
         Money::assertRange($amount);
-        if ($amount === 0 || $configVersion < 1 || $configVersion > 4294967295
-            || !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $pluginCode)
-            || !preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,31}$/D', $pluginVersion)
-            || !preg_match('/^[1-9][0-9]{0,19}$/D', $configurationId)
-            || (strlen($configurationId) === 20 && strcmp($configurationId, '18446744073709551615') > 0)
-            || $scopeKey === '' || strlen($scopeKey) > 64
-            || !PaymentTypeCode::valid($payType)
-            || $eventKey === '' || strlen($eventKey) > 128
-            || ($paidAt !== null && (!preg_match('/^[0-9]{4}-/', $this->paymentTime())
-                || (int) substr($this->paymentTime(), 0, 4) < 1000))
-            || ($platformTradeNo !== null && ($platformTradeNo === '' || strlen($platformTradeNo) > 128))
-            || ($remark !== null && mb_strlen($remark, 'UTF-8') > 256)
-            || !preg_match('/^[a-f0-9]{64}$/D', $sourcePayloadDigest)
-            || !mb_check_encoding([$scopeKey, $eventKey, $platformTradeNo ?? '', $remark ?? ''], 'UTF-8')) {
+        if (
+            $amount === 0 ||
+            $configVersion < 1 ||
+            $configVersion > 4294967295 ||
+            !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $pluginCode) ||
+            !preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,31}$/D', $pluginVersion) ||
+            !preg_match('/^[1-9][0-9]{0,19}$/D', $configurationId) ||
+            (strlen($configurationId) === 20 &&
+                strcmp($configurationId, '18446744073709551615') > 0) ||
+            $scopeKey === '' ||
+            strlen($scopeKey) > 64 ||
+            !PaymentTypeCode::valid($payType) ||
+            $eventKey === '' ||
+            strlen($eventKey) > 128 ||
+            ($paidAt !== null &&
+                (!preg_match('/^[0-9]{4}-/', $this->paymentTime()) ||
+                    (int) substr($this->paymentTime(), 0, 4) < 1000)) ||
+            ($platformTradeNo !== null &&
+                ($platformTradeNo === '' || strlen($platformTradeNo) > 128)) ||
+            ($remark !== null && mb_strlen($remark, 'UTF-8') > 256) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $sourcePayloadDigest) ||
+            !mb_check_encoding(
+                [$scopeKey, $eventKey, $platformTradeNo ?? '', $remark ?? ''],
+                'UTF-8',
+            )
+        ) {
             throw new InvalidArgumentException('到账事件尚未完成有效归一化');
         }
     }
@@ -69,8 +81,12 @@ final readonly class ReceiptEvent
      */
     public function sourceReference(): array
     {
-        return ['plugin_code' => $this->pluginCode, 'plugin_version' => $this->pluginVersion,
-            'api_config_id' => $this->configurationId, 'config_revision_id' => $this->configVersion];
+        return [
+            'plugin_code' => $this->pluginCode,
+            'plugin_version' => $this->pluginVersion,
+            'api_config_id' => $this->configurationId,
+            'config_revision_id' => $this->configVersion,
+        ];
     }
 
     /**
@@ -80,17 +96,30 @@ final readonly class ReceiptEvent
      */
     public function digest(): string
     {
-        return hash('sha256', json_encode([
-            'version' => 3, 'plugin_code' => $this->pluginCode, 'event_key' => $this->eventKey,
-            'pay_type' => $this->payType, 'amount' => $this->amount, 'paid_at' => $this->paymentTime(),
-            'platform_trade_no' => $this->platformTradeNo, 'remark' => $this->remark,
-            'source_payload_digest' => $this->sourcePayloadDigest,
-        ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return hash(
+            'sha256',
+            json_encode(
+                [
+                    'version' => 3,
+                    'plugin_code' => $this->pluginCode,
+                    'event_key' => $this->eventKey,
+                    'pay_type' => $this->payType,
+                    'amount' => $this->amount,
+                    'paid_at' => $this->paymentTime(),
+                    'platform_trade_no' => $this->platformTradeNo,
+                    'remark' => $this->remark,
+                    'source_payload_digest' => $this->sourcePayloadDigest,
+                ],
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            ),
+        );
     }
 
     /** 数据库统一采用 Asia/Shanghai 秒精度；null 保留为未知，不能补成当前时间。 */
     public function paymentTime(): ?string
     {
-        return $this->paidAt?->setTimezone(new DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s');
+        return $this->paidAt
+            ?->setTimezone(new DateTimeZone('Asia/Shanghai'))
+            ->format('Y-m-d H:i:s');
     }
 }

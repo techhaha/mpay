@@ -12,9 +12,7 @@ use think\Session;
 /** 后台及同源收银台写请求的 Session CSRF 校验；须先执行 SessionInit，不适用于易支付或设备协议。 */
 final class CsrfMiddleware
 {
-    public function __construct(private readonly Session $session)
-    {
-    }
+    public function __construct(private readonly Session $session) {}
 
     /**
      * 对非只读原始 HTTP 方法校验 token；权限和业务幂等仍由后续入口分别检查。
@@ -27,8 +25,16 @@ final class CsrfMiddleware
         if (!in_array($request->method(true), ['GET', 'HEAD', 'OPTIONS'], true)) {
             $expected = $this->session->get('csrf_token');
             $actual = $request->header('X-Csrf-Token', '');
-            if (!is_string($expected) || $expected === '' || !is_string($actual) || !hash_equals($expected, $actual)) {
-                throw new BusinessException('页面已过期，请刷新后重试', ApiResponseConstant::CSRF_INVALID);
+            if (
+                !is_string($expected) ||
+                $expected === '' ||
+                !is_string($actual) ||
+                !hash_equals($expected, $actual)
+            ) {
+                throw new BusinessException(
+                    '页面已过期，请刷新后重试',
+                    ApiResponseConstant::CSRF_INVALID,
+                );
             }
         }
         return $next($request);

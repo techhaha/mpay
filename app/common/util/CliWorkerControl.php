@@ -25,14 +25,20 @@ final class CliWorkerControl
     public function install(): bool
     {
         foreach (['pcntl_async_signals', 'pcntl_signal_get_handler', 'pcntl_signal'] as $function) {
-            if (!function_exists($function)) { return false; }
+            if (!function_exists($function)) {
+                return false;
+            }
         }
-        if (!defined('SIGTERM') || !defined('SIGINT')) { return false; }
+        if (!defined('SIGTERM') || !defined('SIGINT')) {
+            return false;
+        }
         $this->previousAsync = pcntl_async_signals();
         foreach ([SIGTERM, SIGINT] as $signal) {
             $this->previousHandlers[$signal] = pcntl_signal_get_handler($signal);
             // 只设置退出意图；不中断正在提交的事务/结果回写，下一轮不再认领。
-            pcntl_signal($signal, function (): void { $this->stopping = true; });
+            pcntl_signal($signal, function (): void {
+                $this->stopping = true;
+            });
         }
         pcntl_async_signals(true);
         $this->signalsInstalled = true;
@@ -42,16 +48,28 @@ final class CliWorkerControl
     /** 同一运行目录每个角色只启动一个进程；watch 不支持跨主机多实例登录同一账号。 */
     public function acquire(string $runtimePath, string $role): void
     {
-        if (!in_array($role, ['work', 'watch'], true) || $this->roleLock !== null) { throw new LogicException('工作者角色无效或重复获取锁'); }
+        if (!in_array($role, ['work', 'watch'], true) || $this->roleLock !== null) {
+            throw new LogicException('工作者角色无效或重复获取锁');
+        }
         $directory = rtrim($runtimePath, '/\\') . '/workers';
-        if (is_link($directory) || (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory))) {
+        if (
+            is_link($directory) ||
+            (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory))
+        ) {
             throw new RuntimeException('工作者目录无效');
         }
         $path = $directory . '/' . $role . '.lock';
-        if (is_link($path)) { throw new RuntimeException('工作者锁不能是符号链接'); }
+        if (is_link($path)) {
+            throw new RuntimeException('工作者锁不能是符号链接');
+        }
         $stream = fopen($path, 'c+b');
-        if ($stream === false) { throw new RuntimeException('无法打开工作者锁'); }
-        if (!flock($stream, LOCK_EX | LOCK_NB)) { fclose($stream); throw new RuntimeException('该角色已有工作者运行'); }
+        if ($stream === false) {
+            throw new RuntimeException('无法打开工作者锁');
+        }
+        if (!flock($stream, LOCK_EX | LOCK_NB)) {
+            fclose($stream);
+            throw new RuntimeException('该角色已有工作者运行');
+        }
         $this->roleLock = $stream;
     }
 
@@ -90,9 +108,21 @@ final class CliWorkerControl
             if (!flock($stream, LOCK_EX)) {
                 throw new RuntimeException('无法锁定工作者心跳');
             }
-            $json = json_encode(['role' => $role, 'owner' => $owner, 'pid' => getmypid(),
-                'running' => $running, 'observed_at' => time()], JSON_THROW_ON_ERROR);
-            if (!ftruncate($stream, 0) || fwrite($stream, $json) !== strlen($json) || !fflush($stream)) {
+            $json = json_encode(
+                [
+                    'role' => $role,
+                    'owner' => $owner,
+                    'pid' => getmypid(),
+                    'running' => $running,
+                    'observed_at' => time(),
+                ],
+                JSON_THROW_ON_ERROR,
+            );
+            if (
+                !ftruncate($stream, 0) ||
+                fwrite($stream, $json) !== strlen($json) ||
+                !fflush($stream)
+            ) {
                 throw new RuntimeException('工作者心跳未完整写入');
             }
         } finally {
@@ -103,7 +133,10 @@ final class CliWorkerControl
     /** 仅恢复本实例安装的处理器，方便同进程测试或控制台继续执行其他命令。 */
     public function restore(): void
     {
-        if (is_resource($this->roleLock)) { fclose($this->roleLock); $this->roleLock = null; }
+        if (is_resource($this->roleLock)) {
+            fclose($this->roleLock);
+            $this->roleLock = null;
+        }
         if ($this->signalsInstalled) {
             foreach ($this->previousHandlers as $signal => $handler) {
                 pcntl_signal($signal, $handler);

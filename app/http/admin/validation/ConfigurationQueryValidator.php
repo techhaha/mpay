@@ -11,7 +11,8 @@ use think\Validate;
 final class ConfigurationQueryValidator extends Validate
 {
     protected $rule = [
-        'id' => ['string', 'recordId'], 'configuration_id' => ['string', 'recordId'],
+        'id' => ['string', 'recordId'],
+        'configuration_id' => ['string', 'recordId'],
         'enabled' => ['string', 'in' => ['0', '1']],
     ];
     protected $scene = [
@@ -31,11 +32,18 @@ final class ConfigurationQueryValidator extends Validate
     {
         $fields = $this->scene['channels'];
         $this->known($input, [...$fields, 'page', 'limit']);
-        $filters = array_filter(array_intersect_key($input, array_flip($fields)), static fn (mixed $value): bool => $value !== '');
+        $filters = array_filter(
+            array_intersect_key($input, array_flip($fields)),
+            static fn(mixed $value): bool => $value !== '',
+        );
         $validator = (clone $this)->scene('channels')->failException(false);
         $validator->append(array_fill_keys(array_keys($filters), 'require'));
-        if (!$validator->check($filters)) { throw new BusinessException('配置筛选无效', ApiResponseConstant::VALIDATION_FAILED); }
-        if (array_key_exists('enabled', $filters)) { $filters['enabled'] = (int) $filters['enabled']; }
+        if (!$validator->check($filters)) {
+            throw new BusinessException('配置筛选无效', ApiResponseConstant::VALIDATION_FAILED);
+        }
+        if (array_key_exists('enabled', $filters)) {
+            $filters['enabled'] = (int) $filters['enabled'];
+        }
         return ['filters' => $filters] + $this->pagination->validate($input);
     }
 
@@ -43,19 +51,28 @@ final class ConfigurationQueryValidator extends Validate
     public function identity(array $input): string
     {
         $this->known($input, ['id']);
-        if (!(clone $this)->only(['id'])->append('id', 'require')->failException(false)->check($input)) {
+        if (
+            !(clone $this)
+                ->only(['id'])
+                ->append('id', 'require')
+                ->failException(false)
+                ->check($input)
+        ) {
             throw new BusinessException('配置记录编号无效', ApiResponseConstant::VALIDATION_FAILED);
         }
         return $input['id'];
     }
 
     /** @param array<string,mixed> $input 无参数接口也拒绝凭浏览器字段选择商户。 */
-    public function emptyQuery(array $input): void { $this->known($input, []); }
+    public function emptyQuery(array $input): void
+    {
+        $this->known($input, []);
+    }
 
     protected function recordId(string $value): bool
     {
-        return preg_match('/^[1-9][0-9]{0,19}$/D', $value) === 1
-            && (strlen($value) < 20 || strcmp($value, '18446744073709551615') <= 0);
+        return preg_match('/^[1-9][0-9]{0,19}$/D', $value) === 1 &&
+            (strlen($value) < 20 || strcmp($value, '18446744073709551615') <= 0);
     }
 
     /**
@@ -65,7 +82,10 @@ final class ConfigurationQueryValidator extends Validate
     private function known(array $input, array $fields): void
     {
         if (array_diff(array_keys($input), $fields) !== []) {
-            throw new BusinessException('配置查询包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '配置查询包含未允许的字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
     }
 }

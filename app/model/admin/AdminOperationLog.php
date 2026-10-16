@@ -35,5 +35,4 @@ final class AdminOperationLog extends BaseModel
             ],
         ];
     }
-
 }

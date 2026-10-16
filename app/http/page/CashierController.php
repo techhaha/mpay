@@ -18,12 +18,19 @@ use think\Response;
 final class CashierController extends BaseController
 {
     /** 成功页重新验证持有者凭证及数据库事实；不能通过手改 URL 把未付款订单展示成成功。 */
-    public function completed(CashierValidator $validator, CashierService $cashier, Clock $clock): Response
-    {
+    public function completed(
+        CashierValidator $validator,
+        CashierService $cashier,
+        Clock $clock,
+    ): Response {
         $identity = $validator->identity($this->request->get());
         $completion = $cashier->completion($identity['biz_no'], $identity['token']);
-        if ($completion['action'] === 'return') { return redirect($completion['next_url'], 303); }
-        if ($completion['action'] !== 'success') { return redirect('/cashier/pay?' . http_build_query($identity), 303); }
+        if ($completion['action'] === 'return') {
+            return redirect($completion['next_url'], 303);
+        }
+        if ($completion['action'] !== 'success') {
+            return redirect('/cashier/pay?' . http_build_query($identity), 303);
+        }
         $data = $cashier->view($identity['biz_no'], $identity['token'], $clock->now());
         if ($data['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) {
             return redirect('/cashier/pay?' . http_build_query($identity), 303);
@@ -32,19 +39,29 @@ final class CashierController extends BaseController
         return view('cashier/success', [
             'title' => '支付成功 · MPAY',
             'csrf_token' => '',
-            'payment' => $data
+            'payment' => $data,
         ]);
     }
 
-    public function index(CashierValidator $validator, CashierService $cashier, AdminSessionService $session, Clock $clock): Response
-    {
+    public function index(
+        CashierValidator $validator,
+        CashierService $cashier,
+        AdminSessionService $session,
+        Clock $clock,
+    ): Response {
         $identity = $validator->identity($this->request->get());
         $data = $cashier->view($identity['biz_no'], $identity['token'], $clock->now());
         return view('cashier/index', [
-            'title' => 'MPAY 收银台', 'csrf_token' => $session->csrfToken(), 'request_id' => $this->context->id(),
-            'biz_no' => $identity['biz_no'], 'access_token' => $identity['token'],
+            'title' => 'MPAY 收银台',
+            'csrf_token' => $session->csrfToken(),
+            'request_id' => $this->context->id(),
+            'biz_no' => $identity['biz_no'],
+            'access_token' => $identity['token'],
             // script 中的 JSON 必须转义 HTML 敏感字符，不能让订单名称关闭 script 标签。
-            'initial_json' => json_encode($data, JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT),
+            'initial_json' => json_encode(
+                $data,
+                JSON_THROW_ON_ERROR | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT,
+            ),
         ]);
     }
 
@@ -52,9 +69,12 @@ final class CashierController extends BaseController
     public function back(CashierValidator $validator, EpayV1ProtocolService $protocol): Response
     {
         $identity = $validator->identity($this->request->get());
-        try { return redirect($protocol->returnUrl($identity['biz_no'], $identity['token']), 303); }
-        catch (BusinessException $exception) {
-            if ($exception->getCode() !== ApiResponseConstant::CONFLICT) { throw $exception; }
+        try {
+            return redirect($protocol->returnUrl($identity['biz_no'], $identity['token']), 303);
+        } catch (BusinessException $exception) {
+            if ($exception->getCode() !== ApiResponseConstant::CONFLICT) {
+                throw $exception;
+            }
             return redirect('/cashier/pay?' . http_build_query($identity), 303);
         }
     }

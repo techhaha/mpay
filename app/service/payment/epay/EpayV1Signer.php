@@ -25,7 +25,11 @@ final class EpayV1Signer
             if ($value !== null && !is_string($value)) {
                 throw new \InvalidArgumentException('易支付签名参数必须是原始表单字符串');
             }
-            if (in_array((string) $name, ['sign', 'sign_type'], true) || $value === null || $value === '') {
+            if (
+                in_array((string) $name, ['sign', 'sign_type'], true) ||
+                $value === null ||
+                $value === ''
+            ) {
                 continue;
             }
             $parts[] = (string) $name . '=' . $value;
@@ -40,8 +44,11 @@ final class EpayV1Signer
     public function verify(array $parameters, string $key): bool
     {
         $signature = $parameters['sign'] ?? null;
-        if (($parameters['sign_type'] ?? null) !== 'MD5' || !is_string($signature)
-            || !preg_match('/^[a-f0-9]{32}$/D', $signature)) {
+        if (
+            ($parameters['sign_type'] ?? null) !== 'MD5' ||
+            !is_string($signature) ||
+            !preg_match('/^[a-f0-9]{32}$/D', $signature)
+        ) {
             return false;
         }
         return hash_equals($this->sign($parameters, $key), $signature);

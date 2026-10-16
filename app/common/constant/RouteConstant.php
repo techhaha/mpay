@@ -18,7 +18,9 @@ final class RouteConstant
     {
         return match ($mode) {
             self::DIRECT => '指定通道',
-            self::ORDER => '顺序轮询', self::WEIGHTED => '权重随机', self::FIRST_AVAILABLE => '默认优先',
+            self::ORDER => '顺序轮询',
+            self::WEIGHTED => '权重随机',
+            self::FIRST_AVAILABLE => '默认优先',
             default => throw new UnexpectedValueException('未知选路策略'),
         };
     }

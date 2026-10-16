@@ -30,7 +30,12 @@ final class PayOrderController extends BaseAdminController
     public function history(PayOrderValidator $validator, PayOrderQueryService $orders): Response
     {
         $input = $validator->history($this->request->get());
-        $result = $orders->history($input['biz_no'], $input['kind'], $input['page'], $input['limit']);
+        $result = $orders->history(
+            $input['biz_no'],
+            $input['kind'],
+            $input['page'],
+            $input['limit'],
+        );
         return $this->page($result['items'], $result['total'], $result['page'], $result['limit']);
     }
 
@@ -42,33 +47,62 @@ final class PayOrderController extends BaseAdminController
     }
 
     /** 证据必须由管理员明确填写，不能从期望金额/当前时间自动生成“已核实到账”。 */
-    public function confirm(PayOrderValidator $validator, PayOrderQueryService $orders, PayOrderAdminActionService $actions, Clock $clock): Response
-    {
+    public function confirm(
+        PayOrderValidator $validator,
+        PayOrderQueryService $orders,
+        PayOrderAdminActionService $actions,
+        Clock $clock,
+    ): Response {
         $input = $validator->action('confirm', $this->jsonBody());
-        $actions->confirm($orders->paymentNumber($input['biz_no']), $this->actor($input['reason']),
-            $validator->evidence($input), $input['current_password'], $clock->now(), $input['notify_merchant']);
+        $actions->confirm(
+            $orders->paymentNumber($input['biz_no']),
+            $this->actor($input['reason']),
+            $validator->evidence($input),
+            $input['current_password'],
+            $clock->now(),
+            $input['notify_merchant'],
+        );
         return $this->success(null, '人工确认已处理，请核对原订单和通知状态');
     }
 
-    public function close(PayOrderValidator $validator, PayOrderAdminActionService $actions, Clock $clock): Response
-    {
+    public function close(
+        PayOrderValidator $validator,
+        PayOrderAdminActionService $actions,
+        Clock $clock,
+    ): Response {
         $input = $validator->action('close', $this->jsonBody());
         $actions->closeBusiness($input['biz_no'], $this->actor($input['reason']), $clock->now());
         return $this->success(null, '已本地关闭；收款二维码未被平台撤销');
     }
 
     /** 返回已持久化的调度结果；首次放行或提前发送沿用自动策略，已结束任务仅补发一次，不等同远端 ACK。 */
-    public function retryNotification(PayOrderValidator $validator, PayOrderQueryService $orders, PayOrderAdminActionService $actions, Clock $clock): Response
-    {
+    public function retryNotification(
+        PayOrderValidator $validator,
+        PayOrderQueryService $orders,
+        PayOrderAdminActionService $actions,
+        Clock $clock,
+    ): Response {
         $input = $validator->action('retry', $this->jsonBody());
-        return $this->success($actions->retryNotification($orders->paymentNumber($input['biz_no']), $input['expected_attempts'],
-            $this->actor($input['reason']), $clock->now()), '已安排商户通知，请查看发送记录');
+        return $this->success(
+            $actions->retryNotification(
+                $orders->paymentNumber($input['biz_no']),
+                $input['expected_attempts'],
+                $this->actor($input['reason']),
+                $clock->now(),
+            ),
+            '已安排商户通知，请查看发送记录',
+        );
     }
 
     /** 操作者仅来自服务端中间件；动作服务在事务内再次核对身份版本，原因只作为人工审计材料。 */
     private function actor(string $reason): AdminActionContext
     {
         $identity = $this->identity();
-        return new AdminActionContext($identity['id'], $identity['session_version'], $this->context->id(), $reason);
+        return new AdminActionContext(
+            $identity['id'],
+            $identity['session_version'],
+            $this->context->id(),
+            $reason,
+        );
     }
 }

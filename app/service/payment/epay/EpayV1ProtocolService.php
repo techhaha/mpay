@@ -39,17 +39,28 @@ final class EpayV1ProtocolService extends BaseService
         private readonly EpayV1MessageService $messages,
         private readonly Clock $clock,
         private readonly CashierService $cashier,
-    ) {
-    }
+    ) {}
 
     /**
      * @param array<string|int,string> $raw 未 trim/截断/转换的原始表单标量。
      * @return array{trade_no:string,payurl:string,reused:bool} 内部跳转结果，Controller 再适配 submit/mapi。
      */
-    public function create(array $raw, string $scene, ?string $clientIp, string $device, string $requestId): array
-    {
+    public function create(
+        array $raw,
+        string $scene,
+        ?string $clientIp,
+        string $device,
+        string $requestId,
+    ): array {
         $identity = $this->authenticate($raw, true);
-        $input = $this->validator->order($raw, $scene, $identity['app']['id'], $identity['version'], $clientIp, $device);
+        $input = $this->validator->order(
+            $raw,
+            $scene,
+            $identity['app']['id'],
+            $identity['version'],
+            $clientIp,
+            $device,
+        );
         // 链接由框架按当前 Request 生成，不冻结为安装时的域名。
         $created = $this->orders->create($input, $this->clock->now());
         if ($created->payNo !== null) {
@@ -58,9 +69,17 @@ final class EpayV1ProtocolService extends BaseService
                 throw new PaymentDefinitiveException();
             }
         }
-        return ['trade_no' => $created->payNo ?? '',
-            'payurl' => (string) url('/cashier/pay', ['biz_no' => $created->bizNo, 'token' => $created->accessToken])->suffix(false)->domain(true)->root(''),
-            'reused' => $created->reused];
+        return [
+            'trade_no' => $created->payNo ?? '',
+            'payurl' => (string) url('/cashier/pay', [
+                'biz_no' => $created->bizNo,
+                'token' => $created->accessToken,
+            ])
+                ->suffix(false)
+                ->domain(true)
+                ->root(''),
+            'reused' => $created->reused,
+        ];
     }
 
     /**
@@ -85,16 +104,30 @@ final class EpayV1ProtocolService extends BaseService
             } else {
                 $biz = $this->bizOrders->findByAppOrder($app['id'], $selector['out_trade_no']);
                 $payNo = $biz['active_pay_no'] ?? null;
-                if ($payNo === null) { throw new BusinessException('支付订单不存在', ApiResponseConstant::NOT_FOUND); }
+                if ($payNo === null) {
+                    throw new BusinessException('支付订单不存在', ApiResponseConstant::NOT_FOUND);
+                }
             }
             // 退款内部核对应用归属、成功事实和剩余额度；是否支持退款由原订单插件决定。
-            $refund = $this->refunds->refund($app['id'], $payNo, $input['amount'], $input['request_no']);
+            $refund = $this->refunds->refund(
+                $app['id'],
+                $payNo,
+                $input['amount'],
+                $input['request_no'],
+            );
             $status = (int) $refund['status'];
-            return ['code' => $status === \app\common\constant\RefundConstant::SUCCESS ? 1 : 0,
-                'msg' => $refund['result_code'] === \app\common\constant\PaymentResultCode::REFUND_UNSUPPORTED ? '此订单的插件不支持接口退款，请联系收款方处理'
-                    : \app\common\constant\RefundConstant::label($status),
-                'refund_no' => $refund['refund_no'], 'trade_no' => $payNo,
-                'money' => \app\common\util\Money::format((int) $refund['refund_amount']), 'refund_status' => $status];
+            return [
+                'code' => $status === \app\common\constant\RefundConstant::SUCCESS ? 1 : 0,
+                'msg' =>
+                    $refund['result_code'] ===
+                    \app\common\constant\PaymentResultCode::REFUND_UNSUPPORTED
+                        ? '此订单的插件不支持接口退款，请联系收款方处理'
+                        : \app\common\constant\RefundConstant::label($status),
+                'refund_no' => $refund['refund_no'],
+                'trade_no' => $payNo,
+                'money' => \app\common\util\Money::format((int) $refund['refund_amount']),
+                'refund_status' => $status,
+            ];
         }
         if (!in_array($action, ['order', 'orders', 'query'], true)) {
             throw new BusinessException('不支持的易支付操作', ApiResponseConstant::BAD_REQUEST);
@@ -116,7 +149,9 @@ final class EpayV1ProtocolService extends BaseService
             if ($action === 'orders') {
                 $page = $this->validator->pagination($raw);
                 $orders = $this->bizOrders->pageForApp($app['id'], $page['page'], $page['limit']);
-                $payments = $this->payOrders->forBizOrders(array_map(static fn (BizOrder $biz): string => $biz['biz_no'], $orders));
+                $payments = $this->payOrders->forBizOrders(
+                    array_map(static fn(BizOrder $biz): string => $biz['biz_no'], $orders),
+                );
                 $items = [];
                 foreach ($orders as $biz) {
                     $pay = $payments[$biz['biz_no']] ?? null;
@@ -128,11 +163,24 @@ final class EpayV1ProtocolService extends BaseService
                 return ['code' => 1, 'msg' => '查询成功', 'data' => $items];
             }
             $today = $this->clock->now()->setTime(0, 0);
-            return ['code' => 1, 'msg' => '本系统不托管资金，余额固定为 0.00', 'pid' => $app['pid'],
-                'active' => (int) $app['status'], 'money' => '0.00',
+            return [
+                'code' => 1,
+                'msg' => '本系统不托管资金，余额固定为 0.00',
+                'pid' => $app['pid'],
+                'active' => (int) $app['status'],
+                'money' => '0.00',
                 'orders' => $this->bizOrders->countForApp($app['id']),
-                'order_today' => $this->bizOrders->countForApp($app['id'], $today->format('Y-m-d H:i:s'), $today->modify('+1 day')->format('Y-m-d H:i:s')),
-                'order_lastday' => $this->bizOrders->countForApp($app['id'], $today->modify('-1 day')->format('Y-m-d H:i:s'), $today->format('Y-m-d H:i:s'))];
+                'order_today' => $this->bizOrders->countForApp(
+                    $app['id'],
+                    $today->format('Y-m-d H:i:s'),
+                    $today->modify('+1 day')->format('Y-m-d H:i:s'),
+                ),
+                'order_lastday' => $this->bizOrders->countForApp(
+                    $app['id'],
+                    $today->modify('-1 day')->format('Y-m-d H:i:s'),
+                    $today->format('Y-m-d H:i:s'),
+                ),
+            ];
         });
     }
 
@@ -144,7 +192,10 @@ final class EpayV1ProtocolService extends BaseService
     {
         // 首次 ACK 不会因后续补发失败撤销；先完成独立读取，避免嵌套事务，签名前仍重核订单与冻结目标。
         if ($this->cashier->completion($bizNo, $accessToken)['action'] !== 'return') {
-            throw new BusinessException('订单尚未完成商户确认或未设置返回地址', ApiResponseConstant::CONFLICT);
+            throw new BusinessException(
+                '订单尚未完成商户确认或未设置返回地址',
+                ApiResponseConstant::CONFLICT,
+            );
         }
         return $this->transaction(function () use ($bizNo, $accessToken): string {
             $biz = $this->bizOrders->find($bizNo);
@@ -154,12 +205,17 @@ final class EpayV1ProtocolService extends BaseService
                 throw new BusinessException('订单尚未确认支付成功', ApiResponseConstant::CONFLICT);
             }
             if ($biz['return_url'] === null) {
-                throw new BusinessException('此订单未设置回跳地址，请留在结果页', ApiResponseConstant::CONFLICT);
+                throw new BusinessException(
+                    '此订单未设置回跳地址，请留在结果页',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
             // 使用原单冻结目标，格式由签名/编码方法核验；浏览器回跳不执行服务器出站检查。
-            $parameters = $this->messages->signForTarget($biz['return_url'],
+            $parameters = $this->messages->signForTarget(
+                $biz['return_url'],
                 $this->messages->successParameters($biz, $pay, $biz['pid']),
-                $this->credentials->secretForVersion($biz['app_id'], $biz['credential_version_id']));
+                $this->credentials->secretForVersion($biz['app_id'], $biz['credential_version_id']),
+            );
             return $this->messages->targetUrl($biz['return_url'], $parameters);
         });
     }
@@ -173,20 +229,40 @@ final class EpayV1ProtocolService extends BaseService
     private function authenticate(array $raw, bool $signed): array
     {
         $pid = $this->validator->pid($raw);
-        if (($signed && (($raw['sign_type'] ?? null) !== 'MD5' || !preg_match('/^[a-f0-9]{32}$/D', $raw['sign'] ?? '')))
-            || (!$signed && (($raw['key'] ?? '') === '' || strlen($raw['key']) > 512))) {
-            throw new BusinessException('PID、KEY 或签名无效', ApiResponseConstant::UNAUTHENTICATED);
+        if (
+            ($signed &&
+                (($raw['sign_type'] ?? null) !== 'MD5' ||
+                    !preg_match('/^[a-f0-9]{32}$/D', $raw['sign'] ?? ''))) ||
+            (!$signed && (($raw['key'] ?? '') === '' || strlen($raw['key']) > 512))
+        ) {
+            throw new BusinessException(
+                'PID、KEY 或签名无效',
+                ApiResponseConstant::UNAUTHENTICATED,
+            );
         }
         return $this->transaction(function () use ($pid, $raw, $signed): array {
             $app = $this->apps->findByPid($pid);
             if ($app === null || (int) $app['status'] !== 1) {
-                throw new BusinessException('PID、KEY 或签名无效', ApiResponseConstant::UNAUTHENTICATED);
+                throw new BusinessException(
+                    'PID、KEY 或签名无效',
+                    ApiResponseConstant::UNAUTHENTICATED,
+                );
             }
             $version = $this->credentials->active($app);
-            $valid = $version !== null && ($signed
-                ? $this->signer->verify($raw, $this->credentials->secretForVersion($app['id'], $version['id']))
-                : hash_equals($version['key_fingerprint'], hash('sha256', $raw['key'])));
-            if (!$valid) { throw new BusinessException('PID、KEY 或签名无效', ApiResponseConstant::UNAUTHENTICATED); }
+            $valid =
+                $version !== null &&
+                ($signed
+                    ? $this->signer->verify(
+                        $raw,
+                        $this->credentials->secretForVersion($app['id'], $version['id']),
+                    )
+                    : hash_equals($version['key_fingerprint'], hash('sha256', $raw['key'])));
+            if (!$valid) {
+                throw new BusinessException(
+                    'PID、KEY 或签名无效',
+                    ApiResponseConstant::UNAUTHENTICATED,
+                );
+            }
             $matched = $version['id'];
             return ['app' => $app, 'version' => $matched];
         });
@@ -196,11 +272,15 @@ final class EpayV1ProtocolService extends BaseService
     private function payFor(BizOrder $biz): ?PayOrder
     {
         if ($biz['active_pay_no'] === null) {
-            if ((int) $biz['attempt_count'] !== 0 || (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS) {
+            if (
+                (int) $biz['attempt_count'] !== 0 ||
+                (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS
+            ) {
                 throw new \RuntimeException('业务单的支付关联缺失');
             }
             return null;
         }
-        return $this->payOrders->find($biz['active_pay_no']) ?? throw new \RuntimeException('业务单引用的支付单缺失');
+        return $this->payOrders->find($biz['active_pay_no']) ??
+            throw new \RuntimeException('业务单引用的支付单缺失');
     }
 }

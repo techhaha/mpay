@@ -13,7 +13,10 @@ use app\model\payment\PaymentAppKey;
  */
 final class PaymentAppKeyRepository extends BaseRepository
 {
-    public function __construct(PaymentAppKey $model) { parent::__construct($model); }
+    public function __construct(PaymentAppKey $model)
+    {
+        parent::__construct($model);
+    }
 
     public function version(string $appId, string $id): ?PaymentAppKey
     {
@@ -24,9 +27,23 @@ final class PaymentAppKeyRepository extends BaseRepository
     public function append(string $appId, string $value, string $fingerprint): string
     {
         $this->requireTransaction();
-        $number = (int) ($this->model->where('app_id', $appId)->order('version', 'desc')->lock(true)->value('version') ?? 0) + 1;
-        if ($number > 4294967295) { throw new \RuntimeException('凭证版本序号已用尽'); }
-        return $this->insert(['app_id' => $appId, 'version' => $number, 'secret' => $value,
-            'key_fingerprint' => $fingerprint], ['app_id', 'version', 'secret', 'key_fingerprint']);
+        $number =
+            (int) ($this->model
+                ->where('app_id', $appId)
+                ->order('version', 'desc')
+                ->lock(true)
+                ->value('version') ?? 0) + 1;
+        if ($number > 4294967295) {
+            throw new \RuntimeException('凭证版本序号已用尽');
+        }
+        return $this->insert(
+            [
+                'app_id' => $appId,
+                'version' => $number,
+                'secret' => $value,
+                'key_fingerprint' => $fingerprint,
+            ],
+            ['app_id', 'version', 'secret', 'key_fingerprint'],
+        );
     }
 }

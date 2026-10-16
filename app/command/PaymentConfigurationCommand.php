@@ -17,9 +17,20 @@ final class PaymentConfigurationCommand extends Command
 {
     protected function configure(): void
     {
-        $this->setName('payment:configuration')->setDescription('通过私有 JSON 文件管理插件配置和通道')
-            ->addOption('operation', null, Option::VALUE_REQUIRED, 'editor-create/editor-save/plugin-save/channel-enabled/channel-delete')
-            ->addOption('input', null, Option::VALUE_REQUIRED, 'public 之外的私有 JSON 文件，凭证不得写进命令行');
+        $this->setName('payment:configuration')
+            ->setDescription('通过私有 JSON 文件管理插件配置和通道')
+            ->addOption(
+                'operation',
+                null,
+                Option::VALUE_REQUIRED,
+                'editor-create/editor-save/plugin-save/channel-enabled/channel-delete',
+            )
+            ->addOption(
+                'input',
+                null,
+                Option::VALUE_REQUIRED,
+                'public 之外的私有 JSON 文件，凭证不得写进命令行',
+            );
     }
 
     /** 命令只输出公开 ID/版本；schema/业务拒绝返回 2，程序故障记录脱敏诊断并返回 1。 */
@@ -28,9 +39,13 @@ final class PaymentConfigurationCommand extends Command
         try {
             $operation = $input->getOption('operation');
             $path = $input->getOption('input');
-            if (!is_string($operation) || !is_string($path) || $path === '') { throw new \InvalidArgumentException('必须指定 --operation 和 --input'); }
+            if (!is_string($operation) || !is_string($path) || $path === '') {
+                throw new \InvalidArgumentException('必须指定 --operation 和 --input');
+            }
             $raw = $this->app->make(ConfigurationInputFile::class)->read($path);
-            $data = $this->app->make(PaymentConfigurationValidator::class)->validate($operation, $raw);
+            $data = $this->app
+                ->make(PaymentConfigurationValidator::class)
+                ->validate($operation, $raw);
             $actor = ConfigurationActionContext::cli();
             $result = $this->apply($operation, $data, $actor);
             $output->writeln(json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE));
@@ -47,7 +62,9 @@ final class PaymentConfigurationCommand extends Command
             return 2;
         } catch (\Throwable $exception) {
             $this->app->make(SafeLogger::class)->exception($exception);
-            $output->writeln('<error>配置管理未完成，请查看技术日志；未输出平台配置或凭证。</error>');
+            $output->writeln(
+                '<error>配置管理未完成，请查看技术日志；未输出平台配置或凭证。</error>',
+            );
             return 1;
         }
     }
@@ -62,12 +79,23 @@ final class PaymentConfigurationCommand extends Command
     private function apply(string $operation, array $data, ConfigurationActionContext $actor): array
     {
         $service = $this->app->make(\app\service\payment\config\PaymentChannelEditorService::class);
-        if ($operation === 'editor-create') { return $service->create($data, $actor); }
-        if ($operation === 'editor-save') { return $service->save($data, $actor); }
-        if ($operation === 'plugin-save') { return $service->configure($data, $actor); }
-        if ($operation === 'channel-enabled') { $service->setEnabled($data, $actor); return ['id'=>$data['id'],'enabled'=>$data['enabled']]; }
-        if ($operation === 'channel-delete') { $service->delete($data, $actor); return ['id'=>$data['id']]; }
+        if ($operation === 'editor-create') {
+            return $service->create($data, $actor);
+        }
+        if ($operation === 'editor-save') {
+            return $service->save($data, $actor);
+        }
+        if ($operation === 'plugin-save') {
+            return $service->configure($data, $actor);
+        }
+        if ($operation === 'channel-enabled') {
+            $service->setEnabled($data, $actor);
+            return ['id' => $data['id'], 'enabled' => $data['enabled']];
+        }
+        if ($operation === 'channel-delete') {
+            $service->delete($data, $actor);
+            return ['id' => $data['id']];
+        }
         throw new \LogicException('已校验管理操作没有对应服务分支');
     }
-
 }

@@ -33,5 +33,8 @@ final class PaymentPluginNotifyResultValidator extends Validate
     }
 
     /** 标准插件金额必须为整数分，不能接受可被 integer 规则转换的字符串或浮点。 */
-    protected function integerValue(mixed $value): bool { return is_int($value); }
+    protected function integerValue(mixed $value): bool
+    {
+        return is_int($value);
+    }
 }

@@ -34,5 +34,4 @@ final class ChannelNotifyLog extends BaseModel
             ],
         ];
     }
-
 }

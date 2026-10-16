@@ -22,7 +22,10 @@ final class ReceiptMessageException extends BusinessException
             'authentication_failed' => ['来源消息认证失败', ApiResponseConstant::FORBIDDEN],
             'transport_expired' => ['来源消息超出接收时间窗口', ApiResponseConstant::FORBIDDEN],
             'source_mismatch' => ['来源消息不属于允许的来源', ApiResponseConstant::FORBIDDEN],
-            'unsupported_message' => ['来源消息类型尚未支持', ApiResponseConstant::VALIDATION_FAILED],
+            'unsupported_message' => [
+                '来源消息类型尚未支持',
+                ApiResponseConstant::VALIDATION_FAILED,
+            ],
             default => throw new \InvalidArgumentException('来源消息拒绝原因未定义'),
         };
         parent::__construct($message, $code);

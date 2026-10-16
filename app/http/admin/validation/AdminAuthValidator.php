@@ -17,7 +17,12 @@ final class AdminAuthValidator extends Validate
         'password' => ['require', 'string', 'passwordBytes'],
         'current_password' => ['require', 'string', 'passwordBytes'],
         'new_password' => ['require', 'string', 'passwordBytes', 'min' => 12],
-        'password_confirmation' => ['require', 'string', 'passwordBytes', 'confirm' => 'new_password'],
+        'password_confirmation' => [
+            'require',
+            'string',
+            'passwordBytes',
+            'confirm' => 'new_password',
+        ],
     ];
 
     protected $scene = [
@@ -42,7 +47,10 @@ final class AdminAuthValidator extends Validate
     {
         $fields = $this->scene[$scene] ?? throw new InvalidArgumentException('未知认证验证场景');
         if (array_diff(array_keys($input), $fields) !== []) {
-            throw new BusinessException('认证操作包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '认证操作包含未允许的字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $validator = (clone $this)->scene($scene)->batch(true)->failException(false);
         if (!$validator->check($input)) {
@@ -50,7 +58,11 @@ final class AdminAuthValidator extends Validate
             foreach ((array) $validator->getError() as $field => $message) {
                 $errors[$field] = [$message];
             }
-            throw new BusinessException('请检查填写内容', ApiResponseConstant::VALIDATION_FAILED, $errors);
+            throw new BusinessException(
+                '请检查填写内容',
+                ApiResponseConstant::VALIDATION_FAILED,
+                $errors,
+            );
         }
         return array_intersect_key($input, array_flip($fields));
     }
@@ -58,7 +70,10 @@ final class AdminAuthValidator extends Validate
     /** 原生 string 规则之外补充凭据字节边界，不实现另一套验证引擎或读取账号数据。 */
     protected function passwordBytes(mixed $value): bool
     {
-        return is_string($value) && $value !== '' && strlen($value) <= 72
-            && !str_contains($value, "\0") && mb_check_encoding($value, 'UTF-8');
+        return is_string($value) &&
+            $value !== '' &&
+            strlen($value) <= 72 &&
+            !str_contains($value, "\0") &&
+            mb_check_encoding($value, 'UTF-8');
     }
 }

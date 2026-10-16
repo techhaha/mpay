@@ -21,9 +21,14 @@ final readonly class ManualReceiptEvidence
         public string $reference,
     ) {
         Money::assertRange($receivedAmount);
-        if ($receivedAmount === 0 || trim($reference) === '' || mb_strlen($reference, 'UTF-8') > 1024
-            || !mb_check_encoding([$reference, $platformTradeNo ?? ''], 'UTF-8')
-            || ($platformTradeNo !== null && ($platformTradeNo === '' || strlen($platformTradeNo) > 128))) {
+        if (
+            $receivedAmount === 0 ||
+            trim($reference) === '' ||
+            mb_strlen($reference, 'UTF-8') > 1024 ||
+            !mb_check_encoding([$reference, $platformTradeNo ?? ''], 'UTF-8') ||
+            ($platformTradeNo !== null &&
+                ($platformTradeNo === '' || strlen($platformTradeNo) > 128))
+        ) {
             throw new \InvalidArgumentException('人工收款证据无效');
         }
     }
@@ -31,8 +36,13 @@ final readonly class ManualReceiptEvidence
     /** @return array{received_amount:int,paid_at:string,platform_trade_no:?string,reference:string} */
     public function toArray(): array
     {
-        return ['received_amount' => $this->receivedAmount,
-            'paid_at' => $this->paidAt->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('Y-m-d H:i:s'),
-            'platform_trade_no' => $this->platformTradeNo, 'reference' => $this->reference];
+        return [
+            'received_amount' => $this->receivedAmount,
+            'paid_at' => $this->paidAt
+                ->setTimezone(new \DateTimeZone('Asia/Shanghai'))
+                ->format('Y-m-d H:i:s'),
+            'platform_trade_no' => $this->platformTradeNo,
+            'reference' => $this->reference,
+        ];
     }
 }

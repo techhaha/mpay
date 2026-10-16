@@ -13,7 +13,10 @@ use app\model\system\SystemConfig;
  */
 final class SystemConfigRepository extends BaseRepository
 {
-    public function __construct(SystemConfig $model) { parent::__construct($model); }
+    public function __construct(SystemConfig $model)
+    {
+        parent::__construct($model);
+    }
 
     /** null 表示该组仍采用部署默认值；数据库故障不得转换为 null。 */
     public function find(string $key): ?SystemConfig
@@ -37,14 +40,21 @@ final class SystemConfigRepository extends BaseRepository
         $this->requireTransaction();
         $json = json_encode((object) $values, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
         if ($current === null) {
-            $this->insert(['config_key' => $key, 'value_json' => $json, 'version' => 1],
-                ['config_key', 'value_json', 'version']);
+            $this->insert(
+                ['config_key' => $key, 'value_json' => $json, 'version' => 1],
+                ['config_key', 'value_json', 'version'],
+            );
             return 1;
         }
         $version = (int) $current['version'] + 1;
-        $changed = $this->model->where('id', $current['id'])->where('config_key', $key)->where('version', $current['version'])
+        $changed = $this->model
+            ->where('id', $current['id'])
+            ->where('config_key', $key)
+            ->where('version', $current['version'])
             ->update(['value_json' => $json, 'version' => $version, 'updated_at' => $now]);
-        if ($changed !== 1) { throw new \RuntimeException('系统配置写入条件改变'); }
+        if ($changed !== 1) {
+            throw new \RuntimeException('系统配置写入条件改变');
+        }
         return $version;
     }
 }

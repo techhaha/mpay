@@ -16,9 +16,14 @@ final readonly class AdminActionContext
         public string $requestId,
         public string $reason,
     ) {
-        if (!preg_match('/^[1-9][0-9]*$/D', $adminId) || $sessionVersion < 1
-            || !preg_match('/^[a-f0-9]{32}$/D', $requestId) || trim($reason) === ''
-            || !mb_check_encoding($reason, 'UTF-8') || mb_strlen($reason, 'UTF-8') > 512) {
+        if (
+            !preg_match('/^[1-9][0-9]*$/D', $adminId) ||
+            $sessionVersion < 1 ||
+            !preg_match('/^[a-f0-9]{32}$/D', $requestId) ||
+            trim($reason) === '' ||
+            !mb_check_encoding($reason, 'UTF-8') ||
+            mb_strlen($reason, 'UTF-8') > 512
+        ) {
             throw new \InvalidArgumentException('管理操作缺少有效身份或原因');
         }
     }

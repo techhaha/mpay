@@ -10,18 +10,32 @@ use think\db\exception\PDOException;
 /** 业务编号统一为前缀＋创建时间＋五位随机数；唯一性由对应数据库唯一索引保证。 */
 final class BusinessNumber
 {
-    private const INDEXES = ['B' => 'uk_biz_no', 'P' => 'uk_pay_no', 'N' => 'uk_notify_no', 'R' => 'uk_refund_no'];
+    private const INDEXES = [
+        'B' => 'uk_biz_no',
+        'P' => 'uk_pay_no',
+        'N' => 'uk_notify_no',
+        'R' => 'uk_refund_no',
+    ];
     private const MAX_ATTEMPTS = 5;
 
     /** 默认使用 PHP 原生安全随机源；允许隔离测试注入确定性引擎验证边界和碰撞。 */
-    public function __construct(private readonly \Random\Randomizer $random = new \Random\Randomizer()) {}
+    public function __construct(
+        private readonly \Random\Randomizer $random = new \Random\Randomizer(),
+    ) {}
 
     public function generate(string $prefix, \DateTimeImmutable $createdAt): string
     {
-        if (!isset(self::INDEXES[$prefix])) { throw new \InvalidArgumentException('不支持的业务编号类型'); }
+        if (!isset(self::INDEXES[$prefix])) {
+            throw new \InvalidArgumentException('不支持的业务编号类型');
+        }
         $date = $createdAt->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('YmdHis');
-        $number = $prefix . $date . str_pad((string) $this->random->getInt(0, 99999), 5, '0', STR_PAD_LEFT);
-        if (strlen($number) !== 20) { throw new \InvalidArgumentException('创建时间超出编号支持范围'); }
+        $number =
+            $prefix .
+            $date .
+            str_pad((string) $this->random->getInt(0, 99999), 5, '0', STR_PAD_LEFT);
+        if (strlen($number) !== 20) {
+            throw new \InvalidArgumentException('创建时间超出编号支持范围');
+        }
         return $number;
     }
 
@@ -36,15 +50,24 @@ final class BusinessNumber
     {
         for ($attempt = 0; $attempt < self::MAX_ATTEMPTS; $attempt++) {
             $number = $this->generate($prefix, $createdAt);
-            try { $insert($number); return $number; }
-            catch (PDOException $exception) {
+            try {
+                $insert($number);
+                return $number;
+            } catch (PDOException $exception) {
                 $info = $exception->getData()['PDO Error Info'] ?? [];
                 // 只识别驱动报文末尾的固定索引名，不记录报文中的重复值、SQL 或绑定参数。
                 $pattern = '/for key [\'`](?:[^\'`]+\.)?' . self::INDEXES[$prefix] . '[\'`]\s*$/iD';
-                if ((int) ($info['Driver Error Code'] ?? 0) !== 1062
-                    || !preg_match($pattern, (string) ($info['Driver Error Message'] ?? ''))) { throw $exception; }
+                if (
+                    (int) ($info['Driver Error Code'] ?? 0) !== 1062 ||
+                    !preg_match($pattern, (string) ($info['Driver Error Message'] ?? ''))
+                ) {
+                    throw $exception;
+                }
             }
         }
-        throw new BusinessException('业务编号暂时分配失败，请重试原订单', ApiResponseConstant::SERVICE_UNAVAILABLE);
+        throw new BusinessException(
+            '业务编号暂时分配失败，请重试原订单',
+            ApiResponseConstant::SERVICE_UNAVAILABLE,
+        );
     }
 }

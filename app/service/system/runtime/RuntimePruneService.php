@@ -9,9 +9,7 @@ use think\App;
 /** 清理应用运行目录内的旧技术日志和已退出进程心跳；交易、流水、通知、审计和密钥不在此范围。 */
 final class RuntimePruneService
 {
-    public function __construct(private readonly App $app, private readonly Clock $clock)
-    {
-    }
+    public function __construct(private readonly App $app, private readonly Clock $clock) {}
 
     /**
      * 默认仅预览；执行时再次核对范围、类型、修改时间和心跳状态，不递归删除目录。
@@ -23,42 +21,68 @@ final class RuntimePruneService
      * @param int $logDays 技术日志保留天数，由 CLI 读取已保存设置或显式给出，服务本身不连接数据库。
      * @return array{dry_run:bool,candidates:int,removed:int,skipped:int,files:list<array{file:string,bytes:int}>,scan_complete:bool,budget_exhausted:bool}
      */
-    public function run(bool $execute = false, int $limit = 500, int $logDays = 30, int $budgetMilliseconds = 0): array
-    {
+    public function run(
+        bool $execute = false,
+        int $limit = 500,
+        int $logDays = 30,
+        int $budgetMilliseconds = 0,
+    ): array {
         if ($limit < 1 || $limit > 5000) {
             throw new \InvalidArgumentException('清理批次必须为 1～5000');
         }
-        if ($logDays < 7 || $logDays > 365) { throw new \InvalidArgumentException('技术日志保留期必须为 7～365 天'); }
+        if ($logDays < 7 || $logDays > 365) {
+            throw new \InvalidArgumentException('技术日志保留期必须为 7～365 天');
+        }
         $configured = rtrim($this->app->getRuntimePath(), '/\\');
         $root = realpath($configured);
         $public = realpath($this->app->getRootPath() . 'public');
-        if ($root === false || is_link($configured) || $public === false || $this->within($root, $public)) {
+        if (
+            $root === false ||
+            is_link($configured) ||
+            $public === false ||
+            $this->within($root, $public)
+        ) {
             throw new \RuntimeException('清理需要明确且非公开的真实 runtime 目录');
         }
-        if ($budgetMilliseconds < 0 || $budgetMilliseconds > 60000) { throw new \InvalidArgumentException('清理时间预算无效'); }
+        if ($budgetMilliseconds < 0 || $budgetMilliseconds > 60000) {
+            throw new \InvalidArgumentException('清理时间预算无效');
+        }
         $started = hrtime(true);
-        $elapsed = static fn (): float => (hrtime(true) - $started) / 1000000;
+        $elapsed = static fn(): float => (hrtime(true) - $started) / 1000000;
         $scanComplete = true;
         $candidates = [];
-        $oldestFirst = static fn (array $a, array $b): int => [$a['mtime'], $a['path']] <=> [$b['mtime'], $b['path']];
+        $oldestFirst = static fn(array $a, array $b): int => [$a['mtime'], $a['path']] <=> [
+            $b['mtime'],
+            $b['path'],
+        ];
         foreach (['log', 'workers'] as $kind) {
             $directory = $root . DIRECTORY_SEPARATOR . $kind;
             if (!is_dir($directory) || is_link($directory)) {
                 continue;
             }
-            $iterator = new \RecursiveIteratorIterator(new \RecursiveCallbackFilterIterator(
-                new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
-                static fn (\SplFileInfo $file): bool => !$file->isLink(),
-            ));
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveCallbackFilterIterator(
+                    new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+                    static fn(\SplFileInfo $file): bool => !$file->isLink(),
+                ),
+            );
             foreach ($iterator as $file) {
                 // 留一半预算给删除；自动清理不能因扫描历史日志长时间阻塞通知。
-                if ($budgetMilliseconds > 0 && $elapsed() >= $budgetMilliseconds / 2) { $scanComplete = false; break 2; }
+                if ($budgetMilliseconds > 0 && $elapsed() >= $budgetMilliseconds / 2) {
+                    $scanComplete = false;
+                    break 2;
+                }
                 if (!$file->isFile()) {
                     continue;
                 }
                 $path = $file->getPathname();
                 if ($this->eligible($path, $root, $kind, $logDays)) {
-                    $candidates[] = ['path' => $path, 'kind' => $kind, 'mtime' => $file->getMTime(), 'size' => $file->getSize()];
+                    $candidates[] = [
+                        'path' => $path,
+                        'kind' => $kind,
+                        'mtime' => $file->getMTime(),
+                        'size' => $file->getSize(),
+                    ];
                     // 扫描大量历史时只保留足够的最旧候选，内存不随整个运行目录持续增长。
                     if (count($candidates) > $limit * 2) {
                         usort($candidates, $oldestFirst);
@@ -69,16 +93,34 @@ final class RuntimePruneService
         }
         usort($candidates, $oldestFirst);
         $candidates = array_slice($candidates, 0, $limit);
-        $result = ['dry_run' => !$execute, 'candidates' => count($candidates), 'removed' => 0, 'skipped' => 0, 'files' => [], 'scan_complete' => $scanComplete, 'budget_exhausted' => !$scanComplete];
+        $result = [
+            'dry_run' => !$execute,
+            'candidates' => count($candidates),
+            'removed' => 0,
+            'skipped' => 0,
+            'files' => [],
+            'scan_complete' => $scanComplete,
+            'budget_exhausted' => !$scanComplete,
+        ];
         foreach ($candidates as $candidate) {
-            if ($budgetMilliseconds > 0 && $elapsed() >= $budgetMilliseconds) { $result['budget_exhausted'] = true; break; }
+            if ($budgetMilliseconds > 0 && $elapsed() >= $budgetMilliseconds) {
+                $result['budget_exhausted'] = true;
+                break;
+            }
             $path = $candidate['path'];
-            $result['files'][] = ['file' => str_replace('\\', '/', substr($path, strlen($root) + 1)), 'bytes' => $candidate['size']];
+            $result['files'][] = [
+                'file' => str_replace('\\', '/', substr($path, strlen($root) + 1)),
+                'bytes' => $candidate['size'],
+            ];
             if (!$execute) {
                 continue;
             }
             clearstatcache(true, $path);
-            if (!$this->eligible($path, $root, $candidate['kind'], $logDays) || filemtime($path) !== $candidate['mtime'] || filesize($path) !== $candidate['size']) {
+            if (
+                !$this->eligible($path, $root, $candidate['kind'], $logDays) ||
+                filemtime($path) !== $candidate['mtime'] ||
+                filesize($path) !== $candidate['size']
+            ) {
                 $result['skipped']++;
                 continue;
             }
@@ -94,15 +136,24 @@ final class RuntimePruneService
     private function eligible(string $path, string $root, string $kind, int $logDays): bool
     {
         $real = realpath($path);
-        if ($real === false || is_link($path) || !is_file($real) || !$this->within($real, $root . DIRECTORY_SEPARATOR . $kind)) {
+        if (
+            $real === false ||
+            is_link($path) ||
+            !is_file($real) ||
+            !$this->within($real, $root . DIRECTORY_SEPARATOR . $kind)
+        ) {
             return false;
         }
         $now = $this->clock->now()->getTimestamp();
         if ($kind === 'log') {
-            return pathinfo($path, PATHINFO_EXTENSION) === 'log' && filemtime($path) < $now - $logDays * 86400;
+            return pathinfo($path, PATHINFO_EXTENSION) === 'log' &&
+                filemtime($path) < $now - $logDays * 86400;
         }
-        if (filemtime($path) >= $now - 7 * 86400 || filesize($path) > 4096
-            || !preg_match('/^(work|watch)-([a-f0-9]{32})\.json$/D', basename($path), $match)) {
+        if (
+            filemtime($path) >= $now - 7 * 86400 ||
+            filesize($path) > 4096 ||
+            !preg_match('/^(work|watch)-([a-f0-9]{32})\.json$/D', basename($path), $match)
+        ) {
             return false;
         }
         $stream = fopen($path, 'rb');
@@ -117,8 +168,12 @@ final class RuntimePruneService
         } finally {
             fclose($stream);
         }
-        return is_array($data) && ($data['role'] ?? null) === $match[1] && ($data['owner'] ?? null) === $match[2]
-            && ($data['running'] ?? null) === false && is_int($data['observed_at'] ?? null) && $data['observed_at'] < $now - 7 * 86400;
+        return is_array($data) &&
+            ($data['role'] ?? null) === $match[1] &&
+            ($data['owner'] ?? null) === $match[2] &&
+            ($data['running'] ?? null) === false &&
+            is_int($data['observed_at'] ?? null) &&
+            $data['observed_at'] < $now - 7 * 86400;
     }
 
     /** 比较带分隔符的完整边界，Windows 使用不区分大小写的规范路径，避免同前缀兄弟目录越界。 */

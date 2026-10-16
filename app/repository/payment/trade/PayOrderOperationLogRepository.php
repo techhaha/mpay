@@ -21,8 +21,15 @@ final class PayOrderOperationLogRepository extends BaseRepository
     /** @return array{items:list<PayOrderOperationLog>,total:int} 按支付号读取操作审计；不返回全表后截断。 */
     public function pageForPay(string $payNo, int $page, int $limit): array
     {
-        return ['items' => $this->model->where('pay_no', $payNo)->order('id', 'desc')->page($page, $limit)->select()->all(),
-            'total' => (int) $this->model->where('pay_no', $payNo)->count()];
+        return [
+            'items' => $this->model
+                ->where('pay_no', $payNo)
+                ->order('id', 'desc')
+                ->page($page, $limit)
+                ->select()
+                ->all(),
+            'total' => (int) $this->model->where('pay_no', $payNo)->count(),
+        ];
     }
 
     /**
@@ -39,10 +46,30 @@ final class PayOrderOperationLogRepository extends BaseRepository
         int $after,
         array $evidence,
     ): void {
-        $this->insert([
-            'pay_no' => $payNo, 'admin_user_id' => $adminId, 'request_id' => $requestId,
-            'action' => $action, 'reason' => $reason, 'before_status' => $before, 'after_status' => $after,
-            'evidence_json' => json_encode($evidence, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-        ], ['pay_no', 'admin_user_id', 'request_id', 'action', 'reason', 'before_status', 'after_status', 'evidence_json']);
+        $this->insert(
+            [
+                'pay_no' => $payNo,
+                'admin_user_id' => $adminId,
+                'request_id' => $requestId,
+                'action' => $action,
+                'reason' => $reason,
+                'before_status' => $before,
+                'after_status' => $after,
+                'evidence_json' => json_encode(
+                    $evidence,
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+                ),
+            ],
+            [
+                'pay_no',
+                'admin_user_id',
+                'request_id',
+                'action',
+                'reason',
+                'before_status',
+                'after_status',
+                'evidence_json',
+            ],
+        );
     }
 }

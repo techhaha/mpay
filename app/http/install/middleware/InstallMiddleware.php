@@ -18,8 +18,16 @@ final class InstallMiddleware
     public function handle(Request $request, \Closure $next): Response
     {
         if ($this->files->completed()) {
-            if (ltrim($request->pathinfo(), '/') === 'install' && in_array($request->method(true), ['GET', 'HEAD'], true)) { return redirect('/admin/login', 303); }
-            throw new BusinessException('系统已经安装，安装入口已关闭', ApiResponseConstant::CONFLICT);
+            if (
+                ltrim($request->pathinfo(), '/') === 'install' &&
+                in_array($request->method(true), ['GET', 'HEAD'], true)
+            ) {
+                return redirect('/admin/login', 303);
+            }
+            throw new BusinessException(
+                '系统已经安装，安装入口已关闭',
+                ApiResponseConstant::CONFLICT,
+            );
         }
         return $next($request);
     }

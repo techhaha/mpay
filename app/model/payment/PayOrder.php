@@ -69,13 +69,15 @@ final class PayOrder extends BaseModel
     /** 原金额用于业务核对；尚未准备识别值时，pay_amount 本身就是原金额。 */
     public function originalAmount(): int
     {
-        return (int) ($this['ext_json']['personal_receipt']['original_amount'] ?? $this['pay_amount']);
+        return (int) ($this['ext_json']['personal_receipt']['original_amount'] ??
+            $this['pay_amount']);
     }
 
     /** 收银台和回调使用插件冻结的识别值；成功恢复 pay_amount 后仍可查看原提示金额。 */
     public function receiptAmount(): int
     {
-        return (int) ($this['ext_json']['personal_receipt']['receipt_amount'] ?? $this['pay_amount']);
+        return (int) ($this['ext_json']['personal_receipt']['receipt_amount'] ??
+            $this['pay_amount']);
     }
 
     /** 实际到账证据来自通知或人工确认，不以二维码或识别值补造。 */

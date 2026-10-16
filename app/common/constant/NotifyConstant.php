@@ -16,5 +16,11 @@ final class NotifyConstant
     public const STATUS_EXHAUSTED = 3;
     // 人工明确暂缓异步通知；仍保留冻结责任，但扫描器不得自动发送。
     public const STATUS_HELD = 4;
-    public const STATUSES = [self::STATUS_PENDING, self::STATUS_SENDING, self::STATUS_SUCCESS, self::STATUS_EXHAUSTED, self::STATUS_HELD];
+    public const STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_SENDING,
+        self::STATUS_SUCCESS,
+        self::STATUS_EXHAUSTED,
+        self::STATUS_HELD,
+    ];
 }

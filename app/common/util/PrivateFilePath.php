@@ -38,31 +38,49 @@ final class PrivateFilePath
         $absolute = $this->absolute($path);
         $name = basename($absolute);
         $parent = realpath(dirname($absolute));
-        if ($parent === false || !is_dir($parent) || $name === '' || in_array($name, ['.', '..'], true)
-            || (DIRECTORY_SEPARATOR === '\\' && preg_match('/[. ]$/D', $name))) {
+        if (
+            $parent === false ||
+            !is_dir($parent) ||
+            $name === '' ||
+            in_array($name, ['.', '..'], true) ||
+            (DIRECTORY_SEPARATOR === '\\' && preg_match('/[. ]$/D', $name))
+        ) {
             throw new \InvalidArgumentException('私有文件名无效或父目录不存在');
         }
         $resolved = $parent . DIRECTORY_SEPARATOR . $name;
         $this->assertPrivate($absolute, $resolved);
         // is_link 同时拒绝悬空链接；fopen 的 x 模式仍负责最终的排他创建。
-        if (file_exists($resolved) || is_link($resolved)) { throw new \InvalidArgumentException('私有文件已存在，拒绝覆盖'); }
+        if (file_exists($resolved) || is_link($resolved)) {
+            throw new \InvalidArgumentException('私有文件已存在，拒绝覆盖');
+        }
         return $resolved;
     }
 
     private function absolute(string $path): string
     {
-        if ($path === '' || str_contains($path, "\0") || preg_match('~^[A-Za-z][A-Za-z0-9+.-]*://~', $path)) {
+        if (
+            $path === '' ||
+            str_contains($path, "\0") ||
+            preg_match('~^[A-Za-z][A-Za-z0-9+.-]*://~', $path)
+        ) {
             throw new \InvalidArgumentException('私有文件需要本地文件路径');
         }
         if (DIRECTORY_SEPARATOR === '\\') {
             $path = str_replace('\\', '/', $path);
             // 不接收 UNC、驱动器相对路径或 NTFS 数据流；避免多种路径别名绕过 public 边界。
-            if (str_starts_with($path, '/') || preg_match('~^[A-Za-z]:(?!/)~', $path)
-                || str_contains(preg_replace('~^[A-Za-z]:/~', '', $path), ':')) {
-                throw new \InvalidArgumentException('Windows 私有文件需要完整驱动器路径或普通相对路径');
+            if (
+                str_starts_with($path, '/') ||
+                preg_match('~^[A-Za-z]:(?!/)~', $path) ||
+                str_contains(preg_replace('~^[A-Za-z]:/~', '', $path), ':')
+            ) {
+                throw new \InvalidArgumentException(
+                    'Windows 私有文件需要完整驱动器路径或普通相对路径',
+                );
             }
         }
-        return preg_match('~^(?:[A-Za-z]:[\\\\/]|/)~', $path) ? $path : $this->app->getRootPath() . $path;
+        return preg_match('~^(?:[A-Za-z]:[\\\\/]|/)~', $path)
+            ? $path
+            : $this->app->getRootPath() . $path;
     }
 
     /** 检查 public 本身的访问路径和真实目录，也拒绝 public 内链接到外部私有文件的访问路径。 */
@@ -70,13 +88,17 @@ final class PrivateFilePath
     {
         $public = $this->app->getRootPath() . 'public';
         $actualPublic = realpath($public);
-        if ($actualPublic === false || !is_dir($actualPublic)) { throw new \InvalidArgumentException('无法核对站点公开目录'); }
+        if ($actualPublic === false || !is_dir($actualPublic)) {
+            throw new \InvalidArgumentException('无法核对站点公开目录');
+        }
         foreach ([$public, $actualPublic] as $root) {
             $root = $this->comparisonPath($root);
             foreach ([$configured, $resolved] as $path) {
                 $normal = $this->comparisonPath($path);
                 if ($normal === $root || str_starts_with($normal, $root . '/')) {
-                    throw new \InvalidArgumentException('私有文件的访问路径和实际位置都必须在 public 之外');
+                    throw new \InvalidArgumentException(
+                        '私有文件的访问路径和实际位置都必须在 public 之外',
+                    );
                 }
             }
         }
@@ -85,12 +107,19 @@ final class PrivateFilePath
     /** 只做边界比较，不用此字符串访问文件；真实文件访问仍依赖 realpath，避免自行解释符号链接。 */
     private function comparisonPath(string $path): string
     {
-        $path = str_replace('\\', '/', $path); $segments = [];
+        $path = str_replace('\\', '/', $path);
+        $segments = [];
         foreach (explode('/', $path) as $part) {
-            if ($part === '' || $part === '.') { continue; }
+            if ($part === '' || $part === '.') {
+                continue;
+            }
             if ($part === '..') {
-                if ($segments !== [] && !str_ends_with($segments[array_key_last($segments)], ':')) { array_pop($segments); }
-            } else { $segments[] = $part; }
+                if ($segments !== [] && !str_ends_with($segments[array_key_last($segments)], ':')) {
+                    array_pop($segments);
+                }
+            } else {
+                $segments[] = $part;
+            }
         }
         $normal = (str_starts_with($path, '/') ? '/' : '') . implode('/', $segments);
         return DIRECTORY_SEPARATOR === '\\' ? strtolower($normal) : $normal;

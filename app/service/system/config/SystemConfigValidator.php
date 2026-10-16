@@ -23,7 +23,10 @@ final class SystemConfigValidator extends Validate
     ];
 
     /** @return list<string> 只由本程序固定的组名组成，调用者不能按请求拼接数据库键。 */
-    public function groups(): array { return array_keys($this->scene); }
+    public function groups(): array
+    {
+        return array_keys($this->scene);
+    }
 
     /**
      * @param array<string,mixed> $values 完整组对象；缺失/null/字符串数字不能隐式补默认。
@@ -31,21 +34,40 @@ final class SystemConfigValidator extends Validate
      */
     public function values(string $group, array $values): array
     {
-        $fields = $this->scene[$group] ?? throw new BusinessException('不支持的系统设置组', ApiResponseConstant::VALIDATION_FAILED);
-        if (array_diff(array_keys($values), $fields) !== [] || array_diff($fields, array_keys($values)) !== []) {
-            throw new BusinessException('请提交该设置组的完整字段，不能包含额外配置', ApiResponseConstant::VALIDATION_FAILED);
+        $fields =
+            $this->scene[$group] ??
+            throw new BusinessException(
+                '不支持的系统设置组',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        if (
+            array_diff(array_keys($values), $fields) !== [] ||
+            array_diff($fields, array_keys($values)) !== []
+        ) {
+            throw new BusinessException(
+                '请提交该设置组的完整字段，不能包含额外配置',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $validator = (clone $this)->scene($group)->batch()->failException(false);
         $validator->append(array_fill_keys($fields, 'require'));
         $validator->message(array_fill_keys($fields, '字段类型或范围无效'));
         if (!$validator->check($values)) {
             $errors = [];
-            foreach ($validator->getError(true) as $field => $message) { $errors[$field] = [$message]; }
-            throw new BusinessException('系统设置参数无效', ApiResponseConstant::VALIDATION_FAILED, $errors);
+            foreach ($validator->getError(true) as $field => $message) {
+                $errors[$field] = [$message];
+            }
+            throw new BusinessException(
+                '系统设置参数无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+                $errors,
+            );
         }
         return $values;
     }
 
-    protected function jsonInteger(mixed $value): bool { return is_int($value); }
-
+    protected function jsonInteger(mixed $value): bool
+    {
+        return is_int($value);
+    }
 }

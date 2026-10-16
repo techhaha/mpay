@@ -31,34 +31,69 @@ final class EpayV1Validator extends Validate
         'param' => ['string', 'byteLength' => 2048],
         'refund_no' => ['string', 'regex' => '/^[A-Za-z0-9_-]{1,64}$/D'],
         'trade_no' => ['require', 'string', 'byteLength' => 64],
-        'page' => ['require', 'string', 'regex' => '/^[1-9][0-9]{0,6}$/D', 'between' => [1, 1000000]],
+        'page' => [
+            'require',
+            'string',
+            'regex' => '/^[1-9][0-9]{0,6}$/D',
+            'between' => [1, 1000000],
+        ],
         'limit' => ['require', 'string', 'regex' => '/^[1-9][0-9]{0,6}$/D', 'between' => [1, 50]],
     ];
     protected $message = [
-        'pid' => 'PID 必须为有效正整数', 'out_trade_no' => '外部订单号必须为 1～64 个字符',
-        'name' => '订单名称不能为空且必须为字符串', 'money' => '金额必须为有效的正数元字符串，最多两位小数',
-        'type' => '请选择支持的支付方式', 'notify_url' => '必须提供有效通知地址',
-        'return_url' => '页面下单必须提供有效回跳地址', 'clientip' => '必须提供有效 IPv4 或 IPv6 地址',
-        'device' => '设备类型不受支持', 'param' => '扩展参数不能超过 2048 字节',
-        'trade_no' => '支付单号必须为 1～64 字节字符串', 'page' => '分页参数超出范围', 'limit' => '分页参数超出范围',
+        'pid' => 'PID 必须为有效正整数',
+        'out_trade_no' => '外部订单号必须为 1～64 个字符',
+        'name' => '订单名称不能为空且必须为字符串',
+        'money' => '金额必须为有效的正数元字符串，最多两位小数',
+        'type' => '请选择支持的支付方式',
+        'notify_url' => '必须提供有效通知地址',
+        'return_url' => '页面下单必须提供有效回跳地址',
+        'clientip' => '必须提供有效 IPv4 或 IPv6 地址',
+        'device' => '设备类型不受支持',
+        'param' => '扩展参数不能超过 2048 字节',
+        'trade_no' => '支付单号必须为 1～64 字节字符串',
+        'page' => '分页参数超出范围',
+        'limit' => '分页参数超出范围',
     ];
     protected $scene = [
-        'pid' => ['pid'], 'query_trade' => ['trade_no'], 'query_external' => ['out_trade_no'],
-        'pagination' => ['page', 'limit'], 'refund' => ['money', 'refund_no'],
+        'pid' => ['pid'],
+        'query_trade' => ['trade_no'],
+        'query_external' => ['out_trade_no'],
+        'pagination' => ['page', 'limit'],
+        'refund' => ['money', 'refund_no'],
     ];
 
     /** 页面下单允许暂不选方式，但必须提供回跳地址；其余字段规则保持共用。 */
     protected function sceneSubmit(): void
     {
-        $this->only(['out_trade_no', 'name', 'money', 'type', 'notify_url', 'return_url', 'clientip', 'device', 'param'])
-            ->append('return_url', 'require');
+        $this->only([
+            'out_trade_no',
+            'name',
+            'money',
+            'type',
+            'notify_url',
+            'return_url',
+            'clientip',
+            'device',
+            'param',
+        ])->append('return_url', 'require');
     }
 
     /** API 下单必须明确方式和付款端 IP，回跳地址可以省略。 */
     protected function sceneMapi(): void
     {
-        $this->only(['out_trade_no', 'name', 'money', 'type', 'notify_url', 'return_url', 'clientip', 'device', 'param'])
-            ->append('type', 'require')->append('clientip', 'require');
+        $this->only([
+            'out_trade_no',
+            'name',
+            'money',
+            'type',
+            'notify_url',
+            'return_url',
+            'clientip',
+            'device',
+            'param',
+        ])
+            ->append('type', 'require')
+            ->append('clientip', 'require');
     }
 
     /** @param array<string|int,string> $input 原始标量表单，不修改待签名字节。 */
@@ -76,25 +111,55 @@ final class EpayV1Validator extends Validate
      * @param string $scene submit 或 mapi。
      * @throws BusinessException 字段、金额或目标政策拒绝；尚未创建业务订单。
      */
-    public function order(array $input, string $scene, string $appId, string $versionId, ?string $requestIp, string $detectedDevice): CreateOrderInput
-    {
-        if (!in_array($scene, ['submit', 'mapi'], true)) { throw new LogicException('未知易支付下单场景'); }
+    public function order(
+        array $input,
+        string $scene,
+        string $appId,
+        string $versionId,
+        ?string $requestIp,
+        string $detectedDevice,
+    ): CreateOrderInput {
+        if (!in_array($scene, ['submit', 'mapi'], true)) {
+            throw new LogicException('未知易支付下单场景');
+        }
         $this->assertScene($scene, $input);
-        try { $amount = Money::parse($input['money']); }
-        catch (InvalidArgumentException) { $this->invalid('money', '金额必须为有效的正数元字符串，最多两位小数'); }
-        if ($amount < 1) { $this->invalid('money', '付款金额必须大于零'); }
+        try {
+            $amount = Money::parse($input['money']);
+        } catch (InvalidArgumentException) {
+            $this->invalid('money', '金额必须为有效的正数元字符串，最多两位小数');
+        }
+        if ($amount < 1) {
+            $this->invalid('money', '付款金额必须大于零');
+        }
         $type = ($input['type'] ?? '') === '' ? null : $input['type'];
         $notify = $input['notify_url'];
         $return = ($input['return_url'] ?? '') === '' ? null : $input['return_url'];
         HttpTargetPolicy::uri($notify);
-        if ($return !== null) { HttpTargetPolicy::uri($return); }
+        if ($return !== null) {
+            HttpTargetPolicy::uri($return);
+        }
         $clientIp = ($input['clientip'] ?? '') === '' ? null : $input['clientip'];
-        if ($clientIp === null && $requestIp !== null && filter_var($requestIp, FILTER_VALIDATE_IP) !== false) { $clientIp = $requestIp; }
+        if (
+            $clientIp === null &&
+            $requestIp !== null &&
+            filter_var($requestIp, FILTER_VALIDATE_IP) !== false
+        ) {
+            $clientIp = $requestIp;
+        }
         $device = ($input['device'] ?? '') === '' ? null : $input['device'];
         return new CreateOrderInput(
-            appId: $appId, pid: $input['pid'], credentialVersionId: $versionId, merchantOrderNo: $input['out_trade_no'],
-            subject: mb_strcut($input['name'], 0, 127, 'UTF-8'), amount: $amount, requestedPayType: $type,
-            notifyUrl: $notify, returnUrl: $return, clientIp: $clientIp, device: $device, param: $input['param'] ?? '',
+            appId: $appId,
+            pid: $input['pid'],
+            credentialVersionId: $versionId,
+            merchantOrderNo: $input['out_trade_no'],
+            subject: mb_strcut($input['name'], 0, 127, 'UTF-8'),
+            amount: $amount,
+            requestedPayType: $type,
+            notifyUrl: $notify,
+            returnUrl: $return,
+            clientIp: $clientIp,
+            device: $device,
+            param: $input['param'] ?? '',
             detectedDevice: $detectedDevice,
         );
     }
@@ -129,11 +194,18 @@ final class EpayV1Validator extends Validate
     /** @param array<string|int,string> $input 已认证的原生表单。退款金额为正整数分。 */
     public function refund(array $input): array
     {
-        if (($input['refund_no'] ?? '') === '') { unset($input['refund_no']); }
+        if (($input['refund_no'] ?? '') === '') {
+            unset($input['refund_no']);
+        }
         $this->assertScene('refund', $input);
-        try { $amount = Money::parse($input['money']); }
-        catch (InvalidArgumentException) { $this->invalid('money', '退款金额必须为有效正数，最多两位小数'); }
-        if ($amount < 1) { $this->invalid('money', '退款金额必须大于零'); }
+        try {
+            $amount = Money::parse($input['money']);
+        } catch (InvalidArgumentException) {
+            $this->invalid('money', '退款金额必须为有效正数，最多两位小数');
+        }
+        if ($amount < 1) {
+            $this->invalid('money', '退款金额必须大于零');
+        }
         return ['amount' => $amount, 'request_no' => $input['refund_no'] ?? null];
     }
 
@@ -156,6 +228,8 @@ final class EpayV1Validator extends Validate
 
     private function invalid(string $field, string $message): never
     {
-        throw new BusinessException($message, ApiResponseConstant::VALIDATION_FAILED, [$field => [$message]]);
+        throw new BusinessException($message, ApiResponseConstant::VALIDATION_FAILED, [
+            $field => [$message],
+        ]);
     }
 }

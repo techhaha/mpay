@@ -32,6 +32,14 @@ final class FileRecordRepository extends BaseRepository
      */
     public function create(array $data): string
     {
-        return $this->insert($data, ['storage', 'path', 'original_name', 'mime_type', 'size', 'sha256', 'admin_user_id']);
+        return $this->insert($data, [
+            'storage',
+            'path',
+            'original_name',
+            'mime_type',
+            'size',
+            'sha256',
+            'admin_user_id',
+        ]);
     }
 }

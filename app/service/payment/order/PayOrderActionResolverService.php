@@ -17,22 +17,58 @@ final class PayOrderActionResolverService
     {
         $status = $pay === null ? null : (int) $pay['status'];
         return [
-            'confirm' => $pay !== null && in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING,
-                TradeConstant::ORDER_STATUS_FAILED, TradeConstant::ORDER_STATUS_CLOSED, TradeConstant::ORDER_STATUS_TIMEOUT], true),
-            'confirm_unavailable_reason' => $pay === null && (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS ? '尚未发起支付，无法补确认' : null,
-            'notification_action' => $task === null ? '发送商户通知' : match ((int) $task['status']) {
-                NotifyConstant::STATUS_HELD => '发送商户通知',
-                NotifyConstant::STATUS_PENDING => '立即发送',
-                NotifyConstant::STATUS_SUCCESS => '再次通知',
-                default => '重新通知',
-            },
-            'close' => $pay === null ? (int) $biz['status'] === TradeConstant::ORDER_STATUS_CREATED
-                : in_array($status, [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING], true),
-            'retry_notification' => $status === TradeConstant::ORDER_STATUS_SUCCESS && $task !== null
-                && in_array((int) $task['status'], [NotifyConstant::STATUS_PENDING, NotifyConstant::STATUS_HELD,
-                    NotifyConstant::STATUS_SUCCESS, NotifyConstant::STATUS_EXHAUSTED], true) && $task['manual_attempt_no'] === null
-                && $task['claim_token'] === null && $task['lease_until'] === null && (int) $task['retry_count'] < 4294967295
-                && !str_starts_with((string) $task['last_response'], 'quarantined_'),
+            'confirm' =>
+                $pay !== null &&
+                in_array(
+                    $status,
+                    [
+                        TradeConstant::ORDER_STATUS_CREATED,
+                        TradeConstant::ORDER_STATUS_PAYING,
+                        TradeConstant::ORDER_STATUS_FAILED,
+                        TradeConstant::ORDER_STATUS_CLOSED,
+                        TradeConstant::ORDER_STATUS_TIMEOUT,
+                    ],
+                    true,
+                ),
+            'confirm_unavailable_reason' =>
+                $pay === null && (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS
+                    ? '尚未发起支付，无法补确认'
+                    : null,
+            'notification_action' =>
+                $task === null
+                    ? '发送商户通知'
+                    : match ((int) $task['status']) {
+                        NotifyConstant::STATUS_HELD => '发送商户通知',
+                        NotifyConstant::STATUS_PENDING => '立即发送',
+                        NotifyConstant::STATUS_SUCCESS => '再次通知',
+                        default => '重新通知',
+                    },
+            'close' =>
+                $pay === null
+                    ? (int) $biz['status'] === TradeConstant::ORDER_STATUS_CREATED
+                    : in_array(
+                        $status,
+                        [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING],
+                        true,
+                    ),
+            'retry_notification' =>
+                $status === TradeConstant::ORDER_STATUS_SUCCESS &&
+                $task !== null &&
+                in_array(
+                    (int) $task['status'],
+                    [
+                        NotifyConstant::STATUS_PENDING,
+                        NotifyConstant::STATUS_HELD,
+                        NotifyConstant::STATUS_SUCCESS,
+                        NotifyConstant::STATUS_EXHAUSTED,
+                    ],
+                    true,
+                ) &&
+                $task['manual_attempt_no'] === null &&
+                $task['claim_token'] === null &&
+                $task['lease_until'] === null &&
+                (int) $task['retry_count'] < 4294967295 &&
+                !str_starts_with((string) $task['last_response'], 'quarantined_'),
         ];
     }
 }

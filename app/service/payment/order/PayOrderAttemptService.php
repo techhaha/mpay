@@ -42,8 +42,7 @@ final class PayOrderAttemptService
         private readonly PaymentChannelRepository $channels,
         private readonly PaymentPluginConfRepository $configurations,
         private readonly PaymentChannelRevisionService $revisions,
-    ) {
-    }
+    ) {}
 
     /**
      * 首次建立先核对配置与选路策略，再锁内部匹配范围并插入支付单；识别准备在创建提交后由插件执行。
@@ -71,19 +70,28 @@ final class PayOrderAttemptService
                 throw new RuntimeException('业务单的支付尝试关联失效');
             }
             if (($pay['ext_json']['payment_context']['pay_type'] ?? null) !== $payType) {
-                throw new BusinessException('订单已选择其他支付方式', ApiResponseConstant::CONFLICT);
+                throw new BusinessException(
+                    '订单已选择其他支付方式',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
             return $pay;
         }
         // 等锁/事务重试可能耗时，取得锁后重新读取时间判断付款窗口。
         $now = $this->clock->now();
-        if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_CREATED
-            || (int) $biz['attempt_count'] !== 0 || $biz['expire_at'] <= $now->format('Y-m-d H:i:s')) {
+        if (
+            (int) $biz['status'] !== TradeConstant::ORDER_STATUS_CREATED ||
+            (int) $biz['attempt_count'] !== 0 ||
+            $biz['expire_at'] <= $now->format('Y-m-d H:i:s')
+        ) {
             throw new BusinessException('订单已不能建立支付尝试', ApiResponseConstant::CONFLICT);
         }
         $type = $this->catalog->lockType($payType);
         if ($type === null || (int) $type['enabled'] !== 1) {
-            throw new BusinessException('该支付方式暂不可用', ApiResponseConstant::SERVICE_UNAVAILABLE);
+            throw new BusinessException(
+                '该支付方式暂不可用',
+                ApiResponseConstant::SERVICE_UNAVAILABLE,
+            );
         }
         $selection = $this->routes->selectFor($biz['app_id'], (int) $biz['order_amount'], $payType);
         return $this->persist($biz, $type['id'], $payType, $selection);
@@ -101,12 +109,22 @@ final class PayOrderAttemptService
         $biz = $this->bizOrders->lock($biz['biz_no']);
         if ($biz['active_pay_no'] !== null) {
             $pay = $this->payOrders->lock($biz['active_pay_no']);
-            if ($pay['biz_no'] !== $biz['biz_no'] || $pay['channel_id'] !== $channelId || (int) $biz['attempt_count'] !== 1) {
-                throw new BusinessException('原订单的支付通道不一致', ApiResponseConstant::CONFLICT);
+            if (
+                $pay['biz_no'] !== $biz['biz_no'] ||
+                $pay['channel_id'] !== $channelId ||
+                (int) $biz['attempt_count'] !== 1
+            ) {
+                throw new BusinessException(
+                    '原订单的支付通道不一致',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
             return $pay;
         }
-        if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_CREATED || (int) $biz['attempt_count'] !== 0) {
+        if (
+            (int) $biz['status'] !== TradeConstant::ORDER_STATUS_CREATED ||
+            (int) $biz['attempt_count'] !== 0
+        ) {
             throw new BusinessException('订单已不能建立支付尝试', ApiResponseConstant::CONFLICT);
         }
         $observed = $this->channels->find($channelId);
@@ -117,11 +135,20 @@ final class PayOrderAttemptService
         if (($biz['ext_json']['requested_pay_type'] ?? null) !== $payType) {
             throw new BusinessException('通道支付方式已变化', ApiResponseConstant::CONFLICT);
         }
-        $type = $this->catalog->lockType($payType) ?? throw new BusinessException('通道支付方式不存在', ApiResponseConstant::CONFLICT);
+        $type =
+            $this->catalog->lockType($payType) ??
+            throw new BusinessException('通道支付方式不存在', ApiResponseConstant::CONFLICT);
         $configuration = $this->configurations->lock($observed['api_config_id']);
         $channel = $this->channels->lock($channelId);
-        if ($channel['api_config_id'] !== $configuration['id'] || $channel['pay_types'] !== [$payType] || $channel['deleted_at'] !== null) {
-            throw new BusinessException('通道配置已变化，请重新发起', ApiResponseConstant::CONFLICT);
+        if (
+            $channel['api_config_id'] !== $configuration['id'] ||
+            $channel['pay_types'] !== [$payType] ||
+            $channel['deleted_at'] !== null
+        ) {
+            throw new BusinessException(
+                '通道配置已变化，请重新发起',
+                ApiResponseConstant::CONFLICT,
+            );
         }
         // 指定通道不评估运营启停与限额；已保存插件参数仍须通过 schema 校验。
         $revision = $this->revisions->freezeLocked($configuration, $channel);
@@ -132,7 +159,7 @@ final class PayOrderAttemptService
             'config_version' => $snapshot['config_version'],
             'plugin_version' => $snapshot['plugin_version'],
             'poll_group_id' => null,
-            'route_mode' => RouteConstant::DIRECT
+            'route_mode' => RouteConstant::DIRECT,
         ]);
     }
 
@@ -147,8 +174,12 @@ final class PayOrderAttemptService
      *     route_mode:int
      * } $selection 已锁定并冻结的通道选择结果，直接指定时轮询组为空。
      */
-    private function persist(BizOrder $biz, string $typeId, string $payType, array $selection): PayOrder
-    {
+    private function persist(
+        BizOrder $biz,
+        string $typeId,
+        string $payType,
+        array $selection,
+    ): PayOrder {
         $context = $biz['ext_json'] ?? [];
         $channel = $selection['channel'];
         // 新支付行尚不存在，先拿范围排他锁，避免插入外键产生共享锁后升级死锁。
@@ -163,25 +194,44 @@ final class PayOrderAttemptService
         }
         // 建单只继承业务单截止；插件 pay() 准备自身付款材料时可在原截止内缩短窗口。
         $expireAt = $biz['expire_at'];
-        $payNo = $this->numbers->insert('P', $now, fn (string $payNo) => $this->payOrders->create([
-            'created_at' => $now->format('Y-m-d H:i:s'), 'pay_no' => $payNo, 'biz_no' => $biz['biz_no'], 'trace_no' => $biz['trace_no'],
-            'poll_group_id' => $selection['poll_group_id'], 'route_mode' => $selection['route_mode'],
-            'channel_id' => $channel['id'], 'channel_revision_id' => $channel['current_revision_id'],
-            'pay_type_id' => $typeId, 'plugin_code' => $channel['plugin_code'],
-            'pay_amount' => (int) $biz['order_amount'],
-            'receipt_scope_key' => $scope['receipt_scope_key'], 'expire_at' => $expireAt,
-            'ext_json' => json_encode([
-                'payment_context' => ['version' => 1, 'pay_type' => $payType, 'device' => $context['device'] ?? null],
-                'personal_receipt' => [
-                    // 测试身份只取自运行环境，不接受易支付参数伪造；后续切换入口仍明确标注合成订单。
-                    'test_only' => $this->config->get('mpay.environment') === 'testing',
-                    'config_version' => $selection['config_version'], 'plugin_version' => $selection['plugin_version'],
-                ],
-            ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-        ]));
+        $payNo = $this->numbers->insert(
+            'P',
+            $now,
+            fn(string $payNo) => $this->payOrders->create([
+                'created_at' => $now->format('Y-m-d H:i:s'),
+                'pay_no' => $payNo,
+                'biz_no' => $biz['biz_no'],
+                'trace_no' => $biz['trace_no'],
+                'poll_group_id' => $selection['poll_group_id'],
+                'route_mode' => $selection['route_mode'],
+                'channel_id' => $channel['id'],
+                'channel_revision_id' => $channel['current_revision_id'],
+                'pay_type_id' => $typeId,
+                'plugin_code' => $channel['plugin_code'],
+                'pay_amount' => (int) $biz['order_amount'],
+                'receipt_scope_key' => $scope['receipt_scope_key'],
+                'expire_at' => $expireAt,
+                'ext_json' => json_encode(
+                    [
+                        'payment_context' => [
+                            'version' => 1,
+                            'pay_type' => $payType,
+                            'device' => $context['device'] ?? null,
+                        ],
+                        'personal_receipt' => [
+                            // 测试身份只取自运行环境，不接受易支付参数伪造；后续切换入口仍明确标注合成订单。
+                            'test_only' => $this->config->get('mpay.environment') === 'testing',
+                            'config_version' => $selection['config_version'],
+                            'plugin_version' => $selection['plugin_version'],
+                        ],
+                    ],
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+                ),
+            ]),
+        );
         // 订单先提交；识别金额及备注由插件 pay() 在自己的短事务内准备。
         $this->bizOrders->attachAttempt($biz['biz_no'], $payNo);
-        return $this->payOrders->find($payNo) ?? throw new RuntimeException('已创建的支付单不可读取');
+        return $this->payOrders->find($payNo) ??
+            throw new RuntimeException('已创建的支付单不可读取');
     }
-
 }

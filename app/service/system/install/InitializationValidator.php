@@ -24,23 +24,38 @@ final class InitializationValidator extends Validate
      */
     public function validateInput(array $input): array
     {
-        if (array_diff(array_keys($input), array_keys($this->rule)) !== []
-            || array_diff(['username', 'password', 'password_confirmation', 'app_name'], array_keys($input)) !== []) {
-            throw new BusinessException('初始化输入字段不完整或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            array_diff(array_keys($input), array_keys($this->rule)) !== [] ||
+            array_diff(
+                ['username', 'password', 'password_confirmation', 'app_name'],
+                array_keys($input),
+            ) !== []
+        ) {
+            throw new BusinessException(
+                '初始化输入字段不完整或包含未知字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $validator = (clone $this)->only(array_keys($input))->failException(false);
         if (!$validator->check($input)) {
-            throw new BusinessException('初始化参数无效；密码至少 12 个字符且最多 72 字节，确认值须一致', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '初始化参数无效；密码至少 12 个字符且最多 72 字节，确认值须一致',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         return $input;
     }
 
     protected function plainText(string $value): bool
     {
-        return trim($value) !== '' && mb_check_encoding($value, 'UTF-8') && !preg_match('/[\x00-\x1f\x7f]/', $value);
+        return trim($value) !== '' &&
+            mb_check_encoding($value, 'UTF-8') &&
+            !preg_match('/[\x00-\x1f\x7f]/', $value);
     }
     protected function passwordBytes(string $value): bool
     {
-        return strlen($value) <= 72 && mb_check_encoding($value, 'UTF-8') && !str_contains($value, "\0");
+        return strlen($value) <= 72 &&
+            mb_check_encoding($value, 'UTF-8') &&
+            !str_contains($value, "\0");
     }
 }

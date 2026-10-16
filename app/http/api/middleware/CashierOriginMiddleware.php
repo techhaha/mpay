@@ -17,9 +17,15 @@ final class CashierOriginMiddleware
         if ($request->header('Sec-Fetch-Site', '') === 'cross-site') {
             throw new BusinessException('不允许跨站提交收银台操作', ApiResponseConstant::FORBIDDEN);
         }
-        if (strtolower(trim(explode(';', (string) $request->header('Content-Type', ''))[0])) !== 'application/json'
-            || strlen($request->getInput()) > 4096) {
-            throw new BusinessException('收银台操作必须使用受限 JSON 正文', ApiResponseConstant::BAD_REQUEST);
+        if (
+            strtolower(trim(explode(';', (string) $request->header('Content-Type', ''))[0])) !==
+                'application/json' ||
+            strlen($request->getInput()) > 4096
+        ) {
+            throw new BusinessException(
+                '收银台操作必须使用受限 JSON 正文',
+                ApiResponseConstant::BAD_REQUEST,
+            );
         }
         return $next($request);
     }

@@ -30,8 +30,7 @@ final class PayOrderService extends BaseService
         private readonly SystemConfigService $settings,
         private readonly HttpTargetPolicy $targets,
         private readonly BusinessNumber $numbers,
-    ) {
-    }
+    ) {}
 
     /**
      * 只接受已经认证、规范化的输入；验签所用 PID/活动凭证在应用锁下再次核对。
@@ -43,7 +42,7 @@ final class PayOrderService extends BaseService
      */
     public function create(CreateOrderInput $input, DateTimeImmutable $now): CreatedOrder
     {
-        return $this->runCreation(fn (): CreatedOrder => $this->createLocked($input, $now));
+        return $this->runCreation(fn(): CreatedOrder => $this->createLocked($input, $now));
     }
 
     /**
@@ -61,38 +60,68 @@ final class PayOrderService extends BaseService
             throw new BusinessException('应用已停用', ApiResponseConstant::FORBIDDEN);
         }
         if ($app['active_key_id'] !== $input->credentialVersionId || $app['pid'] !== $input->pid) {
-            throw new BusinessException('接入凭证已变更，请重新签名', ApiResponseConstant::UNAUTHENTICATED);
+            throw new BusinessException(
+                '接入凭证已变更，请重新签名',
+                ApiResponseConstant::UNAUTHENTICATED,
+            );
         }
         $biz = $this->bizOrders->lockByAppOrder($input->appId, $input->merchantOrderNo);
         $reused = $biz !== null;
         if ($biz === null) {
             // 域名授权只决定新订单；已验签的同单重投仍使用冻结目标，下面继续核对完整业务指纹。
             $targets = $this->targets->forHosts($app['allowed_hosts']);
-            if ($input->notifyUrl !== null) { $targets->validateNotification($input->notifyUrl); }
-            if ($input->returnUrl !== null) { $targets->validate($input->returnUrl); }
+            if ($input->notifyUrl !== null) {
+                $targets->validateNotification($input->notifyUrl);
+            }
+            if ($input->returnUrl !== null) {
+                $targets->validate($input->returnUrl);
+            }
             $accessToken = bin2hex(random_bytes(32));
-            $bizNo = $this->numbers->insert('B', $now, fn (string $bizNo) => $this->bizOrders->create([
-                'created_at' => $now->format('Y-m-d H:i:s'), 'biz_no' => $bizNo, 'trace_no' => 'T' . bin2hex(random_bytes(16)),
-                'app_id' => $input->appId, 'pid' => $input->pid, 'merchant_order_no' => $input->merchantOrderNo,
-                'subject' => $input->subject, 'order_amount' => $input->amount,
-                'credential_version_id' => $input->credentialVersionId,
-                'access_token_hash' => hash('sha256', $accessToken), 'client_ip' => $input->clientIp,
-                'notify_url' => $input->notifyUrl, 'return_url' => $input->returnUrl,
-                'expire_at' => $now->modify('+' . $validSeconds . ' seconds')->format('Y-m-d H:i:s'),
-                'ext_json' => json_encode([
-                    'creation_fingerprint' => $input->fingerprint(), 'requested_pay_type' => $input->requestedPayType,
-                    // 自动识别只用于展示，不写入幂等指纹；客户端换环境重投仍复用原上下文。
-                    'device' => $input->device ?? $input->detectedDevice, 'param' => $input->param,
-                    // 摘要用于访问认证；保存的原凭证供已验签重投取回同一地址，不轮换使旧页面失效。
-                    'cashier_token' => $accessToken,
-                ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-            ]));
+            $bizNo = $this->numbers->insert(
+                'B',
+                $now,
+                fn(string $bizNo) => $this->bizOrders->create([
+                    'created_at' => $now->format('Y-m-d H:i:s'),
+                    'biz_no' => $bizNo,
+                    'trace_no' => 'T' . bin2hex(random_bytes(16)),
+                    'app_id' => $input->appId,
+                    'pid' => $input->pid,
+                    'merchant_order_no' => $input->merchantOrderNo,
+                    'subject' => $input->subject,
+                    'order_amount' => $input->amount,
+                    'credential_version_id' => $input->credentialVersionId,
+                    'access_token_hash' => hash('sha256', $accessToken),
+                    'client_ip' => $input->clientIp,
+                    'notify_url' => $input->notifyUrl,
+                    'return_url' => $input->returnUrl,
+                    'expire_at' => $now
+                        ->modify('+' . $validSeconds . ' seconds')
+                        ->format('Y-m-d H:i:s'),
+                    'ext_json' => json_encode(
+                        [
+                            'creation_fingerprint' => $input->fingerprint(),
+                            'requested_pay_type' => $input->requestedPayType,
+                            // 自动识别只用于展示，不写入幂等指纹；客户端换环境重投仍复用原上下文。
+                            'device' => $input->device ?? $input->detectedDevice,
+                            'param' => $input->param,
+                            // 摘要用于访问认证；保存的原凭证供已验签重投取回同一地址，不轮换使旧页面失效。
+                            'cashier_token' => $accessToken,
+                        ],
+                        JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
+                    ),
+                ]),
+            );
             $biz = $this->bizOrders->lock($bizNo);
         } else {
             $context = $biz['ext_json'] ?? [];
-            if (!is_string($context['creation_fingerprint'] ?? null)
-                || !hash_equals($context['creation_fingerprint'], $input->fingerprint())) {
-                throw new BusinessException('该外部订单号的业务参数与原单不一致', ApiResponseConstant::CONFLICT);
+            if (
+                !is_string($context['creation_fingerprint'] ?? null) ||
+                !hash_equals($context['creation_fingerprint'], $input->fingerprint())
+            ) {
+                throw new BusinessException(
+                    '该外部订单号的业务参数与原单不一致',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
             $accessToken = $this->recoverAccessToken($biz);
         }
@@ -133,8 +162,11 @@ final class PayOrderService extends BaseService
      */
     public function assertAccess(?BizOrder $biz, string $accessToken): void
     {
-        if (!preg_match('/^[a-f0-9]{64}$/D', $accessToken) || $biz === null
-            || !hash_equals($biz['access_token_hash'], hash('sha256', $accessToken))) {
+        if (
+            !preg_match('/^[a-f0-9]{64}$/D', $accessToken) ||
+            $biz === null ||
+            !hash_equals($biz['access_token_hash'], hash('sha256', $accessToken))
+        ) {
             throw new BusinessException('订单访问凭证无效', ApiResponseConstant::FORBIDDEN);
         }
     }
@@ -146,7 +178,10 @@ final class PayOrderService extends BaseService
         if (!is_string($token)) {
             throw new RuntimeException('订单访问凭证快照缺失');
         }
-        if (!preg_match('/^[a-f0-9]{64}$/D', $token) || !hash_equals($biz['access_token_hash'], hash('sha256', $token))) {
+        if (
+            !preg_match('/^[a-f0-9]{64}$/D', $token) ||
+            !hash_equals($biz['access_token_hash'], hash('sha256', $token))
+        ) {
             throw new RuntimeException('订单访问凭证快照损坏');
         }
         return $token;
@@ -165,15 +200,21 @@ final class PayOrderService extends BaseService
         $databaseFailures = 0;
         while (true) {
             try {
-                return $this->transaction(fn () => $operation());
+                return $this->transaction(fn() => $operation());
             } catch (PDOException $exception) {
-                $driverCode = (int) ($exception->getData()['PDO Error Info']['Driver Error Code'] ?? 0);
+                $driverCode =
+                    (int) ($exception->getData()['PDO Error Info']['Driver Error Code'] ?? 0);
                 // 重复键可能来自另一个建单进程；整个事务回滚后重新读原身份才能判断是否同参。
                 if (!in_array($driverCode, [1062, 1205, 1213], true)) {
                     throw $exception;
                 }
                 if (++$databaseFailures === 3) {
-                    throw new BusinessException('订单创建发生并发竞争，请稍后重试', ApiResponseConstant::SERVICE_UNAVAILABLE, [], $exception);
+                    throw new BusinessException(
+                        '订单创建发生并发竞争，请稍后重试',
+                        ApiResponseConstant::SERVICE_UNAVAILABLE,
+                        [],
+                        $exception,
+                    );
                 }
             }
         }

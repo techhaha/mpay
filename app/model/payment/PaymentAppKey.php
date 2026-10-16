@@ -10,9 +10,18 @@ final class PaymentAppKey extends BaseModel
 {
     protected function getOptions(): array
     {
-        return ['table' => 'ma_payment_app_key', 'schema' => [
-            'id' => 'string', 'app_id' => 'string', 'version' => 'int', 'secret' => 'string',
-            'key_fingerprint' => 'string', 'created_at' => 'string', 'updated_at' => 'string',
-        ], 'hidden' => ['secret', 'key_fingerprint']];
+        return [
+            'table' => 'ma_payment_app_key',
+            'schema' => [
+                'id' => 'string',
+                'app_id' => 'string',
+                'version' => 'int',
+                'secret' => 'string',
+                'key_fingerprint' => 'string',
+                'created_at' => 'string',
+                'updated_at' => 'string',
+            ],
+            'hidden' => ['secret', 'key_fingerprint'],
+        ];
     }
 }

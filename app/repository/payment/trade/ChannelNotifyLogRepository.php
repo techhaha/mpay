@@ -13,7 +13,10 @@ use app\model\payment\ChannelNotifyLog;
  */
 final class ChannelNotifyLogRepository extends BaseRepository
 {
-    public function __construct(ChannelNotifyLog $model) { parent::__construct($model); }
+    public function __construct(ChannelNotifyLog $model)
+    {
+        parent::__construct($model);
+    }
 
     public function find(string $id): ?ChannelNotifyLog
     {
@@ -26,11 +29,18 @@ final class ChannelNotifyLogRepository extends BaseRepository
      */
     public function adminPage(array $filters, int $page, int $limit): array
     {
-        $query = $this->model->where('created_at', '>=', $filters['from'])->where('created_at', '<', $filters['until']);
+        $query = $this->model
+            ->where('created_at', '>=', $filters['from'])
+            ->where('created_at', '<', $filters['until']);
         foreach (['channel_id', 'plugin_code', 'result_code', 'request_id'] as $field) {
-            if (isset($filters[$field])) { $query->where($field, $filters[$field]); }
+            if (isset($filters[$field])) {
+                $query->where($field, $filters[$field]);
+            }
         }
-        return ['total' => (int) (clone $query)->count(), 'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all()];
+        return [
+            'total' => (int) (clone $query)->count(),
+            'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all(),
+        ];
     }
 
     /**
@@ -38,13 +48,40 @@ final class ChannelNotifyLogRepository extends BaseRepository
      *
      * @param list<string> $flowIds 已持久化事实 ID，拒绝前为空。
      */
-    public function record(string $channelId, string $requestId, string $pluginCode, string $result, string $digest, array $flowIds): void
-    {
-        if (!preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $result) || !preg_match('/^[a-f0-9]{64}$/D', $digest)) {
+    public function record(
+        string $channelId,
+        string $requestId,
+        string $pluginCode,
+        string $result,
+        string $digest,
+        array $flowIds,
+    ): void {
+        if (
+            !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $result) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $digest)
+        ) {
             throw new \InvalidArgumentException('通道审计只接受固定结果码和摘要');
         }
-        $this->insert(['channel_id' => $channelId, 'request_id' => $requestId, 'plugin_code' => $pluginCode,
-            'result_code' => $result, 'payload_digest' => $digest,
-            'summary_json' => json_encode(['flow_ids' => $flowIds, 'count' => count($flowIds)], JSON_THROW_ON_ERROR)], ['channel_id', 'request_id', 'plugin_code', 'result_code', 'payload_digest', 'summary_json']);
+        $this->insert(
+            [
+                'channel_id' => $channelId,
+                'request_id' => $requestId,
+                'plugin_code' => $pluginCode,
+                'result_code' => $result,
+                'payload_digest' => $digest,
+                'summary_json' => json_encode(
+                    ['flow_ids' => $flowIds, 'count' => count($flowIds)],
+                    JSON_THROW_ON_ERROR,
+                ),
+            ],
+            [
+                'channel_id',
+                'request_id',
+                'plugin_code',
+                'result_code',
+                'payload_digest',
+                'summary_json',
+            ],
+        );
     }
 }

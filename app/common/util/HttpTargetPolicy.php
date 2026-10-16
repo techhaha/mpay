@@ -16,10 +16,11 @@ use think\Config;
 class HttpTargetPolicy
 {
     /** @param list<string> $allowedHosts 新订单的域名限制；空列表或 * 表示不限域名。 */
-    public function __construct(private readonly Config $config, private readonly HttpAddressResolver $addresses,
-        private readonly array $allowedHosts = [])
-    {
-    }
+    public function __construct(
+        private readonly Config $config,
+        private readonly HttpAddressResolver $addresses,
+        private readonly array $allowedHosts = [],
+    ) {}
 
     /** 创建本次应用的目标策略；不修改容器共用实例，不从工具内读取业务库。
      * @param list<string> $hosts 已规范化的域名，或用空列表/['*'] 表示不限域名。
@@ -35,25 +36,61 @@ class HttpTargetPolicy
      *
      * @throws BusinessException 输入不符合项目的地址合同，错误不回显 URL。
      */
-    public static function uri(string $url, int $maximum = 2048, bool $merchantQuery = true): UriInterface
-    {
-        if ($maximum < 1 || $maximum > 16384) { throw new \InvalidArgumentException('URL 长度上限无效'); }
-        if ($url === '' || !mb_check_encoding($url, 'UTF-8') || mb_strlen($url, 'UTF-8') > $maximum
-            || preg_match('/[\x00-\x20\x7f\\\\]/', $url) || preg_match('/%(?![a-fA-F0-9]{2})/', $url)) {
-            throw new BusinessException('目标 URL 格式无效', ApiResponseConstant::VALIDATION_FAILED);
+    public static function uri(
+        string $url,
+        int $maximum = 2048,
+        bool $merchantQuery = true,
+    ): UriInterface {
+        if ($maximum < 1 || $maximum > 16384) {
+            throw new \InvalidArgumentException('URL 长度上限无效');
         }
-        try { $uri = new Uri($url); }
-        catch (\InvalidArgumentException) { throw new BusinessException('目标 URL 格式无效', ApiResponseConstant::VALIDATION_FAILED); }
+        if (
+            $url === '' ||
+            !mb_check_encoding($url, 'UTF-8') ||
+            mb_strlen($url, 'UTF-8') > $maximum ||
+            preg_match('/[\x00-\x20\x7f\\\\]/', $url) ||
+            preg_match('/%(?![a-fA-F0-9]{2})/', $url)
+        ) {
+            throw new BusinessException(
+                '目标 URL 格式无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
+        try {
+            $uri = new Uri($url);
+        } catch (\InvalidArgumentException) {
+            throw new BusinessException(
+                '目标 URL 格式无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
         $host = trim($uri->getHost(), '[]');
-        if (!in_array($uri->getScheme(), ['http', 'https'], true) || $uri->getUserInfo() !== '' || $host === ''
-            || (filter_var($host, FILTER_VALIDATE_IP) === false && $host !== 'localhost'
-                && !preg_match('/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/D', $host))) {
-            throw new BusinessException('目标必须是无用户信息的标准 HTTP(S) 地址', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            !in_array($uri->getScheme(), ['http', 'https'], true) ||
+            $uri->getUserInfo() !== '' ||
+            $host === '' ||
+            (filter_var($host, FILTER_VALIDATE_IP) === false &&
+                $host !== 'localhost' &&
+                !preg_match(
+                    '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/D',
+                    $host,
+                ))
+        ) {
+            throw new BusinessException(
+                '目标必须是无用户信息的标准 HTTP(S) 地址',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         if ($merchantQuery) {
-            foreach (UrlEncodedForm::parse($uri->getQuery(), $maximum > 2048 ? 256 : 128) as $name => $unused) {
+            foreach (
+                UrlEncodedForm::parse($uri->getQuery(), $maximum > 2048 ? 256 : 128)
+                as $name => $unused
+            ) {
                 if (preg_match('/[.\s]/', (string) $name)) {
-                    throw new BusinessException('目标 query 字段名存在签名歧义', ApiResponseConstant::VALIDATION_FAILED);
+                    throw new BusinessException(
+                        '目标 query 字段名存在签名歧义',
+                        ApiResponseConstant::VALIDATION_FAILED,
+                    );
                 }
             }
         }
@@ -66,9 +103,16 @@ class HttpTargetPolicy
         // 目标本身最多 2048 字符；已附加协议参数的完整 GET 请求允许增长。
         $target = self::uri($url, $signedRequest ? 16384 : 2048);
         $allowed = $this->allowedHosts;
-        if ($allowed !== [] && !in_array('*', $allowed, true) && !$this->developmentAllowed($target)
-            && !in_array(trim($target->getHost(), '[]'), array_map('strtolower', $allowed), true)) {
-            throw new BusinessException('目标域名未在应用允许列表中', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            $allowed !== [] &&
+            !in_array('*', $allowed, true) &&
+            !$this->developmentAllowed($target) &&
+            !in_array(trim($target->getHost(), '[]'), array_map('strtolower', $allowed), true)
+        ) {
+            throw new BusinessException(
+                '目标域名未在应用允许列表中',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         return $target;
     }
@@ -80,14 +124,27 @@ class HttpTargetPolicy
         $development = $this->developmentAllowed($target);
         $ports = $this->config->get('http.allowed_ports', [80, 443]);
         if (!$development) {
-            if (!is_array($ports) || !in_array(($target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80)), $ports, true)) {
-                throw new BusinessException('目标端口未在允许列表中', ApiResponseConstant::VALIDATION_FAILED);
+            if (
+                !is_array($ports) ||
+                !in_array(
+                    $target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80),
+                    $ports,
+                    true,
+                )
+            ) {
+                throw new BusinessException(
+                    '目标端口未在允许列表中',
+                    ApiResponseConstant::VALIDATION_FAILED,
+                );
             }
         }
         if (filter_var(trim($target->getHost(), '[]'), FILTER_VALIDATE_IP) !== false) {
             $this->addresses->assertAddress(trim($target->getHost(), '[]'), $development);
         } elseif (trim($target->getHost(), '[]') === 'localhost' && !$development) {
-            throw new BusinessException('不允许本机目标地址', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '不允许本机目标地址',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         return $target;
     }
@@ -108,8 +165,16 @@ class HttpTargetPolicy
     /** 开发放行同时匹配环境、主机和端口，不能靠一个全局“关闭 SSRF”开关启用。 */
     private function developmentAllowed(UriInterface $target): bool
     {
-        return in_array($this->config->get('mpay.environment'), ['development', 'testing'], true)
-            && in_array(trim($target->getHost(), '[]'), $this->config->get('http.development_hosts', []), true)
-            && in_array(($target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80)), $this->config->get('http.development_ports', []), true);
+        return in_array($this->config->get('mpay.environment'), ['development', 'testing'], true) &&
+            in_array(
+                trim($target->getHost(), '[]'),
+                $this->config->get('http.development_hosts', []),
+                true,
+            ) &&
+            in_array(
+                $target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80),
+                $this->config->get('http.development_ports', []),
+                true,
+            );
     }
 }

@@ -12,8 +12,18 @@ final class PaginationValidator extends Validate
 {
     /** @var array<string,array> 原生父类属性保持未声明类型，避免破坏框架继承签名。 */
     protected $rule = [
-        'page' => ['require', 'formInteger', 'regex' => '/^[1-9][0-9]{0,6}$/D', 'between' => [1, 1000000]],
-        'limit' => ['require', 'formInteger', 'regex' => '/^[1-9][0-9]{0,6}$/D', 'between' => [1, 100]],
+        'page' => [
+            'require',
+            'formInteger',
+            'regex' => '/^[1-9][0-9]{0,6}$/D',
+            'between' => [1, 1000000],
+        ],
+        'limit' => [
+            'require',
+            'formInteger',
+            'regex' => '/^[1-9][0-9]{0,6}$/D',
+            'between' => [1, 100],
+        ],
     ];
     protected $message = ['page' => '必须为 1～1000000 的整数', 'limit' => '必须为 1～100 的整数'];
 
@@ -30,8 +40,15 @@ final class PaginationValidator extends Validate
         // 容器可复用实例；错误和 batch 状态只属于本次校验，不写回共享验证器。
         $validator = clone $this;
         if (!$validator->batch()->failException(false)->check($values)) {
-            $errors = array_map(static fn (string $message): array => [$message], $validator->getError(true));
-            throw new BusinessException('请求参数校验失败', ApiResponseConstant::VALIDATION_FAILED, $errors);
+            $errors = array_map(
+                static fn(string $message): array => [$message],
+                $validator->getError(true),
+            );
+            throw new BusinessException(
+                '请求参数校验失败',
+                ApiResponseConstant::VALIDATION_FAILED,
+                $errors,
+            );
         }
         return ['page' => (int) $values['page'], 'limit' => (int) $values['limit']];
     }

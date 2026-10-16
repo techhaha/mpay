@@ -18,10 +18,18 @@ final class PaymentPluginConfRevision extends BaseModel
 {
     protected function getOptions(): array
     {
-        return ['table' => 'ma_payment_plugin_conf_revision', 'schema' => [
-            'id' => 'string', 'api_config_id' => 'string', 'config_version' => 'int',
-            'plugin_version' => 'string', 'config_json' => 'json',
-            'created_at' => 'string',
-        ], 'hidden' => ['config_json'], 'updateTime' => false];
+        return [
+            'table' => 'ma_payment_plugin_conf_revision',
+            'schema' => [
+                'id' => 'string',
+                'api_config_id' => 'string',
+                'config_version' => 'int',
+                'plugin_version' => 'string',
+                'config_json' => 'json',
+                'created_at' => 'string',
+            ],
+            'hidden' => ['config_json'],
+            'updateTime' => false,
+        ];
     }
 }

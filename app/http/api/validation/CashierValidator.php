@@ -42,12 +42,18 @@ final class CashierValidator extends Validate
     {
         $allowed = $select ? ['biz_no', 'token', 'type'] : ['biz_no', 'token'];
         if (array_diff(array_keys($input), $allowed) !== []) {
-            throw new BusinessException('收银台操作包含未允许的字段', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '收银台操作包含未允许的字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $identity = $this->identity($input);
         if ($select) {
             if (!(clone $this)->scene('selection')->failException(false)->check($input)) {
-                throw new BusinessException('请选择支持的支付方式', ApiResponseConstant::VALIDATION_FAILED);
+                throw new BusinessException(
+                    '请选择支持的支付方式',
+                    ApiResponseConstant::VALIDATION_FAILED,
+                );
             }
             $identity['type'] = $input['type'];
         }

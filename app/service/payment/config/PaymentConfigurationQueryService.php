@@ -27,9 +27,8 @@ final class PaymentConfigurationQueryService extends BaseService
         private readonly ReceiptScopeRepository $scopes,
         private readonly PaymentPluginFactoryService $plugins,
         private readonly PaymentCatalogService $management,
-        private readonly DefaultRoutingService $defaults
-    ) {
-    }
+        private readonly DefaultRoutingService $defaults,
+    ) {}
 
     /** @return list<array<string,mixed>> 已同步数据库定义；未同步的新文件通过插件管理刷新后出现。 */
     public function plugins(): array
@@ -47,12 +46,26 @@ final class PaymentConfigurationQueryService extends BaseService
             $rows = $this->channels->adminPage($filters, $page, $limit);
             $items = [];
             foreach ($rows['items'] as $row) {
-                $item = ['id' => $row['id'], 'name' => $row['name'], 'plugin_code' => $row['plugin_code'],
-                    'enabled' => (int) $row['enabled'] === 1, 'updated_at' => $row['updated_at']];
-                $items[] = $item + ['configuration_id' => $row['api_config_id'], 'scope_key' => $row['receipt_scope_key'],
-                        'pay_types' => $row['pay_types'], 'revision_id' => $row['current_revision_id']];
+                $item = [
+                    'id' => $row['id'],
+                    'name' => $row['name'],
+                    'plugin_code' => $row['plugin_code'],
+                    'enabled' => (int) $row['enabled'] === 1,
+                    'updated_at' => $row['updated_at'],
+                ];
+                $items[] = $item + [
+                    'configuration_id' => $row['api_config_id'],
+                    'scope_key' => $row['receipt_scope_key'],
+                    'pay_types' => $row['pay_types'],
+                    'revision_id' => $row['current_revision_id'],
+                ];
             }
-            return ['items' => $items, 'total' => $rows['total'], 'page' => $page, 'limit' => $limit];
+            return [
+                'items' => $items,
+                'total' => $rows['total'],
+                'page' => $page,
+                'limit' => $limit,
+            ];
         });
     }
 
@@ -71,18 +84,34 @@ final class PaymentConfigurationQueryService extends BaseService
                 throw new BusinessException('收款配置不存在', ApiResponseConstant::NOT_FOUND);
             }
             $version = (int) $configuration['config_version'];
-            $revision = $this->configurations->revision($id, $version) ?? throw new RuntimeException('配置版本缺失');
-            if ($revision['config_json'] !== $configuration['config_json']) { throw new RuntimeException('配置正文与版本不一致'); }
+            $revision =
+                $this->configurations->revision($id, $version) ??
+                throw new RuntimeException('配置版本缺失');
+            if ($revision['config_json'] !== $configuration['config_json']) {
+                throw new RuntimeException('配置正文与版本不一致');
+            }
             $plugin = $this->plugin($configuration['plugin_code']);
 
             $original = $revision['config_json'];
-            if (!is_array($original)) { throw new RuntimeException('配置正文无效'); }
+            if (!is_array($original)) {
+                throw new RuntimeException('配置正文无效');
+            }
             // 已删除字段不再渲染或回传；现有字段保持原值，不用默认值掩盖配置问题。
-            $settings = array_intersect_key($original, array_flip(array_column($plugin['schema'], 'field')));
-            if ($this->scopes->configurationScopes($id, false) === []) { throw new RuntimeException('配置范围绑定缺失'); }
-            return ['id' => $id, 'name' => $configuration['name'], 'config_version' => $version,
-                'enabled' => (int) $configuration['enabled'] === 1, 'plugin' => $plugin,
-                'settings' => (object) $settings];
+            $settings = array_intersect_key(
+                $original,
+                array_flip(array_column($plugin['schema'], 'field')),
+            );
+            if ($this->scopes->configurationScopes($id, false) === []) {
+                throw new RuntimeException('配置范围绑定缺失');
+            }
+            return [
+                'id' => $id,
+                'name' => $configuration['name'],
+                'config_version' => $version,
+                'enabled' => (int) $configuration['enabled'] === 1,
+                'plugin' => $plugin,
+                'settings' => (object) $settings,
+            ];
         });
     }
 
@@ -97,25 +126,43 @@ final class PaymentConfigurationQueryService extends BaseService
             if ($channel === null || $channel['deleted_at'] !== null) {
                 throw new BusinessException('通道不存在', ApiResponseConstant::NOT_FOUND);
             }
-            $configuration = $this->configurations->find($channel['api_config_id']) ?? throw new RuntimeException('通道配置缺失');
+            $configuration =
+                $this->configurations->find($channel['api_config_id']) ??
+                throw new RuntimeException('通道配置缺失');
             $types = $channel['pay_types'];
-            if (!is_array($types) || count($types) !== 1) { throw new RuntimeException('通道必须有一个明确支付方式'); }
+            if (!is_array($types) || count($types) !== 1) {
+                throw new RuntimeException('通道必须有一个明确支付方式');
+            }
             // 详情只读取展示和编辑需要的数据；快照/范围一致性由保存及支付执行入口核对。
             $plugin = $this->plugins->make($configuration['plugin_code']);
             $push = $plugin instanceof ChannelNotifyInterface;
             $polling = $plugin instanceof ReceiptCollectorInterface;
-            return ['id' => $id, 'plugin_code' => $channel['plugin_code'], 'configuration_id' => $channel['api_config_id'],
-                'configuration_version' => (int) $configuration['config_version'], 'enabled' => (int) $channel['enabled'] === 1,
+            return [
+                'id' => $id,
+                'plugin_code' => $channel['plugin_code'],
+                'configuration_id' => $channel['api_config_id'],
+                'configuration_version' => (int) $configuration['config_version'],
+                'enabled' => (int) $channel['enabled'] === 1,
                 // 只返回通知路径；后台按浏览器当前站点展示完整地址，不存入通道快照。
-                'notification' => ['mode' => $push ? 'push' : ($polling ? 'polling' : 'unavailable'),
+                'notification' => [
+                    'mode' => $push ? 'push' : ($polling ? 'polling' : 'unavailable'),
                     'method' => $push ? 'POST' : null,
-                    'path' => $push ? '/api/pay/' . $id . '/notify' : null],
+                    'path' => $push ? '/api/pay/' . $id . '/notify' : null,
+                ],
                 'revision_id' => $channel['current_revision_id'],
                 'participates_default_route' => $this->defaults->participates($id, $types[0]),
-                'channel' => ['name' => $channel['name'], 'scope_key' => $channel['receipt_scope_key'], 'pay_type' => $types[0],
-                    'minimum_amount' => (int) $channel['min_amount'], 'maximum_amount' => (int) $channel['max_amount'],
-                    'daily_limit_amount' => (int) $channel['daily_limit_amount'], 'daily_limit_count' => (int) $channel['daily_limit_count'],
-                    'available_from' => $channel['available_from'], 'available_to' => $channel['available_to']]];
+                'channel' => [
+                    'name' => $channel['name'],
+                    'scope_key' => $channel['receipt_scope_key'],
+                    'pay_type' => $types[0],
+                    'minimum_amount' => (int) $channel['min_amount'],
+                    'maximum_amount' => (int) $channel['max_amount'],
+                    'daily_limit_amount' => (int) $channel['daily_limit_amount'],
+                    'daily_limit_count' => (int) $channel['daily_limit_count'],
+                    'available_from' => $channel['available_from'],
+                    'available_to' => $channel['available_to'],
+                ],
+            ];
         });
     }
 
@@ -123,9 +170,13 @@ final class PaymentConfigurationQueryService extends BaseService
     private function plugin(string $code): array
     {
         foreach ($this->management->definitions() as $definition) {
-            if ($definition['code'] === $code) { return $definition; }
+            if ($definition['code'] === $code) {
+                return $definition;
+            }
         }
-        throw new BusinessException('插件定义未同步或文件缺失，请先到插件管理刷新', ApiResponseConstant::CONFLICT);
+        throw new BusinessException(
+            '插件定义未同步或文件缺失，请先到插件管理刷新',
+            ApiResponseConstant::CONFLICT,
+        );
     }
-
 }

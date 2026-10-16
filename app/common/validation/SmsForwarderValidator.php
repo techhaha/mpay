@@ -34,7 +34,7 @@ final class SmsForwarderValidator extends Validate
         string $secret,
         array $allowedSources,
         DateTimeImmutable $receivedAt,
-        int $toleranceSeconds
+        int $toleranceSeconds,
     ): array {
         if (!(clone $this)->failException(false)->check($input)) {
             throw new ReceiptMessageException('invalid_message');
@@ -45,18 +45,33 @@ final class SmsForwarderValidator extends Validate
         }
         // POST 已解码一次；兼容发送端预先 URL 编码签名的形式，仅再解码一次。
         $signature = rawurldecode($input['sign']);
-        $expected = base64_encode(hash_hmac('sha256', $input['timestamp'] . "\n" . $secret, $secret, true));
+        $expected = base64_encode(
+            hash_hmac('sha256', $input['timestamp'] . "\n" . $secret, $secret, true),
+        );
         if (!hash_equals($expected, $signature)) {
             throw new ReceiptMessageException('authentication_failed');
         }
-        if (!(clone $this)->only(['from'])->append('from', ['in' => $allowedSources])->failException(false)->check($input)) {
+        if (
+            !(clone $this)
+                ->only(['from'])
+                ->append('from', ['in' => $allowedSources])
+                ->failException(false)
+                ->check($input)
+        ) {
             throw new ReceiptMessageException('source_mismatch');
         }
-        return ['from' => $input['from'], 'content' => $input['content'], 'timestamp' => $timestamp];
+        return [
+            'from' => $input['from'],
+            'content' => $input['content'],
+            'timestamp' => $timestamp,
+        ];
     }
 
     /** 原生 max 按字符计数；通知正文需要字节上限。 */
-    protected function byteLength(string $value, int $maximum): bool { return strlen($value) <= $maximum; }
+    protected function byteLength(string $value, int $maximum): bool
+    {
+        return strlen($value) <= $maximum;
+    }
 
     protected function utf8Text(string $value): bool
     {

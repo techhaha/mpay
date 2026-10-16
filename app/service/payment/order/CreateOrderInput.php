@@ -43,18 +43,32 @@ final readonly class CreateOrderInput
         public ?string $channelId = null,
     ) {
         Money::assertRange($amount);
-        if (!preg_match('/^[1-9][0-9]{0,31}$/D', $pid) || $amount === 0 || !preg_match('/^[1-9][0-9]*$/D', $appId)
-            || !preg_match('/^[1-9][0-9]*$/D', $credentialVersionId)
-            || !mb_check_encoding([$merchantOrderNo, $subject, $param, $notifyUrl ?? '', $returnUrl ?? ''], 'UTF-8')
-            || mb_strlen($merchantOrderNo, 'UTF-8') < 1 || mb_strlen($merchantOrderNo, 'UTF-8') > 64
-            || $subject === '' || strlen($subject) > 127
-            || strlen($param) > 2048 || ($notifyUrl !== null && ($notifyUrl === '' || mb_strlen($notifyUrl, 'UTF-8') > 2048))
-            || ($channelId !== null && !preg_match('/^[1-9][0-9]*$/D', $channelId))
-            || ($returnUrl !== null && ($returnUrl === '' || mb_strlen($returnUrl, 'UTF-8') > 2048))
-            || ($clientIp !== null && filter_var($clientIp, FILTER_VALIDATE_IP) === false)
-            || ($requestedPayType !== null && !PaymentTypeCode::valid($requestedPayType))
-            || !in_array($device, [null, 'pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump'], true)
-            || !in_array($detectedDevice, [null, 'pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump'], true)) {
+        if (
+            !preg_match('/^[1-9][0-9]{0,31}$/D', $pid) ||
+            $amount === 0 ||
+            !preg_match('/^[1-9][0-9]*$/D', $appId) ||
+            !preg_match('/^[1-9][0-9]*$/D', $credentialVersionId) ||
+            !mb_check_encoding(
+                [$merchantOrderNo, $subject, $param, $notifyUrl ?? '', $returnUrl ?? ''],
+                'UTF-8',
+            ) ||
+            mb_strlen($merchantOrderNo, 'UTF-8') < 1 ||
+            mb_strlen($merchantOrderNo, 'UTF-8') > 64 ||
+            $subject === '' ||
+            strlen($subject) > 127 ||
+            strlen($param) > 2048 ||
+            ($notifyUrl !== null && ($notifyUrl === '' || mb_strlen($notifyUrl, 'UTF-8') > 2048)) ||
+            ($channelId !== null && !preg_match('/^[1-9][0-9]*$/D', $channelId)) ||
+            ($returnUrl !== null && ($returnUrl === '' || mb_strlen($returnUrl, 'UTF-8') > 2048)) ||
+            ($clientIp !== null && filter_var($clientIp, FILTER_VALIDATE_IP) === false) ||
+            ($requestedPayType !== null && !PaymentTypeCode::valid($requestedPayType)) ||
+            !in_array($device, [null, 'pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump'], true) ||
+            !in_array(
+                $detectedDevice,
+                [null, 'pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump'],
+                true,
+            )
+        ) {
             throw new InvalidArgumentException('建单输入尚未完成业务规范化');
         }
     }
@@ -65,16 +79,22 @@ final readonly class CreateOrderInput
      */
     public function fingerprint(): string
     {
-        return hash('sha256', json_encode([
-            'version' => 1,
-            'merchant_order_no' => $this->merchantOrderNo,
-            'subject' => $this->subject,
-            'amount' => $this->amount,
-            'requested_pay_type' => $this->requestedPayType,
-            'notify_url' => $this->notifyUrl,
-            'return_url' => $this->returnUrl,
-            'device' => $this->device,
-            'param' => $this->param,
-        ] + ($this->channelId === null ? [] : ['channel_id' => $this->channelId]), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        return hash(
+            'sha256',
+            json_encode(
+                [
+                    'version' => 1,
+                    'merchant_order_no' => $this->merchantOrderNo,
+                    'subject' => $this->subject,
+                    'amount' => $this->amount,
+                    'requested_pay_type' => $this->requestedPayType,
+                    'notify_url' => $this->notifyUrl,
+                    'return_url' => $this->returnUrl,
+                    'device' => $this->device,
+                    'param' => $this->param,
+                ] + ($this->channelId === null ? [] : ['channel_id' => $this->channelId]),
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            ),
+        );
     }
 }

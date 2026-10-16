@@ -27,7 +27,12 @@ abstract class BaseController
      */
     protected function success(array|null $data = null, string $message = '操作成功'): Response
     {
-        return json(['code' => ApiResponseConstant::OK, 'message' => $message, 'data' => $data, 'request_id' => $this->context->id()]);
+        return json([
+            'code' => ApiResponseConstant::OK,
+            'message' => $message,
+            'data' => $data,
+            'request_id' => $this->context->id(),
+        ]);
     }
 
     /**

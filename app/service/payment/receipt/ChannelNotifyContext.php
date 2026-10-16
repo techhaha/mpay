@@ -25,8 +25,7 @@ final readonly class ChannelNotifyContext
         public string $payType,
         public array $configuration,
         public DateTimeImmutable $receivedAt,
-    )
-    {
+    ) {
         if ($configurationVersion < 1) {
             throw new InvalidArgumentException('来源上下文的配置版本无效');
         }

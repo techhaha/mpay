@@ -12,7 +12,11 @@ use think\Validate;
 final class SystemSettingsValidator extends Validate
 {
     protected $rule = [
-        'group' => ['require', 'string', 'in' => ['payment_defaults', 'maintenance', 'page_display']],
+        'group' => [
+            'require',
+            'string',
+            'in' => ['payment_defaults', 'maintenance', 'page_display'],
+        ],
         'expected_version' => ['jsonInteger', 'between' => [0, 4294967294]],
         'values' => ['jsonObject'],
     ];
@@ -20,7 +24,12 @@ final class SystemSettingsValidator extends Validate
     /** @param array<string,mixed> $query 无参数读入口也不接受指定环境、任意配置组或文件路径。 */
     public function emptyQuery(array $query): void
     {
-        if ($query !== []) { throw new BusinessException('此设置查询不接受额外字段', ApiResponseConstant::VALIDATION_FAILED); }
+        if ($query !== []) {
+            throw new BusinessException(
+                '此设置查询不接受额外字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
     }
 
     /**
@@ -29,16 +38,33 @@ final class SystemSettingsValidator extends Validate
      */
     public function save(array $input): array
     {
-        if (array_diff(array_keys($input), array_keys($this->rule)) !== [] || array_diff(array_keys($this->rule), array_keys($input)) !== []) {
-            throw new BusinessException('系统设置正文缺少字段或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            array_diff(array_keys($input), array_keys($this->rule)) !== [] ||
+            array_diff(array_keys($this->rule), array_keys($input)) !== []
+        ) {
+            throw new BusinessException(
+                '系统设置正文缺少字段或包含未知字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $validator = clone $this;
         $validator->append(['expected_version' => 'require', 'values' => 'require']);
-        if (!$validator->failException(false)->check($input)) { throw new BusinessException('系统设置正文类型或范围无效', ApiResponseConstant::VALIDATION_FAILED); }
+        if (!$validator->failException(false)->check($input)) {
+            throw new BusinessException(
+                '系统设置正文类型或范围无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
         $input['values'] = get_object_vars($input['values']);
         return $input;
     }
 
-    protected function jsonInteger(mixed $value): bool { return is_int($value); }
-    protected function jsonObject(mixed $value): bool { return $value instanceof stdClass; }
+    protected function jsonInteger(mixed $value): bool
+    {
+        return is_int($value);
+    }
+    protected function jsonObject(mixed $value): bool
+    {
+        return $value instanceof stdClass;
+    }
 }

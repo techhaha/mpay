@@ -33,5 +33,4 @@ final class PaymentType extends BaseModel
             ],
         ];
     }
-
 }

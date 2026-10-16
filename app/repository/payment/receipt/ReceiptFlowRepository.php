@@ -33,11 +33,19 @@ final class ReceiptFlowRepository extends BaseRepository
      */
     public function consumed(string $plugin, array $events, array $trades): array
     {
-        if ($events === [] && $trades === []) { return []; }
-        return $this->model->where('plugin_code', $plugin)->where(function (Query $query) use ($events, $trades): void {
-            $query->whereIn('event_key', $events);
-            if ($trades !== []) { $query->whereOr('platform_trade_no', 'in', $trades); }
-        })->select()->all();
+        if ($events === [] && $trades === []) {
+            return [];
+        }
+        return $this->model
+            ->where('plugin_code', $plugin)
+            ->where(function (Query $query) use ($events, $trades): void {
+                $query->whereIn('event_key', $events);
+                if ($trades !== []) {
+                    $query->whereOr('platform_trade_no', 'in', $trades);
+                }
+            })
+            ->select()
+            ->all();
     }
 
     /**
@@ -48,34 +56,57 @@ final class ReceiptFlowRepository extends BaseRepository
     {
         $query = $this->model->where('id', '>', 0);
         if (isset($filters['from'], $filters['until'])) {
-            $query->where('received_at', '>=', $filters['from'])->where('received_at', '<', $filters['until']);
+            $query
+                ->where('received_at', '>=', $filters['from'])
+                ->where('received_at', '<', $filters['until']);
         }
-        foreach (['id' => 'id', 'scope_key' => 'receipt_scope_key', 'plugin_code' => 'plugin_code', 'pay_no' => 'pay_no'] as $key => $column) {
-            if (isset($filters[$key])) { $query->where($column, $filters[$key]); }
+        foreach (
+            [
+                'id' => 'id',
+                'scope_key' => 'receipt_scope_key',
+                'plugin_code' => 'plugin_code',
+                'pay_no' => 'pay_no',
+            ]
+            as $key => $column
+        ) {
+            if (isset($filters[$key])) {
+                $query->where($column, $filters[$key]);
+            }
         }
-        return ['total' => (int) (clone $query)->count(), 'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all()];
+        return [
+            'total' => (int) (clone $query)->count(),
+            'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all(),
+        ];
     }
 
     /** 调用前已锁对应 ReceiptScope；生命周期还必须先锁业务单及支付单。 */
     public function lock(string $id): ReceiptFlow
     {
         $this->requireTransaction();
-        return $this->model->where('id', $id)->lock(true)->find() ?? throw new RuntimeException('到账流水不存在');
+        return $this->model->where('id', $id)->lock(true)->find() ??
+            throw new RuntimeException('到账流水不存在');
     }
 
     /** 稳定身份采用插件 + 事件键，不随通道配置改变；null 只表示当前未持久化，唯一键仍承担最终保护。 */
     public function lockByEvent(string $pluginCode, string $eventKey): ?ReceiptFlow
     {
         $this->requireTransaction();
-        return $this->model->where('plugin_code', $pluginCode)
-            ->where('event_key', $eventKey)->lock(true)->find();
+        return $this->model
+            ->where('plugin_code', $pluginCode)
+            ->where('event_key', $eventKey)
+            ->lock(true)
+            ->find();
     }
 
     /** 平台交易号在插件内唯一，查询窗口或配置别名重叠不能重复消费同一交易。 */
     public function lockByTrade(string $plugin, string $trade): ?ReceiptFlow
     {
         $this->requireTransaction();
-        return $this->model->where('plugin_code', $plugin)->where('platform_trade_no', $trade)->lock(true)->find();
+        return $this->model
+            ->where('plugin_code', $plugin)
+            ->where('platform_trade_no', $trade)
+            ->lock(true)
+            ->find();
     }
 
     /**
@@ -89,9 +120,19 @@ final class ReceiptFlowRepository extends BaseRepository
     public function create(array $data): string
     {
         $this->requireTransaction();
-        return $this->insert($data, ['receipt_scope_key', 'plugin_code',
-            'event_key', 'payload_digest', 'platform_trade_no', 'amount', 'remark',
-            'paid_at', 'received_at', 'pay_no', 'reason_code', 'evidence_json']);
+        return $this->insert($data, [
+            'receipt_scope_key',
+            'plugin_code',
+            'event_key',
+            'payload_digest',
+            'platform_trade_no',
+            'amount',
+            'remark',
+            'paid_at',
+            'received_at',
+            'pay_no',
+            'reason_code',
+            'evidence_json',
+        ]);
     }
-
 }

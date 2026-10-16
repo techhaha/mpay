@@ -61,5 +61,4 @@ final class BizOrder extends BaseModel
     {
         return $this->hasOne(PayOrder::class, 'biz_no', 'biz_no');
     }
-
 }

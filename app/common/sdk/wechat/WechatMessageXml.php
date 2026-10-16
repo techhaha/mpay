@@ -21,8 +21,13 @@ final class WechatMessageXml
     public function parse(string $xml): \DOMElement
     {
         // 先限制编码再检查声明，避免 UTF-16/NUL 使 ASCII 检查失效。保守拒绝任何位置的 DTD 声明字样。
-        if ($xml === '' || strlen($xml) > 65536 || !mb_check_encoding($xml, 'UTF-8') || str_contains($xml, "\0")
-            || preg_match('/<!\s*(?:DOCTYPE|ENTITY)\b/i', $xml)) {
+        if (
+            $xml === '' ||
+            strlen($xml) > 65536 ||
+            !mb_check_encoding($xml, 'UTF-8') ||
+            str_contains($xml, "\0") ||
+            preg_match('/<!\s*(?:DOCTYPE|ENTITY)\b/i', $xml)
+        ) {
             throw new ReceiptMessageException('invalid_message');
         }
         $document = new \DOMDocument();
@@ -39,8 +44,13 @@ final class WechatMessageXml
             libxml_clear_errors();
             libxml_use_internal_errors($previousErrors);
         }
-        if (!$loaded || $document->doctype !== null || $document->documentElement === null
-            || ($document->encoding !== null && !in_array(strtolower($document->encoding), ['utf-8', 'utf8'], true))) {
+        if (
+            !$loaded ||
+            $document->doctype !== null ||
+            $document->documentElement === null ||
+            ($document->encoding !== null &&
+                !in_array(strtolower($document->encoding), ['utf-8', 'utf8'], true))
+        ) {
             throw new ReceiptMessageException('invalid_message');
         }
         // DOM 已受输入字节和 libxml 默认深度限制；进一步收紧节点/深度，禁止向后续 XPath 传递异常结构。
@@ -49,7 +59,15 @@ final class WechatMessageXml
         while ($pending !== []) {
             [$node, $depth] = array_pop($pending);
             $nodeCount += 1 + ($node->attributes?->length ?? 0);
-            if ($depth > 32 || $nodeCount > 4096 || in_array($node->nodeType, [XML_PI_NODE, XML_ENTITY_REF_NODE, XML_DOCUMENT_TYPE_NODE], true)) {
+            if (
+                $depth > 32 ||
+                $nodeCount > 4096 ||
+                in_array(
+                    $node->nodeType,
+                    [XML_PI_NODE, XML_ENTITY_REF_NODE, XML_DOCUMENT_TYPE_NODE],
+                    true,
+                )
+            ) {
                 throw new ReceiptMessageException('invalid_message');
             }
             foreach ($node->childNodes as $child) {

@@ -12,9 +12,7 @@ namespace app\common\base;
 abstract class BaseRepository
 {
     /** @param TModel $model 当前仓储的主模型；其他模型由具体仓储显式注入。 */
-    public function __construct(protected readonly BaseModel $model)
-    {
-    }
+    public function __construct(protected readonly BaseModel $model) {}
 
     /**
      * 检查服务是否已开启同连接事务，只读 PDO 状态，不开启、提交或回滚事务。
@@ -40,7 +38,9 @@ abstract class BaseRepository
     protected function insert(array $data, array $fields, ?BaseModel $model = null): string
     {
         $this->requireTransaction();
-        if (array_diff(array_keys($data), $fields) !== []) { throw new \InvalidArgumentException('存在不允许写入的字段'); }
+        if (array_diff(array_keys($data), $fields) !== []) {
+            throw new \InvalidArgumentException('存在不允许写入的字段');
+        }
         if ($model !== null && $model->getConnection() !== $this->model->getConnection()) {
             throw new \LogicException('同一仓储写入必须使用同一事务连接');
         }

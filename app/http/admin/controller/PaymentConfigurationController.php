@@ -29,7 +29,7 @@ final class PaymentConfigurationController extends BaseAdminController
     public function testChannel(
         PaymentChannelTestValidator $validator,
         PaymentChannelTestService $service,
-        Clock $clock
+        Clock $clock,
     ): Response {
         $input = $validator->input($this->jsonBody());
         $order = $service->create(
@@ -38,47 +38,73 @@ final class PaymentConfigurationController extends BaseAdminController
             $input['amount'],
             $input['request_key'],
             $this->actor(),
-            $clock->now()
+            $clock->now(),
         );
-        return $this->success([
-            'biz_no' => $order->bizNo,
-            'pay_no' => $order->payNo,
-            'reused' => $order->reused,
-            // 后台内跳转使用相对地址，沿用浏览器当前站点，不依赖代理回源时观察到的协议或域名。
-            'cashier_url' => (string) url('/cashier/pay', ['biz_no' => $order->bizNo, 'token' => $order->accessToken])->suffix(false)->domain(false)->root('')
-        ], '测试订单已创建');
+        return $this->success(
+            [
+                'biz_no' => $order->bizNo,
+                'pay_no' => $order->payNo,
+                'reused' => $order->reused,
+                // 后台内跳转使用相对地址，沿用浏览器当前站点，不依赖代理回源时观察到的协议或域名。
+                'cashier_url' => (string) url('/cashier/pay', [
+                    'biz_no' => $order->bizNo,
+                    'token' => $order->accessToken,
+                ])
+                    ->suffix(false)
+                    ->domain(false)
+                    ->root(''),
+            ],
+            '测试订单已创建',
+        );
     }
 
-    public function plugins(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
-    {
+    public function plugins(
+        ConfigurationQueryValidator $validator,
+        PaymentConfigurationQueryService $query,
+    ): Response {
         $validator->emptyQuery($this->request->get());
         return $this->success(['items' => $query->plugins()]);
     }
 
-    public function channels(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
-    {
+    public function channels(
+        ConfigurationQueryValidator $validator,
+        PaymentConfigurationQueryService $query,
+    ): Response {
         $input = $validator->channels($this->request->get());
         $data = $query->channels($input['filters'], $input['page'], $input['limit']);
         return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
     }
 
-    public function configuration(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
-    {
+    public function configuration(
+        ConfigurationQueryValidator $validator,
+        PaymentConfigurationQueryService $query,
+    ): Response {
         return $this->success($query->configuration($validator->identity($this->request->get())));
     }
 
-    public function channel(ConfigurationQueryValidator $validator, PaymentConfigurationQueryService $query): Response
-    {
+    public function channel(
+        ConfigurationQueryValidator $validator,
+        PaymentConfigurationQueryService $query,
+    ): Response {
         return $this->success($query->channel($validator->identity($this->request->get())));
     }
 
     /** 上传仅登记图片及审计；通道表单后续显式保存资产 ID，旧订单继续引用旧图片。 */
     public function uploadImage(ImageUploadValidator $validator, FileAssetService $files): Response
     {
-        try { $uploads = $this->request->file() ?? []; }
-        catch (FileException) { throw new BusinessException('图片未完整接收，请检查上传大小和站点限制', ApiResponseConstant::VALIDATION_FAILED); }
+        try {
+            $uploads = $this->request->file() ?? [];
+        } catch (FileException) {
+            throw new BusinessException(
+                '图片未完整接收，请检查上传大小和站点限制',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
         $data = $validator->upload($this->request->post(), $uploads);
-        return $this->success($files->uploadImage($data['image'], $this->actor()), '图片已上传，请保存通道完成绑定');
+        return $this->success(
+            $files->uploadImage($data['image'], $this->actor()),
+            '图片已上传，请保存通道完成绑定',
+        );
     }
 
     public function image(ConfigurationQueryValidator $validator, FileAssetService $files): Response
@@ -87,36 +113,55 @@ final class PaymentConfigurationController extends BaseAdminController
     }
 
     /** 一个表单对应一个完整服务事务；范围与插件配置不再由浏览器分次提交。 */
-    public function editorCreate(PaymentConfigurationValidator $validator, PaymentChannelEditorService $service): Response
-    {
+    public function editorCreate(
+        PaymentConfigurationValidator $validator,
+        PaymentChannelEditorService $service,
+    ): Response {
         $data = $validator->validate('editor-create', $this->jsonBody());
         $result = $service->create($data, $this->actor());
-        return $this->success($result, $result['enabled'] ? '通道已保存并启用' : '通道已保存，尚未启用');
+        return $this->success(
+            $result,
+            $result['enabled'] ? '通道已保存并启用' : '通道已保存，尚未启用',
+        );
     }
 
-    public function editorSave(PaymentConfigurationValidator $validator, PaymentChannelEditorService $service): Response
-    {
+    public function editorSave(
+        PaymentConfigurationValidator $validator,
+        PaymentChannelEditorService $service,
+    ): Response {
         $data = $validator->validate('editor-save', $this->jsonBody());
         return $this->success($service->save($data, $this->actor()), '通道已保存，需重新启用');
     }
 
     /** 插件配置独立保存，不接收通道通用字段；当前通道需核对后启用。 */
-    public function pluginSave(PaymentConfigurationValidator $validator, PaymentChannelEditorService $service): Response
-    {
+    public function pluginSave(
+        PaymentConfigurationValidator $validator,
+        PaymentChannelEditorService $service,
+    ): Response {
         $data = $validator->validate('plugin-save', $this->jsonBody());
-        return $this->success($service->configure($data, $this->actor()), '插件配置已保存，请核对后启用此通道');
+        return $this->success(
+            $service->configure($data, $this->actor()),
+            '插件配置已保存，请核对后启用此通道',
+        );
     }
 
-    public function editorEnabled(PaymentConfigurationValidator $validator, PaymentChannelEditorService $service): Response
-    {
+    public function editorEnabled(
+        PaymentConfigurationValidator $validator,
+        PaymentChannelEditorService $service,
+    ): Response {
         $data = $validator->validate('channel-enabled', $this->jsonBody());
         $service->setEnabled($data, $this->actor());
-        return $this->success(['id' => $data['id'], 'enabled' => $data['enabled']], $data['enabled'] ? '通道已启用' : '通道已停用');
+        return $this->success(
+            ['id' => $data['id'], 'enabled' => $data['enabled']],
+            $data['enabled'] ? '通道已启用' : '通道已停用',
+        );
     }
 
     /** 只删除当前通道配置入口，保留被历史交易引用的实体、快照和流水。 */
-    public function deleteChannel(PaymentConfigurationValidator $validator, PaymentChannelEditorService $service): Response
-    {
+    public function deleteChannel(
+        PaymentConfigurationValidator $validator,
+        PaymentChannelEditorService $service,
+    ): Response {
         $data = $validator->validate('channel-delete', $this->jsonBody());
         $service->delete($data, $this->actor());
         return $this->success(['id' => $data['id']], '通道已删除');
@@ -126,8 +171,12 @@ final class PaymentConfigurationController extends BaseAdminController
     private function actor(?string $reason = null): ConfigurationActionContext
     {
         $identity = $this->identity();
-        return ConfigurationActionContext::administrator($identity['id'], $identity['session_version'], $this->context->id(),
-            $reason, (string) $this->request->server('REMOTE_ADDR', ''));
+        return ConfigurationActionContext::administrator(
+            $identity['id'],
+            $identity['session_version'],
+            $this->context->id(),
+            $reason,
+            (string) $this->request->server('REMOTE_ADDR', ''),
+        );
     }
-
 }

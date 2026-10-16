@@ -41,5 +41,4 @@ final class NotifyAttempt extends BaseModel
             ],
         ];
     }
-
 }

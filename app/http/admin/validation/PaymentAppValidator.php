@@ -16,10 +16,15 @@ final class PaymentAppValidator extends Validate
         'id' => ['require', 'string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'expected_id' => ['require', 'string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'revision' => ['require', 'integerJson', 'between' => [1, 4294967295]],
-        'name' => ['require', 'string', 'max' => 128], 'pid' => ['requireText', 'max' => 32],
-        'enabled' => ['requireBoolean'], 'use_default_route' => ['requireBoolean'], 'allowed_hosts' => ['requireArray'],
-        'reason' => ['require', 'string', 'max' => 500], 'password' => ['require', 'string', 'max' => 72],
-        'key' => ['requireText', 'max' => 128], 'parameters' => ['requireObject'],
+        'name' => ['require', 'string', 'max' => 128],
+        'pid' => ['requireText', 'max' => 32],
+        'enabled' => ['requireBoolean'],
+        'use_default_route' => ['requireBoolean'],
+        'allowed_hosts' => ['requireArray'],
+        'reason' => ['require', 'string', 'max' => 500],
+        'password' => ['require', 'string', 'max' => 72],
+        'key' => ['requireText', 'max' => 128],
+        'parameters' => ['requireObject'],
     ];
     protected $scene = [
         'routing' => ['id', 'revision', 'use_default_route'],
@@ -38,30 +43,63 @@ final class PaymentAppValidator extends Validate
     {
         $fields = $this->scene[$scene] ?? throw new LogicException('未知应用管理场景');
         if (array_diff(array_keys($input), $fields) || array_diff($fields, array_keys($input))) {
-            throw new BusinessException('应用参数缺失或包含未知字段', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '应用参数缺失或包含未知字段',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $validator = (clone $this)->scene($scene)->failException(false);
-        if (!$validator->check($input) || (isset($input['reason']) && trim($input['reason']) === '')) {
-            throw new BusinessException('应用参数类型或范围无效', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            !$validator->check($input) ||
+            (isset($input['reason']) && trim($input['reason']) === '')
+        ) {
+            throw new BusinessException(
+                '应用参数类型或范围无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         if ($scene === 'signature') {
             $input['parameters'] = get_object_vars($input['parameters']);
-            if (count($input['parameters']) > 128 || strlen(json_encode($input['parameters'], JSON_THROW_ON_ERROR)) > 32768) {
+            if (
+                count($input['parameters']) > 128 ||
+                strlen(json_encode($input['parameters'], JSON_THROW_ON_ERROR)) > 32768
+            ) {
                 throw new BusinessException('签名参数过多', ApiResponseConstant::VALIDATION_FAILED);
             }
             foreach ($input['parameters'] as $name => $value) {
-                if (!preg_match('/^[a-zA-Z0-9_-]{1,64}$/D', (string) $name) || ($value !== null && !is_string($value))) {
-                    throw new BusinessException('签名参数名称或类型无效', ApiResponseConstant::VALIDATION_FAILED);
+                if (
+                    !preg_match('/^[a-zA-Z0-9_-]{1,64}$/D', (string) $name) ||
+                    ($value !== null && !is_string($value))
+                ) {
+                    throw new BusinessException(
+                        '签名参数名称或类型无效',
+                        ApiResponseConstant::VALIDATION_FAILED,
+                    );
                 }
             }
         }
         return $input;
     }
 
-    protected function integerJson(mixed $value): bool { return is_int($value); }
+    protected function integerJson(mixed $value): bool
+    {
+        return is_int($value);
+    }
     // require 前缀使原生 Validate 检查空值类型；空 PID/KEY、false 和空列表仍是合法值。
-    protected function requireText(mixed $value): bool { return is_string($value); }
-    protected function requireBoolean(mixed $value): bool { return is_bool($value); }
-    protected function requireArray(mixed $value): bool { return is_array($value); }
-    protected function requireObject(mixed $value): bool { return $value instanceof stdClass; }
+    protected function requireText(mixed $value): bool
+    {
+        return is_string($value);
+    }
+    protected function requireBoolean(mixed $value): bool
+    {
+        return is_bool($value);
+    }
+    protected function requireArray(mixed $value): bool
+    {
+        return is_array($value);
+    }
+    protected function requireObject(mixed $value): bool
+    {
+        return $value instanceof stdClass;
+    }
 }

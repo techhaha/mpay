@@ -13,11 +13,20 @@ use app\model\payment\PayOrder;
 /** 易支付公开消息白名单及目标 query 合并，通知和浏览器回跳共用规则，不依赖当前 HTTP 请求。 */
 final class EpayV1MessageService
 {
-    private const SUCCESS_FIELDS = ['pid', 'trade_no', 'out_trade_no', 'type', 'name', 'money', 'trade_status', 'param', 'sign', 'sign_type'];
+    private const SUCCESS_FIELDS = [
+        'pid',
+        'trade_no',
+        'out_trade_no',
+        'type',
+        'name',
+        'money',
+        'trade_status',
+        'param',
+        'sign',
+        'sign_type',
+    ];
 
-    public function __construct(private readonly EpayV1Signer $signer)
-    {
-    }
+    public function __construct(private readonly EpayV1Signer $signer) {}
 
     /**
      * 只有已确认且相互关联的本地成功才能生成 TRADE_SUCCESS，浏览器输入不能代替此条件。
@@ -26,8 +35,12 @@ final class EpayV1MessageService
      */
     public function successParameters(BizOrder $biz, PayOrder $pay, string $pid): array
     {
-        if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS || (int) $pay['status'] !== TradeConstant::ORDER_STATUS_SUCCESS
-            || $pay['biz_no'] !== $biz['biz_no'] || $biz['active_pay_no'] !== $pay['pay_no']) {
+        if (
+            (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS ||
+            (int) $pay['status'] !== TradeConstant::ORDER_STATUS_SUCCESS ||
+            $pay['biz_no'] !== $biz['biz_no'] ||
+            $biz['active_pay_no'] !== $pay['pay_no']
+        ) {
             throw new \LogicException('未确认业务成功，不能生成易支付成功消息');
         }
         $type = $pay['ext_json']['payment_context']['pay_type'] ?? null;
@@ -35,8 +48,15 @@ final class EpayV1MessageService
         if (!\app\common\validation\PaymentTypeCode::valid($type) || !is_string($param)) {
             throw new \RuntimeException('原始协议上下文缺失');
         }
-        $parameters = ['pid' => $pid, 'trade_no' => $pay['pay_no'], 'out_trade_no' => $biz['merchant_order_no'],
-            'type' => $type, 'name' => $biz['subject'], 'money' => Money::format((int) $biz['order_amount']), 'trade_status' => 'TRADE_SUCCESS'];
+        $parameters = [
+            'pid' => $pid,
+            'trade_no' => $pay['pay_no'],
+            'out_trade_no' => $biz['merchant_order_no'],
+            'type' => $type,
+            'name' => $biz['subject'],
+            'money' => Money::format((int) $biz['order_amount']),
+            'trade_status' => 'TRADE_SUCCESS',
+        ];
         if ($param !== '') {
             $parameters['param'] = $param;
         }
@@ -66,7 +86,9 @@ final class EpayV1MessageService
     /** @param array<string|int,string> $signedParameters 已合并目标 query 的完整冻结参数。 */
     public function targetUrl(string $target, array $signedParameters): string
     {
-        return (string) HttpTargetPolicy::uri($target)->withQuery(http_build_query($signedParameters, '', '&', PHP_QUERY_RFC3986));
+        return (string) HttpTargetPolicy::uri($target)->withQuery(
+            http_build_query($signedParameters, '', '&', PHP_QUERY_RFC3986),
+        );
     }
 
     /**
@@ -75,22 +97,41 @@ final class EpayV1MessageService
      */
     public function order(BizOrder $biz, ?PayOrder $pay, string $pid): array
     {
-        if (($pay !== null && ($pay['biz_no'] !== $biz['biz_no'] || $biz['active_pay_no'] !== $pay['pay_no']
-            || (int) $pay['status'] !== (int) $biz['status'] || $pay->originalAmount() !== (int) $biz['order_amount']))
-            || ($pay === null && ($biz['active_pay_no'] !== null || (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS))) {
+        if (
+            ($pay !== null &&
+                ($pay['biz_no'] !== $biz['biz_no'] ||
+                    $biz['active_pay_no'] !== $pay['pay_no'] ||
+                    (int) $pay['status'] !== (int) $biz['status'] ||
+                    $pay->originalAmount() !== (int) $biz['order_amount'])) ||
+            ($pay === null &&
+                ($biz['active_pay_no'] !== null ||
+                    (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS))
+        ) {
             throw new \RuntimeException('查询的业务单与支付单不一致');
         }
-        $type = $pay === null ? '' : ($pay['ext_json']['payment_context']['pay_type'] ?? null);
+        $type = $pay === null ? '' : $pay['ext_json']['payment_context']['pay_type'] ?? null;
         $param = $biz['ext_json']['param'] ?? '';
-        if (!is_string($param) || ($pay !== null && !\app\common\validation\PaymentTypeCode::valid($type))) {
+        if (
+            !is_string($param) ||
+            ($pay !== null && !\app\common\validation\PaymentTypeCode::valid($type))
+        ) {
             throw new \RuntimeException('查询的原始协议上下文无效');
         }
-        return ['code' => 1, 'msg' => '查询成功', 'trade_no' => $pay === null ? '' : $pay['pay_no'],
-            'out_trade_no' => $biz['merchant_order_no'], 'api_trade_no' => $pay === null ? '' : ($pay['channel_trade_no'] ?? ''),
-            'type' => $type, 'pid' => $pid,
-            'addtime' => $biz['created_at'], 'endtime' => $biz['paid_at'] ?? '', 'name' => $biz['subject'],
+        return [
+            'code' => 1,
+            'msg' => '查询成功',
+            'trade_no' => $pay === null ? '' : $pay['pay_no'],
+            'out_trade_no' => $biz['merchant_order_no'],
+            'api_trade_no' => $pay === null ? '' : $pay['channel_trade_no'] ?? '',
+            'type' => $type,
+            'pid' => $pid,
+            'addtime' => $biz['created_at'],
+            'endtime' => $biz['paid_at'] ?? '',
+            'name' => $biz['subject'],
             'money' => Money::format((int) $biz['order_amount']),
             'status' => (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS ? 1 : 0,
-            'param' => $param, 'buyer' => ''];
+            'param' => $param,
+            'buyer' => '',
+        ];
     }
 }

@@ -30,8 +30,7 @@ final class PaymentRuntimeMaintenanceService extends BaseService
         private readonly PayOrderChannelDispatchService $dispatch,
         private readonly Clock $clock,
         private readonly SafeLogger $logger,
-    ) {
-    }
+    ) {}
 
     /**
      * 同一批次可重复运行或由多个进程竞争，状态/绑定/认领仍由数据库锁和条件写入保护。
@@ -46,21 +45,38 @@ final class PaymentRuntimeMaintenanceService extends BaseService
         if ($limit < 1 || $limit > 200 || $budgetSeconds < 1 || $budgetSeconds > 300) {
             throw new InvalidArgumentException('维护批次数量必须为 1～200');
         }
-        if ($phase !== null && !in_array($phase, ['expire', 'execution'], true)) { throw new InvalidArgumentException('维护阶段无效'); }
+        if ($phase !== null && !in_array($phase, ['expire', 'execution'], true)) {
+            throw new InvalidArgumentException('维护阶段无效');
+        }
         $started = hrtime(true);
-        $outOfTime = static fn (): bool => (hrtime(true) - $started) / 1000000000 >= $budgetSeconds;
-        $result = ['expired' => 0, 'executions_checked' => 0, 'executions_rejected' => 0, 'budget_exhausted' => false];
-        foreach (($phase === null || $phase === 'expire' ? $this->bizOrders->dueExpirationNumbers($this->clock->now()->format('Y-m-d H:i:s'), $limit) : []) as $number) {
+        $outOfTime = static fn(): bool => (hrtime(true) - $started) / 1000000000 >= $budgetSeconds;
+        $result = [
+            'expired' => 0,
+            'executions_checked' => 0,
+            'executions_rejected' => 0,
+            'budget_exhausted' => false,
+        ];
+        foreach (
+            $phase === null || $phase === 'expire'
+                ? $this->bizOrders->dueExpirationNumbers(
+                    $this->clock->now()->format('Y-m-d H:i:s'),
+                    $limit,
+                )
+                : []
+            as $number
+        ) {
             if ($outOfTime()) {
                 return array_replace($result, ['budget_exhausted' => true]);
             }
             $result['expired'] += (int) $this->lifecycle->expire($number);
         }
-        if ($phase === 'expire') { return $result; }
+        if ($phase === 'expire') {
+            return $result;
+        }
         $payments = $this->payOrders->recoverableExecutionPage(
             $this->clock->now()->format('Y-m-d H:i:s'),
             $this->executionAfterId,
-            $limit
+            $limit,
         );
         foreach ($payments as $payment) {
             if ($outOfTime()) {
@@ -72,18 +88,23 @@ final class PaymentRuntimeMaintenanceService extends BaseService
                 $this->dispatch->dispatch($payment['pay_no'], $this->clock->now(), $requestId);
             } catch (BusinessException $error) {
                 // 不改变订单状态或重放规则；单笔配置/业务拒绝不能阻断其他订单及商户通知。
-                $this->logger->record('payment.execution_rejected', [
-                    'pay_no' => $payment['pay_no'],
-                    'trace_no' => $requestId,
-                    'reason_code' => 'business_rejected',
-                ], 'warning');
+                $this->logger->record(
+                    'payment.execution_rejected',
+                    [
+                        'pay_no' => $payment['pay_no'],
+                        'trace_no' => $requestId,
+                        'reason_code' => 'business_rejected',
+                    ],
+                    'warning',
+                );
                 $this->logger->exception($error);
                 $result['executions_rejected']++;
             }
             $result['executions_checked']++;
         }
-        if (count($payments) < $limit) { $this->executionAfterId = '0'; }
+        if (count($payments) < $limit) {
+            $this->executionAfterId = '0';
+        }
         return $result;
     }
-
 }

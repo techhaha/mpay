@@ -27,24 +27,40 @@ final class PaymentChannelTestValidator extends Validate
      */
     public function input(array $input): array
     {
-        if (array_diff(array_keys($input), array_keys($this->rule)) !== []
-            || !(clone $this)->failException(false)->check($input)) {
-            throw new BusinessException('请填写有效测试金额', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            array_diff(array_keys($input), array_keys($this->rule)) !== [] ||
+            !(clone $this)->failException(false)->check($input)
+        ) {
+            throw new BusinessException(
+                '请填写有效测试金额',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         try {
             $amount = Money::parse($input['money']);
         } catch (InvalidArgumentException) {
-            throw new BusinessException('测试金额超出允许范围', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '测试金额超出允许范围',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
-        if ($amount < 1 || (strlen($input['channel_id']) === 20 && strcmp($input['channel_id'], '18446744073709551615') > 0)
-            || (strlen($input['app_id']) === 20 && strcmp($input['app_id'], '18446744073709551615') > 0)) {
-            throw new BusinessException('测试金额或通道编号无效', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            $amount < 1 ||
+            (strlen($input['channel_id']) === 20 &&
+                strcmp($input['channel_id'], '18446744073709551615') > 0) ||
+            (strlen($input['app_id']) === 20 &&
+                strcmp($input['app_id'], '18446744073709551615') > 0)
+        ) {
+            throw new BusinessException(
+                '测试金额或通道编号无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         return [
             'channel_id' => $input['channel_id'],
             'app_id' => $input['app_id'],
             'amount' => $amount,
-            'request_key' => $input['request_key']
+            'request_key' => $input['request_key'],
         ];
     }
 }

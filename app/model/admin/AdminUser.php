@@ -33,5 +33,4 @@ final class AdminUser extends BaseModel
             'hidden' => ['password_hash'],
         ];
     }
-
 }

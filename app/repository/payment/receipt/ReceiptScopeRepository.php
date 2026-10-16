@@ -10,20 +10,30 @@ use RuntimeException;
 /** @extends BaseRepository<ReceiptScope> 配置与支付方式的业务锁域，不解释平台账号。 */
 final class ReceiptScopeRepository extends BaseRepository
 {
-    public function __construct(ReceiptScope $model) { parent::__construct($model); }
+    public function __construct(ReceiptScope $model)
+    {
+        parent::__construct($model);
+    }
 
     /** 同配置/方式只登记一次，由唯一约束保护；调用方拥有配置事务。 */
     public function create(string $key, string $payTypeId, string $configurationId): string
     {
-        return $this->insert(['receipt_scope_key' => $key, 'pay_type_id' => $payTypeId, 'api_config_id' => $configurationId],
-            ['receipt_scope_key', 'pay_type_id', 'api_config_id']);
+        return $this->insert(
+            [
+                'receipt_scope_key' => $key,
+                'pay_type_id' => $payTypeId,
+                'api_config_id' => $configurationId,
+            ],
+            ['receipt_scope_key', 'pay_type_id', 'api_config_id'],
+        );
     }
 
     /** 在业务单/支付单之后取锁，核对归属并串行提交本范围的到账事实；不分配金额或备注。 */
     public function lock(string $scopeKey): ReceiptScope
     {
         $this->requireTransaction();
-        return $this->model->where('receipt_scope_key', $scopeKey)->lock(true)->find() ?? throw new RuntimeException('配置匹配范围不存在');
+        return $this->model->where('receipt_scope_key', $scopeKey)->lock(true)->find() ??
+            throw new RuntimeException('配置匹配范围不存在');
     }
 
     public function find(string $scopeKey): ?ReceiptScope
@@ -40,7 +50,10 @@ final class ReceiptScopeRepository extends BaseRepository
     public function configurationScopes(string $id, bool $lock): array
     {
         $query = $this->model->where('api_config_id', $id)->order('receipt_scope_key');
-        if ($lock) { $this->requireTransaction(); $query->lock(true); }
+        if ($lock) {
+            $this->requireTransaction();
+            $query->lock(true);
+        }
         return $query->select()->all();
     }
 }

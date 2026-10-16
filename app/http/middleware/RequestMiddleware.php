@@ -10,10 +10,7 @@ use think\Response;
 /** HTTP 入口统一附加请求关联号与公共响应头；会话由框架按固定配置初始化。 */
 final class RequestMiddleware
 {
-    public function __construct(
-        private readonly RequestContext $context,
-    ) {
-    }
+    public function __construct(private readonly RequestContext $context) {}
 
     /**
      * 下游抛异常时交给 ExceptionHandle 输出；本中间件不截获异常或推断支付结果。

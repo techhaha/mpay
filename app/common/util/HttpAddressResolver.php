@@ -35,7 +35,10 @@ class HttpAddressResolver
                 continue;
             }
             if (count($visited) >= 8) {
-                throw new BusinessException('目标 DNS 别名链过长', ApiResponseConstant::SERVICE_UNAVAILABLE);
+                throw new BusinessException(
+                    '目标 DNS 别名链过长',
+                    ApiResponseConstant::SERVICE_UNAVAILABLE,
+                );
             }
             $visited[$host] = true;
             $records = $this->lookup($host);
@@ -45,19 +48,31 @@ class HttpAddressResolver
                     $this->assertAddress($ip, $development);
                     $addresses[$ip] = $ip;
                     if (count($addresses) > 64) {
-                        throw new BusinessException('目标 DNS 地址数量超出连接边界', ApiResponseConstant::SERVICE_UNAVAILABLE);
+                        throw new BusinessException(
+                            '目标 DNS 地址数量超出连接边界',
+                            ApiResponseConstant::SERVICE_UNAVAILABLE,
+                        );
                     }
-                } elseif (($record['type'] ?? null) === 'CNAME' && is_string($record['target'] ?? null)) {
+                } elseif (
+                    ($record['type'] ?? null) === 'CNAME' &&
+                    is_string($record['target'] ?? null)
+                ) {
                     $alias = rtrim(strtolower($record['target']), '.');
                     if (!preg_match('/^[a-z0-9.-]{1,253}$/D', $alias)) {
-                        throw new BusinessException('目标 DNS 别名无效', ApiResponseConstant::SERVICE_UNAVAILABLE);
+                        throw new BusinessException(
+                            '目标 DNS 别名无效',
+                            ApiResponseConstant::SERVICE_UNAVAILABLE,
+                        );
                     }
                     $queue[] = $alias;
                 }
             }
         }
         if ($addresses === []) {
-            throw new BusinessException('目标域名当前无法解析', ApiResponseConstant::SERVICE_UNAVAILABLE);
+            throw new BusinessException(
+                '目标域名当前无法解析',
+                ApiResponseConstant::SERVICE_UNAVAILABLE,
+            );
         }
         return array_values($addresses);
     }
@@ -71,7 +86,10 @@ class HttpAddressResolver
     {
         $records = @dns_get_record($host, DNS_A | DNS_AAAA | DNS_CNAME);
         if ($records === false) {
-            throw new BusinessException('目标 DNS 查询失败', ApiResponseConstant::SERVICE_UNAVAILABLE);
+            throw new BusinessException(
+                '目标 DNS 查询失败',
+                ApiResponseConstant::SERVICE_UNAVAILABLE,
+            );
         }
         return $records;
     }
@@ -83,21 +101,51 @@ class HttpAddressResolver
         if ($bytes === false) {
             throw new BusinessException('目标 IP 地址无效', ApiResponseConstant::VALIDATION_FAILED);
         }
-        $private = ['10.0.0.0/8', '127.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '::1/128', 'fc00::/7'];
+        $private = [
+            '10.0.0.0/8',
+            '127.0.0.0/8',
+            '172.16.0.0/12',
+            '192.168.0.0/16',
+            '::1/128',
+            'fc00::/7',
+        ];
         if ($development && $this->inAnyRange($bytes, $private)) {
             return;
         }
         if (strlen($bytes) === 4) {
-            $blocked = ['0.0.0.0/8', '10.0.0.0/8', '100.64.0.0/10', '127.0.0.0/8', '169.254.0.0/16',
-                '172.16.0.0/12', '192.0.0.0/24', '192.0.2.0/24', '192.88.99.0/24', '192.168.0.0/16',
-                '198.18.0.0/15', '198.51.100.0/24', '203.0.113.0/24', '224.0.0.0/4', '240.0.0.0/4'];
+            $blocked = [
+                '0.0.0.0/8',
+                '10.0.0.0/8',
+                '100.64.0.0/10',
+                '127.0.0.0/8',
+                '169.254.0.0/16',
+                '172.16.0.0/12',
+                '192.0.0.0/24',
+                '192.0.2.0/24',
+                '192.88.99.0/24',
+                '192.168.0.0/16',
+                '198.18.0.0/15',
+                '198.51.100.0/24',
+                '203.0.113.0/24',
+                '224.0.0.0/4',
+                '240.0.0.0/4',
+            ];
             $public = !$this->inAnyRange($bytes, $blocked);
         } else {
-            $public = $this->inAnyRange($bytes, ['2000::/3'])
-                && !$this->inAnyRange($bytes, ['2001::/23', '2001:db8::/32', '2002::/16', '3fff::/20']);
+            $public =
+                $this->inAnyRange($bytes, ['2000::/3']) &&
+                !$this->inAnyRange($bytes, [
+                    '2001::/23',
+                    '2001:db8::/32',
+                    '2002::/16',
+                    '3fff::/20',
+                ]);
         }
         if (!$public) {
-            throw new BusinessException('目标地址不属于允许的公网范围', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '目标地址不属于允许的公网范围',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
     }
 
@@ -112,12 +160,14 @@ class HttpAddressResolver
             }
             $whole = intdiv((int) $prefix, 8);
             $remainder = (int) $prefix % 8;
-            if (substr($base, 0, $whole) === substr($bytes, 0, $whole)
-                && ($remainder === 0 || ((ord($base[$whole]) ^ ord($bytes[$whole])) & (0xff << (8 - $remainder))) === 0)) {
+            if (
+                substr($base, 0, $whole) === substr($bytes, 0, $whole) &&
+                ($remainder === 0 ||
+                    ((ord($base[$whole]) ^ ord($bytes[$whole])) & (0xff << (8 - $remainder))) === 0)
+            ) {
                 return true;
             }
         }
         return false;
     }
-
 }

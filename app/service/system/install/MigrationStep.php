@@ -14,8 +14,7 @@ final readonly class MigrationStep
         public string $table,
         public string $sql,
         public string $checksum,
-    ) {
-    }
+    ) {}
 
     /**
      * @param mixed $definition 程序内基线文件的单条 CREATE TABLE，不接受请求输入。
@@ -23,11 +22,14 @@ final readonly class MigrationStep
      */
     public static function fromDefinition(string $version, string $name, mixed $definition): self
     {
-        if (!preg_match('/^[0-9]{12}_[a-z0-9_]+$/D', $version) || strlen($version) > 64
-            || !preg_match('/^ma_[a-z0-9_]{1,61}$/D', $name)
-            || !is_string($definition)
-            || !preg_match('/^CREATE TABLE ' . preg_quote($name, '/') . '\\s*\\(/i', $definition)
-            || str_contains($definition, ';')) {
+        if (
+            !preg_match('/^[0-9]{12}_[a-z0-9_]+$/D', $version) ||
+            strlen($version) > 64 ||
+            !preg_match('/^ma_[a-z0-9_]{1,61}$/D', $name) ||
+            !is_string($definition) ||
+            !preg_match('/^CREATE TABLE ' . preg_quote($name, '/') . '\\s*\\(/i', $definition) ||
+            str_contains($definition, ';')
+        ) {
             throw new RuntimeException('迁移步骤必须是有效版本中与表名对应的单条 CREATE TABLE');
         }
         // 摘要取 SQL 原字节；已经执行的步骤不得更换定义。
@@ -38,5 +40,4 @@ final readonly class MigrationStep
     {
         return $this->version . ':' . $this->name;
     }
-
 }

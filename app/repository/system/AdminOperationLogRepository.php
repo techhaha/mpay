@@ -25,31 +25,61 @@ final class AdminOperationLogRepository extends BaseRepository
      */
     public function record(array $data): void
     {
-        $this->insert($data, ['admin_user_id', 'request_id', 'action', 'target_type', 'target_id',
-            'result_code', 'summary_json', 'client_ip']);
+        $this->insert($data, [
+            'admin_user_id',
+            'request_id',
+            'action',
+            'target_type',
+            'target_id',
+            'result_code',
+            'summary_json',
+            'client_ip',
+        ]);
     }
 
     /**
      * 调用认证服务须先锁同一管理员行；使用已有身份/时间索引读取有限失败样本，不由仓储决定封禁策略。
      * 登录失败身份未被认证，adminId 为 null；改密失败使用已认证身份。未知用户名不作为审计查询条件。
      */
-    public function rejectedAuthenticationCount(?string $adminId, string $action, ?string $clientIp, DateTimeImmutable $since, int $limit): int
-    {
+    public function rejectedAuthenticationCount(
+        ?string $adminId,
+        string $action,
+        ?string $clientIp,
+        DateTimeImmutable $since,
+        int $limit,
+    ): int {
         $this->requireTransaction();
-        $query = $this->model->where('action', $action)
+        $query = $this->model
+            ->where('action', $action)
             ->where('result_code', 'rejected')
             ->where('created_at', '>=', $since->format('Y-m-d H:i:s'));
-        $query = $adminId === null ? $query->whereNull('admin_user_id') : $query->where('admin_user_id', $adminId);
-        $query = $clientIp === null ? $query->whereNull('client_ip') : $query->where('client_ip', $clientIp);
+        $query =
+            $adminId === null
+                ? $query->whereNull('admin_user_id')
+                : $query->where('admin_user_id', $adminId);
+        $query =
+            $clientIp === null
+                ? $query->whereNull('client_ip')
+                : $query->where('client_ip', $clientIp);
         return count($query->limit($limit)->column('id'));
     }
 
     /** @return array{items:list<AdminOperationLog>,total:int} 已认证服务按明确目标读取业务审计。 */
     public function pageForTarget(string $type, string $id, int $page, int $limit): array
     {
-        return ['items' => $this->model->where('target_type', $type)->where('target_id', $id)
-            ->order('id', 'desc')->page($page, $limit)->select()->all(),
-            'total' => (int) $this->model->where('target_type', $type)->where('target_id', $id)->count()];
+        return [
+            'items' => $this->model
+                ->where('target_type', $type)
+                ->where('target_id', $id)
+                ->order('id', 'desc')
+                ->page($page, $limit)
+                ->select()
+                ->all(),
+            'total' => (int) $this->model
+                ->where('target_type', $type)
+                ->where('target_id', $id)
+                ->count(),
+        ];
     }
 
     /**
@@ -58,10 +88,25 @@ final class AdminOperationLogRepository extends BaseRepository
      */
     public function adminPage(array $filters, int $page, int $limit): array
     {
-        $query = $this->model->where('created_at', '>=', $filters['from'])->where('created_at', '<', $filters['until']);
-        foreach (['admin_id' => 'admin_user_id', 'action' => 'action', 'result_code' => 'result_code', 'request_id' => 'request_id'] as $key => $column) {
-            if (isset($filters[$key])) { $query->where($column, $filters[$key]); }
+        $query = $this->model
+            ->where('created_at', '>=', $filters['from'])
+            ->where('created_at', '<', $filters['until']);
+        foreach (
+            [
+                'admin_id' => 'admin_user_id',
+                'action' => 'action',
+                'result_code' => 'result_code',
+                'request_id' => 'request_id',
+            ]
+            as $key => $column
+        ) {
+            if (isset($filters[$key])) {
+                $query->where($column, $filters[$key]);
+            }
         }
-        return ['total' => (int) (clone $query)->count(), 'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all()];
+        return [
+            'total' => (int) (clone $query)->count(),
+            'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all(),
+        ];
     }
 }

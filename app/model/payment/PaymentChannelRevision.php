@@ -35,5 +35,4 @@ final class PaymentChannelRevision extends BaseModel
             'hidden' => ['snapshot_json'],
         ];
     }
-
 }

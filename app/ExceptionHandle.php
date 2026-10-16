@@ -27,7 +27,11 @@ final class ExceptionHandle extends Handle
      */
     public function report(Throwable $exception): void
     {
-        if (!$exception instanceof BusinessException && !$exception instanceof HttpResponseException && !$exception instanceof HttpException) {
+        if (
+            !($exception instanceof BusinessException) &&
+            !($exception instanceof HttpResponseException) &&
+            !($exception instanceof HttpException)
+        ) {
             $this->app->make(SafeLogger::class)->exception($exception);
         }
     }
@@ -72,7 +76,10 @@ final class ExceptionHandle extends Handle
         // 根据已解析路径分流，而非 Accept 头；易支付和设备不能使用后台应用码。
         $path = '/' . ltrim($request->pathinfo(), '/');
         if (preg_match('#^/(adminapi(?:/|$)|installapi(?:/|$)|api/cashier(?:/|$))#', $path)) {
-            $response = json(['code' => $code, 'message' => $message, 'data' => $data, 'request_id' => $id], $status);
+            $response = json(
+                ['code' => $code, 'message' => $message, 'data' => $data, 'request_id' => $id],
+                $status,
+            );
         } elseif (in_array($path, ['/mapi.php', '/api.php'], true)) {
             $response = json(['code' => 0, 'msg' => $message], $status);
         } elseif (str_starts_with($path, '/api/pay/')) {

@@ -24,8 +24,7 @@ final class PaymentChannelTestService extends BaseService
         private readonly PaymentAppCredentialService $credentials,
         private readonly PaymentChannelRepository $channels,
         private readonly PayOrderService $orders,
-    ) {
-    }
+    ) {}
 
     /**
      * 金额单位为分；弹层请求键作为普通外部订单号，复用应用内唯一键及参数指纹。
@@ -39,16 +38,24 @@ final class PaymentChannelTestService extends BaseService
         int $amount,
         string $requestKey,
         ConfigurationActionContext $actor,
-        DateTimeImmutable $now
+        DateTimeImmutable $now,
     ): CreatedOrder {
         if ($actor->origin !== 'admin' || !preg_match('/^[a-f0-9]{32}$/D', $requestKey)) {
             throw new BusinessException('付款请求无效', ApiResponseConstant::FORBIDDEN);
         }
-        return $this->transactionRetry(function () use ($appId, $channelId, $amount, $requestKey, $actor, $now): CreatedOrder {
+        return $this->transactionRetry(function () use (
+            $appId,
+            $channelId,
+            $amount,
+            $requestKey,
+            $actor,
+            $now,
+        ): CreatedOrder {
             $this->audit->authorize($actor);
             $application = $this->apps->lock($appId);
-            $credential = $this->credentials->active($application)
-                ?? throw new BusinessException('应用缺少有效凭证', ApiResponseConstant::CONFLICT);
+            $credential =
+                $this->credentials->active($application) ??
+                throw new BusinessException('应用缺少有效凭证', ApiResponseConstant::CONFLICT);
             $channel = $this->channels->find($channelId);
             if ($channel === null || $channel['deleted_at'] !== null) {
                 throw new BusinessException('通道不存在', ApiResponseConstant::NOT_FOUND);
@@ -66,7 +73,7 @@ final class PaymentChannelTestService extends BaseService
                 clientIp: $actor->clientIp,
                 device: null,
                 param: '',
-                channelId: $channelId
+                channelId: $channelId,
             );
             $created = $this->orders->createLocked($input, $now);
             if (!$created->reused) {
@@ -76,7 +83,7 @@ final class PaymentChannelTestService extends BaseService
                     'payment_channel',
                     $channelId,
                     'created',
-                    ['biz_no' => $created->bizNo, 'amount' => $amount]
+                    ['biz_no' => $created->bizNo, 'amount' => $amount],
                 );
             }
             return $created;

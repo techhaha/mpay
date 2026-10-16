@@ -7,5 +7,8 @@ namespace app\common\validation;
 final class PaymentTypeCode
 {
     public const PATTERN = '/^[a-z][a-z0-9_]{0,31}$/D';
-    public static function valid(mixed $value): bool { return is_string($value) && preg_match(self::PATTERN, $value) === 1; }
+    public static function valid(mixed $value): bool
+    {
+        return is_string($value) && preg_match(self::PATTERN, $value) === 1;
+    }
 }

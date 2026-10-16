@@ -19,11 +19,13 @@ use think\Config;
  */
 final class SystemConfigService extends BaseService
 {
-    public function __construct(private readonly SystemConfigRepository $settings, private readonly SystemConfigValidator $validator,
-        private readonly Config $config, 
-        private readonly ConfigurationAuditService $audit, private readonly Clock $clock)
-    {
-    }
+    public function __construct(
+        private readonly SystemConfigRepository $settings,
+        private readonly SystemConfigValidator $validator,
+        private readonly Config $config,
+        private readonly ConfigurationAuditService $audit,
+        private readonly Clock $clock,
+    ) {}
 
     /** @return array{group:string,version:int,source:string,values:array<string,int|list<string>>} version=0 表示该组尚未保存。 */
     public function read(string $group): array
@@ -33,12 +35,20 @@ final class SystemConfigService extends BaseService
     }
 
     /** @return array<string,int|list<string>> 业务使用方只读取自己消费的组，不批量载入无关配置。 */
-    public function values(string $group): array { return $this->read($group)['values']; }
+    public function values(string $group): array
+    {
+        return $this->read($group)['values'];
+    }
 
     /** @return list<array{group:string,version:int,source:string,values:array<string,int|list<string>>}> 管理页的一致视图，不含部署密钥、环境文件或平台配置。 */
     public function all(): array
     {
-        return $this->transaction(fn (): array => array_map(fn (string $group): array => $this->read($group), $this->validator->groups()));
+        return $this->transaction(
+            fn(): array => array_map(
+                fn(string $group): array => $this->read($group),
+                $this->validator->groups(),
+            ),
+        );
     }
 
     /**
@@ -46,31 +56,75 @@ final class SystemConfigService extends BaseService
      * @return array{group:string,version:int,source:string,values:array<string,int|list<string>>}
      * @throws BusinessException 身份撤销、版本冲突或输入无效。
      */
-    public function save(string $group, int $expectedVersion, array $values, ConfigurationActionContext $actor): array
-    {
+    public function save(
+        string $group,
+        int $expectedVersion,
+        array $values,
+        ConfigurationActionContext $actor,
+    ): array {
         $key = $this->key($group);
         $values = $this->validator->values($group, $values);
-        if ($expectedVersion < 0 || $expectedVersion >= 4294967295) { throw new BusinessException('配置版本无效或已用尽', ApiResponseConstant::CONFLICT); }
+        if ($expectedVersion < 0 || $expectedVersion >= 4294967295) {
+            throw new BusinessException('配置版本无效或已用尽', ApiResponseConstant::CONFLICT);
+        }
 
-        return $this->transaction(function () use ($group, $key, $expectedVersion, $values, $actor): array {
+        return $this->transaction(function () use (
+            $group,
+            $key,
+            $expectedVersion,
+            $values,
+            $actor,
+        ): array {
             $this->audit->authorize($actor);
 
             $row = $this->settings->lock($key);
             $previous = $this->describe($group, $row);
-            if ($previous['version'] !== $expectedVersion) { throw new BusinessException('系统设置已改变，请重新读取后再保存', ApiResponseConstant::STALE_VERSION); }
+            if ($previous['version'] !== $expectedVersion) {
+                throw new BusinessException(
+                    '系统设置已改变，请重新读取后再保存',
+                    ApiResponseConstant::STALE_VERSION,
+                );
+            }
             $changed = $previous['values'] != $values;
             // 首次保存即使等于默认值也显式固定到数据库；之后才可把同值请求记为 unchanged。
-            $version = $row !== null && !$changed ? $expectedVersion
-                : $this->settings->savePublic($key, $row, $values, $this->clock->now()->format('Y-m-d H:i:s'));
-            $this->audit->record($actor, 'system.configuration', 'system_config', $key, $version === $expectedVersion ? 'unchanged' : 'updated',
-                ['config_group' => $group, 'old_version' => $expectedVersion, 'new_version' => $version]);
-            return ['group' => $group, 'version' => $version, 'source' => 'database', 'values' => $values];
+            $version =
+                $row !== null && !$changed
+                    ? $expectedVersion
+                    : $this->settings->savePublic(
+                        $key,
+                        $row,
+                        $values,
+                        $this->clock->now()->format('Y-m-d H:i:s'),
+                    );
+            $this->audit->record(
+                $actor,
+                'system.configuration',
+                'system_config',
+                $key,
+                $version === $expectedVersion ? 'unchanged' : 'updated',
+                [
+                    'config_group' => $group,
+                    'old_version' => $expectedVersion,
+                    'new_version' => $version,
+                ],
+            );
+            return [
+                'group' => $group,
+                'version' => $version,
+                'source' => 'database',
+                'values' => $values,
+            ];
         });
     }
 
     private function key(string $group): string
     {
-        if (!in_array($group, $this->validator->groups(), true)) { throw new BusinessException('不支持的系统设置组', ApiResponseConstant::VALIDATION_FAILED); }
+        if (!in_array($group, $this->validator->groups(), true)) {
+            throw new BusinessException(
+                '不支持的系统设置组',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
         return 'mpay.' . $group;
     }
 
@@ -81,18 +135,29 @@ final class SystemConfigService extends BaseService
             throw new \RuntimeException('系统公开配置存储合同不一致');
         }
         $values = $row === null ? $this->defaults($group) : $row['value_json'];
-        try { $values = $this->validator->values($group, $values); }
-        catch (BusinessException $error) { throw new \RuntimeException('已保存的系统配置或部署默认无效', previous: $error); }
-        return ['group' => $group, 'version' => $row === null ? 0 : (int) $row['version'],
-            'source' => $row === null ? 'deployment' : 'database', 'values' => $values];
+        try {
+            $values = $this->validator->values($group, $values);
+        } catch (BusinessException $error) {
+            throw new \RuntimeException('已保存的系统配置或部署默认无效', previous: $error);
+        }
+        return [
+            'group' => $group,
+            'version' => $row === null ? 0 : (int) $row['version'],
+            'source' => $row === null ? 'deployment' : 'database',
+            'values' => $values,
+        ];
     }
 
     /** @return array<string,mixed> 只列出实际消费的公开默认值，不遍历或导出整个框架 Config。 */
     private function defaults(string $group): array
     {
         return match ($group) {
-            'payment_defaults' => ['order_valid_seconds' => $this->config->get('mpay.order_valid_seconds', 300)],
-            'maintenance' => ['technical_log_days' => $this->config->get('mpay.technical_log_days', 30)],
+            'payment_defaults' => [
+                'order_valid_seconds' => $this->config->get('mpay.order_valid_seconds', 300),
+            ],
+            'maintenance' => [
+                'technical_log_days' => $this->config->get('mpay.technical_log_days', 30),
+            ],
             // 未保存的新装站点直接采用开启默认值，读取页面不补写配置记录。
             'page_display' => ['home_enabled' => 1, 'about_enabled' => 1],
             default => throw new \LogicException('未知系统默认组'),

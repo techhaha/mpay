@@ -10,10 +10,20 @@ final class RefundOrder extends BaseModel
 {
     protected function getOptions(): array
     {
-        return ['table' => 'ma_refund_order', 'schema' => [
-            'id' => 'string', 'refund_no' => 'string', 'pay_no' => 'string', 'request_key' => 'string',
-            'refund_amount' => 'int', 'status' => 'int', 'channel_refund_no' => 'string',
-            'result_code' => 'string', 'created_at' => 'string', 'updated_at' => 'string',
-        ]];
+        return [
+            'table' => 'ma_refund_order',
+            'schema' => [
+                'id' => 'string',
+                'refund_no' => 'string',
+                'pay_no' => 'string',
+                'request_key' => 'string',
+                'refund_amount' => 'int',
+                'status' => 'int',
+                'channel_refund_no' => 'string',
+                'result_code' => 'string',
+                'created_at' => 'string',
+                'updated_at' => 'string',
+            ],
+        ];
     }
 }

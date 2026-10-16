@@ -18,6 +18,5 @@ final readonly class CreatedOrder
         public ?string $payNo,
         public string $accessToken,
         public bool $reused,
-    ) {
-    }
+    ) {}
 }

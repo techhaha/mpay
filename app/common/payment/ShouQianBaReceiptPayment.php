@@ -502,13 +502,24 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         $this->queriedAccounts = [];
         $active = array_fill_keys(array_column($orders, 'channel_revision_id'), true);
         $channels = array_intersect_key($channels, $active);
-        foreach ($this->collectionGroups($channels) as $key => $group) {
-            if ($this->clock->now() >= $deadline) {
-                break;
+        $store = $this->cache->store('receipt');
+        $last = $store->get('shouqianba.rotation');
+        $next = $last;
+        try {
+            foreach ($this->collectionGroups($channels) as $key => $group) {
+                if ($this->clock->now() >= $deadline) {
+                    break;
+                }
+                $result = $this->runAccount($key, $group, $orders, $deadline, false);
+                if ($result !== null) {
+                    $next = $key;
+                    yield $result;
+                }
             }
-            $result = $this->runAccount($key, $group, $orders, $deadline, false);
-            if ($result !== null) {
-                yield $result;
+        } finally {
+            // 保存本批实际处理到的账号；跳过等待中的账号不会推进游标。
+            if ($next !== $last) {
+                $store->set('shouqianba.rotation', $next, 0);
             }
         }
     }
@@ -516,19 +527,29 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
     /** 无订单时也可低频探测；正常查询已验证的状态推迟专门保活。 */
     public function prelogin(array $channels, DateTimeImmutable $deadline): iterable
     {
-        foreach ($this->collectionGroups($channels) as $key => $group) {
-            if ($this->clock->now() >= $deadline) {
-                break;
+        $store = $this->cache->store('receipt');
+        $last = $store->get('shouqianba.rotation');
+        $next = $last;
+        try {
+            foreach ($this->collectionGroups($channels) as $key => $group) {
+                if ($this->clock->now() >= $deadline) {
+                    break;
+                }
+                if (isset($this->queriedAccounts[$key])) {
+                    continue;
+                }
+                $result = $this->runAccount($key, $group, [], $deadline, true);
+                if ($result !== null) {
+                    $next = $key;
+                    yield [
+                        'channel_revision_ids' => $result['channel_revision_ids'],
+                        'error' => $result['error'],
+                    ];
+                }
             }
-            if (isset($this->queriedAccounts[$key])) {
-                continue;
-            }
-            $result = $this->runAccount($key, $group, [], $deadline, true);
-            if ($result !== null) {
-                yield [
-                    'channel_revision_ids' => $result['channel_revision_ids'],
-                    'error' => $result['error'],
-                ];
+        } finally {
+            if ($next !== $last) {
+                $store->set('shouqianba.rotation', $next, 0);
             }
         }
     }
@@ -609,6 +630,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         if (!is_array($state)) {
             $state = [];
         }
+        $persisted = $state;
         $digests = [];
         foreach ($group as $item) {
             $digests += $item['digests'];
@@ -663,7 +685,6 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                 ),
         );
         $state['scope_cursor'] = $index + 1;
-        $store->set('shouqianba.rotation', $key, 0);
         $this->queriedAccounts[$key] = true;
         try {
             // 已验证凭证仍在当前配置中时优先复用；不在不同密码之间反复登录。
@@ -673,7 +694,11 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             } elseif (count($digests) === 1) {
                 $credential = (string) array_key_first($digests);
             } else {
-                throw new ReceiptCollectionException('configuration_conflict');
+                throw new ReceiptCollectionException('configuration_conflict', null, [
+                    'stage' => '合并账号',
+                    'message' =>
+                        '同一登录账号配置了不同密码，且没有可复用的已验证凭证，请核对相关通道',
+                ]);
             }
             $settings['watcher_password'] = $digests[$credential]['watcher_password'];
             if ($known !== $credential) {
@@ -682,7 +707,14 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             $state['credential_digest'] = $credential;
             $session = is_array($state['session'] ?? null) ? $state['session'] : [];
             $state['session'] = $this->client->authenticate($settings, $session, $until);
-            $store->set('shouqianba.account.' . $key, $state, 0);
+            // 登录/刷新改变认证时立即保存；复用未变化的 token 无需在查询前重写。
+            if (
+                ($persisted['session'] ?? null) !== $state['session'] ||
+                ($persisted['credential_digest'] ?? null) !== $state['credential_digest']
+            ) {
+                $store->set('shouqianba.account.' . $key, $state, 0);
+                $persisted = $state;
+            }
             if ($probe) {
                 $from = $now - 600;
                 $to = $now;
@@ -740,12 +772,16 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                     ? $interval
                     : min(300, 30 * 2 ** min(4, $state['failures'] - 1)));
             $state['retry_at'] = $this->clock->now()->getTimestamp() + $delay;
-            $batch['error'] = ['reason' => $error->reasonCode, 'retry_after' => $delay];
+            $batch['error'] =
+                ['reason' => $error->reasonCode, 'retry_after' => $delay] + $error->diagnostic;
         } finally {
             $state['next_query_at'] =
                 $this->clock->now()->getTimestamp() +
                 (int) $this->config->get('receipt.query_interval_seconds', 3);
-            $store->set('shouqianba.account.' . $key, $state, 0);
+            // 最终查询时间、失败等待及范围变化仍逐次持久化，重启不会重置退避。
+            if ($state !== $persisted) {
+                $store->set('shouqianba.account.' . $key, $state, 0);
+            }
         }
         return $batch;
     }
@@ -812,11 +848,17 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                 (!is_int($amount) && !is_string($amount)) ||
                 !preg_match('/^[1-9][0-9]{0,8}$/D', (string) $amount)
             ) {
-                throw new ReceiptCollectionException('protocol_error');
+                throw new ReceiptCollectionException('protocol_error', null, [
+                    'stage' => '解析流水',
+                    'message' => '收钱吧流水的 original_amount 金额字段无效',
+                ]);
             }
             Money::assertRange((int) $amount);
             if (!is_string($row['order_sn'] ?? null) || $row['order_sn'] === '') {
-                throw new ReceiptCollectionException('protocol_error');
+                throw new ReceiptCollectionException('protocol_error', null, [
+                    'stage' => '解析流水',
+                    'message' => '收钱吧流水缺少有效的 order_sn 交易号',
+                ]);
             }
             $paid = $this->paymentTime(
                 $row['finish_time'] ?? ($row['channel_finish_time'] ?? ($row['ctime'] ?? null)),
@@ -826,7 +868,10 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             }
             $remark = $row['reflect'] ?? null;
             if ($remark !== null && !is_string($remark)) {
-                throw new ReceiptCollectionException('protocol_error');
+                throw new ReceiptCollectionException('protocol_error', null, [
+                    'stage' => '解析流水',
+                    'message' => '收钱吧流水的 reflect 备注字段不是文本',
+                ]);
             }
             $remark = preg_match('/(?:^|\D)([0-9]{4})(?:\D|$)/u', $remark ?? '', $code)
                 ? $code[1]
@@ -861,7 +906,10 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $zone)
             : false;
         if (!$date || $date->format('Y-m-d H:i:s') !== $value) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '解析流水',
+                'message' => '收钱吧流水缺少有效的付款时间',
+            ]);
         }
         return $date;
     }

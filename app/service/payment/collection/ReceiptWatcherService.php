@@ -26,6 +26,13 @@ use UnexpectedValueException;
  */
 final class ReceiptWatcherService
 {
+    private const SUMMARY_WRITE_INTERVAL_NANOSECONDS = 10_000_000_000;
+
+    /** @var array<string,array{state:array<string,mixed>,due_at:int}> due_at 为单调时钟纳秒；仅缓冲展示摘要。 */
+    private array $pendingActivity = [];
+    /** @var array<string,int> 最近 10 秒内成功写入的单调时间，过期项随循环清理，不长期积累通道。 */
+    private array $activityWrittenAt = [];
+
     public function __construct(
         private readonly PayOrderRepository $orders,
         private readonly PaymentChannelRepository $channels,
@@ -57,101 +64,87 @@ final class ReceiptWatcherService
             $codes = [...array_slice($codes, $offset + 1), ...array_slice($codes, 0, $offset + 1)];
         }
         $upper = $this->orders->collectionUpperId();
-        foreach ($codes as $code) {
-            if ($counts['queried'] + $counts['verified'] + $counts['failed'] >= $limit) {
-                break;
-            }
-            $plugin = $this->plugins->make($code);
-            if (!($plugin instanceof ReceiptCollectorInterface)) {
-                continue;
-            }
-            $prelogin = $this->plugins->preloginEnabled($plugin);
-            if ($heartbeat !== null) {
-                $heartbeat();
-            }
-            $store->set('watch.plugin_rotation', $code, 0);
-            try {
-                // 保活需要没有待付订单的启用通道；未声明时只读取原单依赖的版本。
-                [$orders, $channels] = $this->input($code, $upper, $prelogin);
-            } catch (ReceiptCollectionException $error) {
-                // 不能拿截断候选匹配，但单个插件超容量也不能阻断其他插件。
-                $this->logger->record(
-                    'receipt.collection',
-                    ['plugin_code' => $code, 'reason_code' => $error->reasonCode],
-                    'warning',
-                );
-                $counts['failed']++;
-                continue;
-            }
-            $deadline = $this->clock
-                ->now()
-                ->modify(
-                    '+' .
-                        (int) $this->config->get('receipt.plugin_budget_seconds', 30) .
-                        ' seconds',
-                );
-            $started = hrtime(true);
-            foreach ($plugin->collect($orders, $channels, $deadline) as $batch) {
-                $covered = $this->batchChannels($batch, $channels);
-                $this->validateError($batch['error'] ?? null);
-                if (
-                    !isset($batch['records'], $batch['limit_reached']) ||
-                    !is_array($batch['records']) ||
-                    !array_is_list($batch['records']) ||
-                    count($batch['records']) > 200 ||
-                    !is_bool($batch['limit_reached']) ||
-                    ($batch['error'] !== null && $batch['records'] !== [])
-                ) {
-                    throw new UnexpectedValueException('采集批次结构无效');
-                }
-                $matched = 0;
-                if ($batch['error'] === null) {
-                    $selected = array_filter(
-                        $orders,
-                        static fn(array $pay): bool => isset($covered[$pay['channel_revision_id']]),
-                    );
-                    if ($selected === []) {
-                        throw new UnexpectedValueException('采集批次没有原单来源');
-                    }
-                    $matched = $this->callbacks->receiveCollected(
-                        $plugin,
-                        $covered,
-                        $selected,
-                        $batch['records'],
-                        bin2hex(random_bytes(16)),
-                    );
-                    $counts['queried']++;
-                    $counts['matched'] += $matched;
-                } else {
-                    $counts['failed']++;
-                }
-                $this->activity(
-                    $code,
-                    $covered,
-                    $batch['error'],
-                    false,
-                    $matched,
-                    $batch['limit_reached'],
-                    $started,
-                );
-                if ($heartbeat !== null) {
-                    $heartbeat();
-                }
+        $next = $last;
+        try {
+            foreach ($codes as $code) {
                 if ($counts['queried'] + $counts['verified'] + $counts['failed'] >= $limit) {
                     break;
                 }
+                $plugin = $this->plugins->make($code);
+                if (!($plugin instanceof ReceiptCollectorInterface)) {
+                    continue;
+                }
+                $prelogin = $this->plugins->preloginEnabled($plugin);
+                if ($heartbeat !== null) {
+                    $heartbeat();
+                }
+                $next = $code;
+                try {
+                    // 保活需要没有待付订单的启用通道；未声明时只读取原单依赖的版本。
+                    [$orders, $channels] = $this->input($code, $upper, $prelogin);
+                } catch (ReceiptCollectionException $error) {
+                    // 不能拿截断候选匹配，但单个插件超容量也不能阻断其他插件。
+                    $this->logger->record(
+                        'receipt.collection',
+                        ['plugin_code' => $code, 'reason_code' => $error->reasonCode],
+                        'warning',
+                    );
+                    $counts['failed']++;
+                    continue;
+                }
+                $deadline = $this->clock
+                    ->now()
+                    ->modify(
+                        '+' .
+                            (int) $this->config->get('receipt.plugin_budget_seconds', 30) .
+                            ' seconds',
+                    );
                 $started = hrtime(true);
-            }
-            if (
-                $prelogin &&
-                $this->clock->now() < $deadline &&
-                $counts['queried'] + $counts['verified'] + $counts['failed'] < $limit
-            ) {
-                foreach ($plugin->prelogin($channels, $deadline) as $batch) {
+                foreach ($plugin->collect($orders, $channels, $deadline) as $batch) {
                     $covered = $this->batchChannels($batch, $channels);
                     $this->validateError($batch['error'] ?? null);
-                    $counts[$batch['error'] === null ? 'verified' : 'failed']++;
-                    $this->activity($code, $covered, $batch['error'], true, 0, false, $started);
+                    if (
+                        !isset($batch['records'], $batch['limit_reached']) ||
+                        !is_array($batch['records']) ||
+                        !array_is_list($batch['records']) ||
+                        count($batch['records']) > 200 ||
+                        !is_bool($batch['limit_reached']) ||
+                        ($batch['error'] !== null && $batch['records'] !== [])
+                    ) {
+                        throw new UnexpectedValueException('采集批次结构无效');
+                    }
+                    $matched = 0;
+                    if ($batch['error'] === null) {
+                        $selected = array_filter(
+                            $orders,
+                            static fn(array $pay): bool => isset(
+                                $covered[$pay['channel_revision_id']],
+                            ),
+                        );
+                        if ($selected === []) {
+                            throw new UnexpectedValueException('采集批次没有原单来源');
+                        }
+                        $matched = $this->callbacks->receiveCollected(
+                            $plugin,
+                            $covered,
+                            $selected,
+                            $batch['records'],
+                            bin2hex(random_bytes(16)),
+                        );
+                        $counts['queried']++;
+                        $counts['matched'] += $matched;
+                    } else {
+                        $counts['failed']++;
+                    }
+                    $this->activity(
+                        $code,
+                        $covered,
+                        $batch['error'],
+                        false,
+                        $matched,
+                        $batch['limit_reached'],
+                        $started,
+                    );
                     if ($heartbeat !== null) {
                         $heartbeat();
                     }
@@ -160,6 +153,33 @@ final class ReceiptWatcherService
                     }
                     $started = hrtime(true);
                 }
+                if (
+                    $prelogin &&
+                    $this->clock->now() < $deadline &&
+                    $counts['queried'] + $counts['verified'] + $counts['failed'] < $limit
+                ) {
+                    foreach ($plugin->prelogin($channels, $deadline) as $batch) {
+                        $covered = $this->batchChannels($batch, $channels);
+                        $this->validateError($batch['error'] ?? null);
+                        $counts[$batch['error'] === null ? 'verified' : 'failed']++;
+                        $this->activity($code, $covered, $batch['error'], true, 0, false, $started);
+                        if ($heartbeat !== null) {
+                            $heartbeat();
+                        }
+                        if (
+                            $counts['queried'] + $counts['verified'] + $counts['failed'] >=
+                            $limit
+                        ) {
+                            break;
+                        }
+                        $started = hrtime(true);
+                    }
+                }
+            }
+        } finally {
+            // 一轮只保存最终轮转位置；无变化时不覆盖文件。
+            if ($next !== $last) {
+                $store->set('watch.plugin_rotation', $next, 0);
             }
         }
         return $counts;
@@ -279,16 +299,62 @@ final class ReceiptWatcherService
                 static fn(mixed $value): bool => is_int($value),
                 'between' => [1, 86400],
             ],
+            'source' => ['string', 'in' => ['platform', 'plugin', 'system']],
+            'stage' => [
+                static fn(mixed $value): bool => is_string($value) &&
+                    mb_check_encoding($value, 'UTF-8') &&
+                    strlen($value) <= 64,
+            ],
+            'platform_code' => [
+                static fn(mixed $value): bool => $value === null ||
+                    (is_string($value) &&
+                        mb_check_encoding($value, 'UTF-8') &&
+                        strlen($value) <= 128),
+            ],
+            'message' => [
+                static fn(mixed $value): bool => is_string($value) &&
+                    mb_check_encoding($value, 'UTF-8') &&
+                    strlen($value) <= 2048,
+            ],
+            'http_status' => [
+                static fn(mixed $value): bool => $value === null ||
+                    (is_int($value) && $value >= 100 && $value <= 599),
+            ],
+            'message_truncated' => [static fn(mixed $value): bool => is_bool($value)],
         ];
         if (
             array_diff(array_keys($error), array_keys($rules)) ||
             !(new Validate())->rule($rules)->failException(false)->check($error)
         ) {
-            throw new UnexpectedValueException('采集错误分类或重试间隔无效');
+            throw new UnexpectedValueException('采集错误分类、重试间隔或诊断字段无效');
         }
     }
 
-    /** 只缓存运行摘要，不保存流水和凭证；后台分别显示查单与登录验证时间。 */
+    /**
+     * 循环心跳及等待期间保存到期摘要；正常退出强制保存剩余摘要。
+     * 网络调用期间不会中断请求刷新展示，业务确认与账号重试状态不经过此缓冲。
+     */
+    public function flushActivity(bool $force = false): void
+    {
+        $now = hrtime(true);
+        foreach ($this->activityWrittenAt as $key => $writtenAt) {
+            if ($now - $writtenAt >= self::SUMMARY_WRITE_INTERVAL_NANOSECONDS) {
+                unset($this->activityWrittenAt[$key]);
+            }
+        }
+        if ($this->pendingActivity === []) {
+            return;
+        }
+        $store = $this->cache->store('receipt');
+        foreach ($this->pendingActivity as $key => $pending) {
+            if (($force || $pending['due_at'] <= $now) && $store->set($key, $pending['state'], 0)) {
+                $this->activityWrittenAt[$key] = $now;
+                unset($this->pendingActivity[$key]);
+            }
+        }
+    }
+
+    /** 普通展示摘要按 10 秒合并；首次、版本/状态变化、失败和确认到账立即写，日志保留原策略。 */
     private function activity(
         string $code,
         array $channels,
@@ -302,11 +368,12 @@ final class ReceiptWatcherService
         $now = $this->clock->now();
         foreach ($channels as $channel) {
             $key = 'collection.summary.' . $channel['api_config_id'];
-            $state = $store->get($key, []);
-            if (
-                !is_array($state) ||
-                ($state['config_version'] ?? null) !== $channel['config_version']
-            ) {
+            $saved = $store->get($key, []);
+            $previous = $this->pendingActivity[$key]['state'] ?? $saved;
+            $previous = is_array($previous) ? $previous : [];
+            $state = $previous;
+            $versionChanged = ($state['config_version'] ?? null) !== $channel['config_version'];
+            if ($versionChanged) {
                 $state = [];
             }
             $state['config_version'] = $channel['config_version'];
@@ -317,6 +384,15 @@ final class ReceiptWatcherService
             $state['reason_code'] = $error['reason'] ?? ($limited ? 'limit_reached' : null);
             $state['last_duration_ms'] = (int) ((hrtime(true) - $started) / 1000000);
             $state['updated_at'] = $now->format('Y-m-d H:i:s');
+            if ($error !== null) {
+                // 仅保存最近一次失败；恢复后保留供排查，不重写成成功或清掉历史错误。
+                $state['last_error'] = array_diff_key($error, ['retry_after' => true]) + [
+                    'occurred_at' => $state['updated_at'],
+                ];
+                $state['recovered_at'] = null;
+            } elseif (isset($state['last_error']) && empty($state['recovered_at'])) {
+                $state['recovered_at'] = $state['updated_at'];
+            }
             $state['retry_count'] = $error === null ? 0 : (int) ($state['retry_count'] ?? 0) + 1;
             $state['next_run_at'] = $now
                 ->modify(
@@ -338,7 +414,28 @@ final class ReceiptWatcherService
                     $state['matched_count'] = $matched;
                 }
             }
-            $store->set($key, $state, 0);
+            $important =
+                $error !== null ||
+                $matched > 0 ||
+                $versionChanged ||
+                ($previous['status'] ?? null) !== $state['status'] ||
+                ($previous['reason_code'] ?? null) !== $state['reason_code'] ||
+                (!$probe && !isset($previous['last_success_at'])) ||
+                ($probe && !isset($previous['last_verified_at']));
+            $tick = hrtime(true);
+            $writtenAt = $this->activityWrittenAt[$key] ?? null;
+            $dueAt = ($writtenAt ?? 0) + self::SUMMARY_WRITE_INTERVAL_NANOSECONDS;
+            if ($important || $writtenAt === null || $dueAt <= $tick) {
+                if ($store->set($key, $state, 0)) {
+                    $this->activityWrittenAt[$key] = $tick;
+                    unset($this->pendingActivity[$key]);
+                } else {
+                    // 未写成功不消耗节流时间，下一次循环继续尝试保存展示状态。
+                    $this->pendingActivity[$key] = ['state' => $state, 'due_at' => $tick];
+                }
+            } else {
+                $this->pendingActivity[$key] = ['state' => $state, 'due_at' => $dueAt];
+            }
             $this->logger->record(
                 $probe ? 'receipt.prelogin' : 'receipt.collection',
                 [
@@ -348,6 +445,12 @@ final class ReceiptWatcherService
                     'channel_id' => $channel['channel_id'],
                     'duration_ms' => $state['last_duration_ms'],
                     'reason_code' => $error['reason'] ?? ($limited ? 'limit_reached' : 'completed'),
+                    'error_source' => $error['source'] ?? null,
+                    'error_stage' => $error['stage'] ?? null,
+                    'platform_code' => $error['platform_code'] ?? null,
+                    'error_message' => $error['message'] ?? null,
+                    'message_truncated' => $error['message_truncated'] ?? false,
+                    'http_status' => $error['http_status'] ?? null,
                 ],
                 $error === null && !$limited ? 'info' : 'warning',
             );

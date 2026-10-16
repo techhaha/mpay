@@ -27,7 +27,10 @@ final class AlipaySigner
                 OPENSSL_ALGO_SHA256,
             )
         ) {
-            throw new \RuntimeException('支付宝请求签名失败');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '请求签名',
+                'message' => '支付宝请求签名失败',
+            ]);
         }
         return base64_encode($signature);
     }
@@ -65,7 +68,11 @@ final class AlipaySigner
             }
             return $content;
         } catch (\JsonException | \UnexpectedValueException) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '验证响应签名',
+                'message' => '支付宝响应缺少有效签名或验签失败，请核对支付宝公钥及接口响应格式',
+                'http_status' => 200,
+            ]);
         }
     }
 
@@ -73,7 +80,10 @@ final class AlipaySigner
     private function key(string $value, bool $private): \OpenSSLAsymmetricKey
     {
         if ($value === '' || strlen($value) > 16384 || str_contains($value, "\0")) {
-            throw new \InvalidArgumentException('支付宝 RSA 密钥格式无效');
+            throw new ReceiptCollectionException('configuration_conflict', null, [
+                'stage' => $private ? '加载应用私钥' : '加载支付宝公钥',
+                'message' => '支付宝 RSA 密钥格式无效',
+            ]);
         }
         $candidates = [];
         if (str_starts_with(trim($value), '-----BEGIN ')) {
@@ -116,7 +126,10 @@ final class AlipaySigner
                 return $key;
             }
         }
-        throw new \InvalidArgumentException('支付宝 RSA 密钥无法加载或位数无效');
+        throw new ReceiptCollectionException('configuration_conflict', null, [
+            'stage' => $private ? '加载应用私钥' : '加载支付宝公钥',
+            'message' => '支付宝 RSA 密钥无法加载或位数无效',
+        ]);
     }
 
     /**

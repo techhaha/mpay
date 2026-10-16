@@ -45,12 +45,16 @@ final class RuntimeDiagnosticRepository
     }
 
     /** @return list<PaymentPluginConf> 显式字段白名单，绝不把 config_json 交给诊断页面。 */
-    public function collectionRows(): array
+    public function collectionRows(array $configurationIds = []): array
     {
         return $this->configurations
             ->alias('c')
             ->join('ma_payment_channel ch', 'ch.api_config_id=c.id')
             ->whereNull('ch.deleted_at')
+            ->when(
+                $configurationIds !== [],
+                static fn($query) => $query->whereIn('c.id', $configurationIds),
+            )
             ->field(['c.id', 'ch.name', 'c.plugin_code', 'ch.enabled', 'c.config_version'])
             ->order('c.id', 'desc')
             ->select()
@@ -58,7 +62,7 @@ final class RuntimeDiagnosticRepository
     }
 
     /** @return array<string,int> 按原通道版本统计待核对订单，不从活动配置推断历史归属。 */
-    public function pendingCollections(string $since): array
+    public function pendingCollections(string $since, array $configurationIds = []): array
     {
         return array_map(
             'intval',
@@ -73,6 +77,10 @@ final class RuntimeDiagnosticRepository
                 ])
                 ->whereNotNull('p.request_at')
                 ->where('p.expire_at', '>=', $since)
+                ->when(
+                    $configurationIds !== [],
+                    static fn($query) => $query->whereIn('r.api_config_id', $configurationIds),
+                )
                 ->group('r.api_config_id')
                 ->column('COUNT(*)', 'r.api_config_id'),
         );

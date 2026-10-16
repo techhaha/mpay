@@ -602,85 +602,96 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
         if ($offset !== false) {
             $keys = [...array_slice($keys, $offset + 1), ...array_slice($keys, 0, $offset + 1)];
         }
-        foreach ($keys as $key) {
-            if ($this->clock->now() >= $deadline) {
-                break;
-            }
-            $state = $store->get('alipay_bill.account.' . $key, []);
-            if (!is_array($state)) {
-                $state = [];
-            }
-            $now = $this->clock->now()->getTimestamp();
-            if ((int) ($state['next_query_at'] ?? 0) > $now) {
-                continue;
-            }
-            $group = $groups[$key];
-            $store->set('alipay_bill.rotation', $key, 0);
-            $selected = array_filter(
-                $orders,
-                static fn(array $order): bool => isset(
-                    $group['channels'][$order['channel_revision_id']],
-                ),
-            );
-            $from = min(
-                array_map(
-                    static fn(array $order): int => strtotime($order['request_at']),
-                    $selected,
-                ),
-            );
-            $to = min(
-                $now,
-                max(
+        $next = $last;
+        try {
+            foreach ($keys as $key) {
+                if ($this->clock->now() >= $deadline) {
+                    break;
+                }
+                $state = $store->get('alipay_bill.account.' . $key, []);
+                if (!is_array($state)) {
+                    $state = [];
+                }
+                $now = $this->clock->now()->getTimestamp();
+                if ((int) ($state['next_query_at'] ?? 0) > $now) {
+                    continue;
+                }
+                $group = $groups[$key];
+                $next = $key;
+                $selected = array_filter(
+                    $orders,
+                    static fn(array $order): bool => isset(
+                        $group['channels'][$order['channel_revision_id']],
+                    ),
+                );
+                $from = min(
                     array_map(
-                        static fn(array $order): int => strtotime($order['expire_at']),
+                        static fn(array $order): int => strtotime($order['request_at']),
                         $selected,
                     ),
-                ),
-            );
-            $until = min(
-                $deadline,
-                $this->clock
-                    ->now()
-                    ->modify(
-                        '+' .
-                            (int) $this->config->get('receipt.account_budget_seconds', 15) .
-                            ' seconds',
-                    ),
-            );
-            $batch = [
-                'channel_revision_ids' => array_map('strval', array_keys($group['channels'])),
-                'records' => [],
-                'limit_reached' => false,
-                'error' => null,
-            ];
-            try {
-                $settings = array_intersect_key(
-                    $group['settings'],
-                    array_flip([
-                        'app_id',
-                        'private_key',
-                        'alipay_public_key',
-                        'bill_user_id',
-                        'app_auth_token',
-                    ]),
                 );
-                if (($settings['app_auth_token'] ?? '') === '') {
-                    unset($settings['app_auth_token']);
+                $to = min(
+                    $now,
+                    max(
+                        array_map(
+                            static fn(array $order): int => strtotime($order['expire_at']),
+                            $selected,
+                        ),
+                    ),
+                );
+                $until = min(
+                    $deadline,
+                    $this->clock
+                        ->now()
+                        ->modify(
+                            '+' .
+                                (int) $this->config->get('receipt.account_budget_seconds', 15) .
+                                ' seconds',
+                        ),
+                );
+                $batch = [
+                    'channel_revision_ids' => array_map('strval', array_keys($group['channels'])),
+                    'records' => [],
+                    'limit_reached' => false,
+                    'error' => null,
+                ];
+                try {
+                    $settings = array_intersect_key(
+                        $group['settings'],
+                        array_flip([
+                            'app_id',
+                            'private_key',
+                            'alipay_public_key',
+                            'bill_user_id',
+                            'app_auth_token',
+                        ]),
+                    );
+                    if (($settings['app_auth_token'] ?? '') === '') {
+                        unset($settings['app_auth_token']);
+                    }
+                    $data = $this->client->query($settings, $from, $to, $until);
+                    $batch['records'] = $this->normalizeBill($data, ['from' => $from, 'to' => $to]);
+                    $batch['limit_reached'] = $data['limit_reached'];
+                    $state['failures'] = 0;
+                    $delay = (int) $this->config->get('receipt.query_interval_seconds', 3);
+                } catch (ReceiptCollectionException $error) {
+                    $state['failures'] = min(10, (int) ($state['failures'] ?? 0) + 1);
+                    $delay =
+                        $error->retryAfterSeconds ??
+                        min(300, 30 * 2 ** min(4, $state['failures'] - 1));
+                    $batch['error'] =
+                        ['reason' => $error->reasonCode, 'retry_after' => $delay] +
+                        $error->diagnostic;
                 }
-                $data = $this->client->query($settings, $from, $to, $until);
-                $batch['records'] = $this->normalizeBill($data, ['from' => $from, 'to' => $to]);
-                $batch['limit_reached'] = $data['limit_reached'];
-                $state['failures'] = 0;
-                $delay = (int) $this->config->get('receipt.query_interval_seconds', 3);
-            } catch (ReceiptCollectionException $error) {
-                $state['failures'] = min(10, (int) ($state['failures'] ?? 0) + 1);
-                $delay =
-                    $error->retryAfterSeconds ?? min(300, 30 * 2 ** min(4, $state['failures'] - 1));
-                $batch['error'] = ['reason' => $error->reasonCode, 'retry_after' => $delay];
+                $state['next_query_at'] = $this->clock->now()->getTimestamp() + $delay;
+                $store->set('alipay_bill.account.' . $key, $state, 0);
+                yield $batch;
             }
-            $state['next_query_at'] = $this->clock->now()->getTimestamp() + $delay;
-            $store->set('alipay_bill.account.' . $key, $state, 0);
-            yield $batch;
+        } finally {
+            // 一轮只保存最终轮转位置；无变化时不覆盖文件。
+            if ($next !== $last) {
+                $store->set('alipay_bill.rotation', $next, 0);
+            }
         }
     }
 
@@ -703,7 +714,10 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
                 new DateTimeZone('Asia/Shanghai'),
             );
             if (!$paid || $paid->format('Y-m-d H:i:s') !== $entry['booked_at']) {
-                throw new ReceiptCollectionException('protocol_error');
+                throw new ReceiptCollectionException('protocol_error', null, [
+                    'stage' => '解析流水',
+                    'message' => '支付宝流水的入账时间格式无效',
+                ]);
             }
             if ($paid->getTimestamp() < $window['from'] || $paid->getTimestamp() > $window['to']) {
                 continue;

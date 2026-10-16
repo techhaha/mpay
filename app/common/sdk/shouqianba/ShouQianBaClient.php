@@ -128,11 +128,17 @@ final class ShouQianBaClient
             !array_is_list($data['records']) ||
             count($data['records']) > $limit
         ) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '解析流水',
+                'message' => '收钱吧流水响应的 records 不是列表或超过本次查询条数',
+            ]);
         }
         $total = $this->integer($data['total'] ?? null);
         if ($total < count($data['records'])) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '解析流水',
+                'message' => '收钱吧流水总数小于本次返回的记录数',
+            ]);
         }
         return [
             'rows' => $data['records'],
@@ -197,6 +203,7 @@ final class ShouQianBaClient
             ],
             $deadline,
             ['sub_appid' => 'sqb'],
+            [$password],
         );
         return [
             'token' => $this->text($data['mchUserTokenInfo']['token'] ?? null),
@@ -211,7 +218,10 @@ final class ShouQianBaClient
         $info = $this->request('GET', '/api/login/ucUser/getLoginInfo', $query, null, $deadline);
         $merchants = $info['loginUserInfos'] ?? null;
         if (!is_array($merchants) || !array_is_list($merchants) || $merchants === []) {
-            throw new ReceiptCollectionException('scope_mismatch');
+            throw new ReceiptCollectionException('scope_mismatch', null, [
+                'stage' => '读取商户列表',
+                'message' => '登录成功，但平台未返回可用商户列表',
+            ]);
         }
         $account = (string) ($settings['receipt_account_no'] ?? '');
         $name = (string) ($settings['receipt_merchant_name'] ?? '');
@@ -245,7 +255,10 @@ final class ShouQianBaClient
             }),
         );
         if (count($matches) !== 1) {
-            throw new ReceiptCollectionException('scope_mismatch');
+            throw new ReceiptCollectionException('scope_mismatch', null, [
+                'stage' => '选择商户',
+                'message' => '配置的商户信息未能唯一对应登录账号下的商户',
+            ]);
         }
         $target = $matches[0];
         // 以下别名来自 V2 已明确列出的同接口版本字段，不跨平台泛化猜测。
@@ -274,7 +287,7 @@ final class ShouQianBaClient
                 $deadline,
             );
         } catch (ReceiptCollectionException $error) {
-            // 50105 表示尚未选择商户，可继续选择；认证、网络及协议错误仍交给插件重试。
+            // 此商户接口的 50105 表示尚未选择商户，可继续选择；登录接口同码不能走这里。
             if ($error->reasonCode !== 'scope_mismatch') {
                 throw $error;
             }
@@ -295,7 +308,10 @@ final class ShouQianBaClient
                 $deadline,
             );
             if (!$this->currentMerchantMatches($current, $merchantSn, $userId)) {
-                throw new ReceiptCollectionException('scope_mismatch');
+                throw new ReceiptCollectionException('scope_mismatch', null, [
+                    'stage' => '核对当前商户',
+                    'message' => '切换后平台返回的当前商户与所选商户不一致',
+                ]);
             }
         }
         $stores = $this->request(
@@ -306,7 +322,10 @@ final class ShouQianBaClient
             $deadline,
         );
         if (!is_array($stores['records'] ?? null) || !array_is_list($stores['records'])) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '读取门店',
+                'message' => '收钱吧门店响应缺少 records 列表',
+            ]);
         }
         $scopes = [];
         foreach ($stores['records'] as $store) {
@@ -351,7 +370,10 @@ final class ShouQianBaClient
             return ['merchant_sn' => $merchantSn, 'merchant_name' => $name];
         }
         if (count($scopes) !== 1) {
-            throw new ReceiptCollectionException('scope_mismatch');
+            throw new ReceiptCollectionException('scope_mismatch', null, [
+                'stage' => '匹配门店',
+                'message' => '配置的收款账号、商户名称或终端范围未能唯一对应平台门店',
+            ]);
         }
         return $scopes[0];
     }
@@ -368,7 +390,7 @@ final class ShouQianBaClient
             (!isset($trade['merchant_user_id']) || (string) $trade['merchant_user_id'] === $userId);
     }
 
-    /** 固定官方站点和接口路径；Guzzle PSR-7 请求交给现有传输，响应错误只保留分类，不保留秘密报文。 */
+    /** 固定平台接口；只提取 code/msg 诊断并移除本次凭证，不把响应正文或登录态交给运行页面。 */
     private function request(
         string $method,
         string $path,
@@ -376,7 +398,51 @@ final class ShouQianBaClient
         ?array $body,
         DateTimeImmutable $deadline,
         array $headers = [],
+        array $secrets = [],
     ): array {
+        $stage = match ($path) {
+            '/api/login/ucUser/login' => '登录',
+            '/api/login/ucUser/refreshToken' => '刷新登录态',
+            '/api/login/ucUser/getLoginInfo' => '读取商户列表',
+            '/api/login/ucUser/getCurrentUser' => '核对当前商户',
+            '/api/login/ucUser/chooseLoginUser' => '选择商户',
+            '/api/findStores' => '读取门店',
+            '/api/transaction/findTransactions' => '查询流水',
+            default => '平台请求',
+        };
+        $secrets = array_filter(
+            [
+                ...$secrets,
+                $query['token'] ?? '',
+                $body['username'] ?? '',
+                $body['password'] ?? '',
+                $headers['Authorization'] ?? '',
+            ],
+            static fn(string $value): bool => $value !== '',
+        );
+        $failure = static function (
+            string $reason,
+            string $message,
+            string $source = 'plugin',
+            ?int $status = null,
+            ?string $code = null,
+        ) use ($stage, $secrets): ReceiptCollectionException {
+            return new ReceiptCollectionException(
+                $reason,
+                null,
+                array_filter(
+                    [
+                        'source' => $source,
+                        'stage' => $stage,
+                        'platform_code' =>
+                            $code === null ? null : str_replace($secrets, '[已隐藏]', $code),
+                        'message' => str_replace($secrets, '[已隐藏]', $message),
+                        'http_status' => $status,
+                    ],
+                    static fn($value): bool => $value !== null,
+                ),
+            );
+        };
         $headers += [
             'Accept' => 'application/json',
             'Content-Type' => 'application/json;charset=UTF-8',
@@ -403,43 +469,70 @@ final class ShouQianBaClient
                 4194304,
             );
         } catch (HttpRequestException $error) {
-            throw new ReceiptCollectionException(
+            throw $failure(
                 $error->reasonCode === 'deadline_elapsed' ? 'budget_exhausted' : 'network_error',
+                '平台请求未完成（' . $error->reasonCode . '）',
+                'system',
             );
         }
-        if (in_array($response->getStatusCode(), [401, 403], true)) {
-            throw new ReceiptCollectionException('authentication_expired');
-        }
-        if ($response->getStatusCode() === 429) {
-            throw new ReceiptCollectionException('rate_limited');
-        }
-        if ($response->getStatusCode() !== 200) {
-            throw new ReceiptCollectionException('network_error');
-        }
+        $status = $response->getStatusCode();
         try {
             $data = json_decode((string) $response->getBody(), true, 64, JSON_THROW_ON_ERROR);
         } catch (JsonException) {
-            throw new ReceiptCollectionException('protocol_error');
+            $data = null;
+        }
+        $code =
+            is_string($data['code'] ?? null) || is_int($data['code'] ?? null)
+                ? (string) $data['code']
+                : null;
+        $message = is_string($data['msg'] ?? null) ? $data['msg'] : '';
+        if ($status !== 200) {
+            $reason = match ($status) {
+                401, 403 => 'authentication_expired',
+                429 => 'rate_limited',
+                default => 'network_error',
+            };
+            throw $failure(
+                $reason,
+                $message !== '' ? $message : '平台返回 HTTP ' . $status,
+                'platform',
+                $status,
+                $code,
+            );
         }
         if (!is_array($data) || array_is_list($data)) {
-            throw new ReceiptCollectionException('protocol_error');
-        }
-        $code = (string) ($data['code'] ?? '');
-        if (in_array($code, ['50201', '50210', '50211', '50212'], true)) {
-            throw new ReceiptCollectionException('authentication_expired');
-        }
-        if ($code === '50105') {
-            throw new ReceiptCollectionException('scope_mismatch');
+            throw $failure('protocol_error', '平台响应不是有效的 JSON 对象', 'plugin', $status);
         }
         if (!in_array($code, ['50000', '10000'], true)) {
-            throw new ReceiptCollectionException('protocol_error');
+            // 同一个 50105 在登录接口表示认证拒绝，在商户接口表示上下文未选择。
+            $reason = match (true) {
+                in_array($code, ['50201', '50210', '50211', '50212'], true)
+                    => 'authentication_expired',
+                $code === '50105' && $path === '/api/login/ucUser/login'
+                    => 'authentication_expired',
+                $code === '50105' => 'scope_mismatch',
+                default => 'protocol_error',
+            };
+            throw $failure(
+                $reason,
+                $message !== '' ? $message : '平台未提供错误说明',
+                'platform',
+                $status,
+                $code,
+            );
         }
         // 选择商户是动作应答，成功时 data 可以是字符串；归属由后续 getCurrentUser 核对。
         if ($path === '/api/login/ucUser/chooseLoginUser') {
             return [];
         }
         if (!is_array($data['data'] ?? null)) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw $failure(
+                'protocol_error',
+                '平台成功响应缺少有效的 data 数据',
+                'plugin',
+                $status,
+                $code,
+            );
         }
         return $data['data'];
     }
@@ -457,7 +550,10 @@ final class ShouQianBaClient
             }
         }
         if ($required) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '解析商户资料',
+                'message' => '收钱吧响应缺少必需的商户标识字段',
+            ]);
         }
         return '';
     }
@@ -465,7 +561,10 @@ final class ShouQianBaClient
     private function text(mixed $value): string
     {
         if (!is_string($value) || $value === '' || strlen($value) > 8192) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '读取认证信息',
+                'message' => '收钱吧认证信息中必需的文本字段为空、类型错误或过长',
+            ]);
         }
         return $value;
     }
@@ -476,7 +575,10 @@ final class ShouQianBaClient
             (!is_int($value) && !is_string($value)) ||
             !preg_match('/^(0|[1-9][0-9]{0,12})$/D', (string) $value)
         ) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '解析平台响应',
+                'message' => '收钱吧响应的条数或认证有效期不是有效整数',
+            ]);
         }
         return (int) $value;
     }

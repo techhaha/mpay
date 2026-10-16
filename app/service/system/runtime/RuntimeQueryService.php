@@ -21,7 +21,7 @@ final class RuntimeQueryService extends BaseService
 {
     private const STATUSES = ReceiptRuntimeConstant::LABELS;
     private const REASONS = [
-        'configuration_conflict' => '同一登录账号的认证配置不一致，请核对相关通道',
+        'configuration_conflict' => '插件配置不符合采集要求，请查看具体错误说明',
         'authentication_expired' => '平台明确拒绝认证',
         'network_error' => '网络请求未完成',
         'rate_limited' => '平台要求降低请求频率',
@@ -116,7 +116,9 @@ final class RuntimeQueryService extends BaseService
         }
         $items = array_values(
             array_filter(
-                $this->collectionItems(),
+                $this->collectionItems(
+                    isset($filters['configuration_id']) ? [$filters['configuration_id']] : [],
+                ),
                 static fn(array $item): bool => (!isset($filters['configuration_id']) ||
                     $item['configuration_id'] === $filters['configuration_id']) &&
                     (!isset($filters['status']) || (string) $item['status'] === $filters['status']),
@@ -140,9 +142,17 @@ final class RuntimeQueryService extends BaseService
         return $counts;
     }
 
-    private function collectionItems(): array
+    /** 通道页批量复用同一只读视图，避免逐行查询订单或复制状态解释。 */
+    public function forConfigurations(array $ids): array
     {
-        $rows = $this->records->collectionRows();
+        return $ids === []
+            ? []
+            : array_column($this->collectionItems($ids), null, 'configuration_id');
+    }
+
+    private function collectionItems(array $configurationIds = []): array
+    {
+        $rows = $this->records->collectionRows($configurationIds);
         $pending = $this->records->pendingCollections(
             $this->clock
                 ->now()
@@ -150,6 +160,7 @@ final class RuntimeQueryService extends BaseService
                     '-' . (int) $this->config->get('receipt.late_check_seconds', 300) . ' seconds',
                 )
                 ->format('Y-m-d H:i:s'),
+            $configurationIds,
         );
         $store = $this->cache->store('receipt');
         $installed = array_fill_keys($this->plugins->codes(), true);
@@ -193,6 +204,27 @@ final class RuntimeQueryService extends BaseService
             ) {
                 $label = '暂无待核对订单';
             }
+            $lastError = is_array($state['last_error'] ?? null) ? $state['last_error'] : null;
+            // 只展示已声明的诊断字段，不把插件私有账号缓存或完整平台响应暴露给页面。
+            $diagnostic =
+                $lastError === null
+                    ? null
+                    : [
+                        'source_label' => match ($lastError['source'] ?? 'plugin') {
+                            'platform' => '第三方平台',
+                            'system' => '系统',
+                            default => '插件',
+                        },
+                        'stage' => $lastError['stage'] ?? null,
+                        'platform_code' => $lastError['platform_code'] ?? null,
+                        'message' =>
+                            ($lastError['message'] ?? '') !== ''
+                                ? $lastError['message']
+                                : self::REASONS[$lastError['reason']] ?? '请核对技术日志',
+                        'http_status' => $lastError['http_status'] ?? null,
+                        'message_truncated' => $lastError['message_truncated'] ?? false,
+                        'occurred_at' => $lastError['occurred_at'],
+                    ];
             $items[] = [
                 'configuration_id' => (string) $row['id'],
                 'name' => $row['name'],
@@ -201,6 +233,9 @@ final class RuntimeQueryService extends BaseService
                 'configuration_version' => (int) $row['config_version'],
                 'status' => $status,
                 'status_label' => $label,
+                'collector' => $collectors[$code],
+                'last_error' => $diagnostic,
+                'recovered_at' => $state['recovered_at'] ?? null,
                 'pending_count' => $count,
                 'reason_label' => isset($state['reason_code'])
                     ? self::REASONS[$state['reason_code']] ?? '请核对技术日志'

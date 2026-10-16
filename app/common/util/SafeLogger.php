@@ -13,7 +13,7 @@ use think\db\exception\PDOException as DatabaseException;
 use think\Log;
 
 /**
- * 技术日志的结构化白名单与受限异常诊断；不保存请求体、异常原文、SQL、参数或任意上游文本。
+ * 技术日志的结构化白名单与受限异常诊断；平台说明仅接受 SDK 脱敏后的采集诊断，不保存完整报文、SQL 或凭证。
  * 文件日志故障只作有限降级，不能代替或跳过交易流水、通知责任和管理员审计的持久化。
  */
 final class SafeLogger
@@ -38,6 +38,11 @@ final class SafeLogger
         'line',
         'http_status',
         'duration_ms',
+        'error_source',
+        'error_stage',
+        'platform_code',
+        'error_message',
+        'message_truncated',
     ];
     private const SQLSTATES = [
         '23000',
@@ -98,9 +103,13 @@ final class SafeLogger
             array_intersect_key($context, array_flip(self::FIELDS)),
             static fn(mixed $value): bool => is_scalar($value) || $value === null,
         );
-        foreach ($safe as &$value) {
-            if (is_string($value) && strlen($value) > 512) {
-                $value = mb_strcut($value, 0, 512, 'UTF-8');
+        foreach ($safe as $field => &$value) {
+            $maximum = $field === 'error_message' ? 2048 : 512;
+            if (is_string($value) && strlen($value) > $maximum) {
+                $value = mb_strcut($value, 0, $maximum, 'UTF-8');
+                if ($field === 'error_message') {
+                    $safe['message_truncated'] = true;
+                }
             }
         }
         unset($value);

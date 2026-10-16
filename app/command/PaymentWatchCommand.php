@@ -42,6 +42,7 @@ final class PaymentWatchCommand extends Command
         $control = new CliWorkerControl();
         $owner = bin2hex(random_bytes(16));
         $startedHeartbeat = false;
+        $watcher = null;
         try {
             $once = (bool) $input->getOption('once');
             $limit = $this->integerOption($input, 'limit', 1, 1000);
@@ -70,12 +71,10 @@ final class PaymentWatchCommand extends Command
                 }
                 $control->heartbeat($this->app->getRuntimePath(), 'watch', $owner, true);
                 $startedHeartbeat = true;
-                $heartbeat = fn() => $control->heartbeat(
-                    $this->app->getRuntimePath(),
-                    'watch',
-                    $owner,
-                    true,
-                );
+                $heartbeat = function () use ($control, $owner, $watcher): void {
+                    $control->heartbeat($this->app->getRuntimePath(), 'watch', $owner, true);
+                    $watcher->flushActivity();
+                };
                 $round = $watcher->runRound($limit, $heartbeat);
                 foreach ($round as $name => $count) {
                     $counts[$name] += $count;
@@ -106,6 +105,7 @@ final class PaymentWatchCommand extends Command
                 if ($startedHeartbeat) {
                     $control->heartbeat($this->app->getRuntimePath(), 'watch', $owner, false);
                 }
+                $watcher?->flushActivity(true);
             } finally {
                 $control->restore();
             }

@@ -10,6 +10,8 @@ use RuntimeException;
 /** CLI 进程的安全退出、短等待和进程心跳；心跳只证明本地工作者运行，不证明任何设备在线。 */
 final class CliWorkerControl
 {
+    private const HEARTBEAT_INTERVAL_NANOSECONDS = 10_000_000_000;
+
     /** @var resource|null 同一运行目录内的角色锁，由操作系统在进程退出时释放。 */
     private $roleLock = null;
     private bool $stopping = false;
@@ -17,6 +19,10 @@ final class CliWorkerControl
     private bool $previousAsync = false;
     /** @var array<int,callable|int> 被临时替换的信号处理器，退出时恢复。 */
     private array $previousHandlers = [];
+    /** 同一进程的重复活动上报只保留时间间隔，启停变化始终立即写入。 */
+    private ?string $heartbeatPath = null;
+    private int $heartbeatWrittenAt = 0;
+    private bool $heartbeatRunning = false;
 
     /**
      * 信号处理是可选增强；不依赖 fork/posix/exec，也不要求为常驻启动解除禁用函数。
@@ -88,6 +94,7 @@ final class CliWorkerControl
 
     /**
      * 每进程独立文件，避免多个工作者互相覆盖；读取端需使用共享文件锁。
+     * 正常活动每 10 秒最多写一次；首次和退出立即写。节流不影响角色锁或业务循环。
      * runtime 中的非敏感运行证据，不进入源码或支付事实，可供 doctor/守护排障。
      */
     public function heartbeat(string $runtimePath, string $role, string $owner, bool $running): void
@@ -96,10 +103,19 @@ final class CliWorkerControl
             throw new InvalidArgumentException('工作者心跳身份无效');
         }
         $directory = rtrim($runtimePath, '/\\') . '/workers';
+        $path = $directory . '/' . $role . '-' . $owner . '.json';
+        $now = hrtime(true);
+        if (
+            $running &&
+            $this->heartbeatRunning &&
+            $this->heartbeatPath === $path &&
+            $now - $this->heartbeatWrittenAt < self::HEARTBEAT_INTERVAL_NANOSECONDS
+        ) {
+            return;
+        }
         if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
             throw new RuntimeException('无法创建工作者心跳目录');
         }
-        $path = $directory . '/' . $role . '-' . $owner . '.json';
         $stream = fopen($path, 'c+b');
         if ($stream === false) {
             throw new RuntimeException('无法写入工作者心跳');
@@ -125,6 +141,9 @@ final class CliWorkerControl
             ) {
                 throw new RuntimeException('工作者心跳未完整写入');
             }
+            $this->heartbeatPath = $path;
+            $this->heartbeatWrittenAt = $now;
+            $this->heartbeatRunning = $running;
         } finally {
             fclose($stream);
         }

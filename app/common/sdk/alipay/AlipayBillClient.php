@@ -56,10 +56,17 @@ final class AlipayBillClient
             throw new InvalidArgumentException('账单查询窗口无效');
         }
         if ($deadline <= $now) {
-            throw new ReceiptCollectionException('budget_exhausted');
+            throw new ReceiptCollectionException('budget_exhausted', null, [
+                'source' => 'system',
+                'stage' => '查询准备',
+                'message' => '本轮采集预算已用完，尚未请求支付宝',
+            ]);
         }
         if ($fromTimestamp < $now->modify('-1 year')->getTimestamp()) {
-            throw new ReceiptCollectionException('history_gap');
+            throw new ReceiptCollectionException('history_gap', null, [
+                'stage' => '查询准备',
+                'message' => '订单时间超出支付宝账单查询支持的一年范围',
+            ]);
         }
         if (
             array_diff(array_keys($account), [
@@ -136,19 +143,38 @@ final class AlipayBillClient
         } catch (HttpRequestException $error) {
             throw new ReceiptCollectionException(
                 $error->reasonCode === 'deadline_elapsed' ? 'budget_exhausted' : 'network_error',
+                null,
+                [
+                    'source' => 'system',
+                    'stage' => '查询流水',
+                    'message' => '平台请求未完成（' . $error->reasonCode . '）',
+                ],
             );
         }
-        if ($response->getStatusCode() === 429) {
-            throw new ReceiptCollectionException('rate_limited');
-        }
         if ($response->getStatusCode() !== 200) {
-            throw new ReceiptCollectionException('network_error');
+            throw new ReceiptCollectionException(
+                $response->getStatusCode() === 429 ? 'rate_limited' : 'network_error',
+                null,
+                [
+                    'source' => 'platform',
+                    'stage' => '查询流水',
+                    'http_status' => $response->getStatusCode(),
+                    'message' => '平台返回 HTTP ' . $response->getStatusCode(),
+                ],
+            );
         }
         $body = $this->signer->response(
             (string) $response->getBody(),
             $account['alipay_public_key'],
         );
-        return self::decode($body);
+        return self::decode(
+            $body,
+            array_filter([
+                $account['private_key'],
+                $account['alipay_public_key'],
+                $account['app_auth_token'] ?? '',
+            ]),
+        );
     }
 
     /**
@@ -157,16 +183,33 @@ final class AlipayBillClient
      *
      * @throws ReceiptCollectionException 结构矛盾；不能把失败伪装成查询成功。
      */
-    private static function decode(string $body): array
+    private static function decode(string $body, array $secrets): array
     {
         try {
             if (strlen($body) > 4194304) {
                 throw new UnexpectedValueException();
             }
             $value = json_decode($body, false, 64, JSON_THROW_ON_ERROR);
-            // 已验签的业务对象只解码一次，状态和明细共同校验；错误不携带平台原文。
-            if (!($value instanceof stdClass) || ($value->code ?? null) !== '10000') {
+            // 先验证平台错误结构；拒绝信息只取业务码和说明，不保留响应正文。
+            if (!($value instanceof stdClass) || !is_string($value->code ?? null)) {
                 throw new UnexpectedValueException();
+            }
+            if ($value->code !== '10000') {
+                $messages = [];
+                foreach (['msg', 'sub_msg'] as $field) {
+                    if (is_string($value->{$field} ?? null) && $value->{$field} !== '') {
+                        $messages[] = $value->{$field};
+                    }
+                }
+                throw new ReceiptCollectionException('protocol_error', null, [
+                    'source' => 'platform',
+                    'stage' => '查询流水',
+                    'platform_code' =>
+                        $value->code .
+                        (is_string($value->sub_code ?? null) ? ' / ' . $value->sub_code : ''),
+                    'message' => str_replace($secrets, '[已隐藏]', implode('；', $messages)),
+                    'http_status' => 200,
+                ]);
             }
             $page = self::integer($value->page_no ?? null, 1, 1000000);
             $size = self::integer($value->page_size ?? null, 1, 2000);
@@ -214,7 +257,11 @@ final class AlipayBillClient
                 'limit_reached' => $total > $size || count($rows) === $size,
             ];
         } catch (JsonException | UnexpectedValueException) {
-            throw new ReceiptCollectionException('protocol_error');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '解析流水',
+                'message' => '支付宝账单响应的分页或明细字段不符合接口约定',
+                'http_status' => 200,
+            ]);
         }
     }
 

@@ -13,6 +13,7 @@ use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\receipt\ReceiptScopeRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\routing\DefaultRoutingService;
+use app\service\system\runtime\RuntimeQueryService;
 use RuntimeException;
 
 /**
@@ -28,6 +29,7 @@ final class PaymentConfigurationQueryService extends BaseService
         private readonly PaymentPluginFactoryService $plugins,
         private readonly PaymentCatalogService $management,
         private readonly DefaultRoutingService $defaults,
+        private readonly RuntimeQueryService $runtime,
     ) {}
 
     /** @return list<array<string,mixed>> 已同步数据库定义；未同步的新文件通过插件管理刷新后出现。 */
@@ -44,6 +46,9 @@ final class PaymentConfigurationQueryService extends BaseService
     {
         return $this->transaction(function () use ($filters, $page, $limit): array {
             $rows = $this->channels->adminPage($filters, $page, $limit);
+            $activity = $this->runtime->forConfigurations(
+                array_map(static fn($row): string => $row['api_config_id'], $rows['items']),
+            );
             $items = [];
             foreach ($rows['items'] as $row) {
                 $item = [
@@ -52,6 +57,7 @@ final class PaymentConfigurationQueryService extends BaseService
                     'plugin_code' => $row['plugin_code'],
                     'enabled' => (int) $row['enabled'] === 1,
                     'updated_at' => $row['updated_at'],
+                    'collection' => $activity[$row['api_config_id']] ?? null,
                 ];
                 $items[] = $item + [
                     'configuration_id' => $row['api_config_id'],
@@ -137,12 +143,16 @@ final class PaymentConfigurationQueryService extends BaseService
             $plugin = $this->plugins->make($configuration['plugin_code']);
             $push = $plugin instanceof ChannelNotifyInterface;
             $polling = $plugin instanceof ReceiptCollectorInterface;
+            $activity = $polling
+                ? $this->runtime->forConfigurations([$channel['api_config_id']])
+                : [];
             return [
                 'id' => $id,
                 'plugin_code' => $channel['plugin_code'],
                 'configuration_id' => $channel['api_config_id'],
                 'configuration_version' => (int) $configuration['config_version'],
                 'enabled' => (int) $channel['enabled'] === 1,
+                'collection' => $activity[$channel['api_config_id']] ?? null,
                 // 只返回通知路径；后台按浏览器当前站点展示完整地址，不存入通道快照。
                 'notification' => [
                     'mode' => $push ? 'push' : ($polling ? 'polling' : 'unavailable'),

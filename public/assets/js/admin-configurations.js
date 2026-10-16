@@ -23,6 +23,8 @@ MpayAdmin.ready(function () {
             {title:'支付方式',width:135,unresize:true,align:'center',templet:row=>row.pay_types.map(UI.payment).join(' ')},
             {title:'插件',minWidth:190,templet:row=>E(pluginName(row.plugin_code))},
             {title:'状态',width:110,align:'center',templet:row=>UI.badge(row.enabled?'已启用':'已停用',row.enabled?'green':'gray')},
+            {title:'采集情况',minWidth:230,templet:row=>!row.collection?.collector?'通知接收':UI.state(row.collection.status_label)
+                +(row.collection.last_error?'<span class="admin-row-sub">'+(row.collection.recovered_at?'已恢复 · ':'')+E(row.collection.last_error.message.slice(0,80))+'</span>':'')},
             {title:'操作',width:240,align:'center',fixed:'right',templet:()=>'<div class="admin-inline-actions"><button type="button" class="admin-link" lay-event="detail">查看</button><button type="button" class="admin-link" lay-event="edit">编辑</button><button type="button" class="admin-link" lay-event="configure">配置</button><button type="button" class="admin-link admin-channel-more" lay-event="more">更多 '+UI.icon('down')+'</button></div>'}
         ]],emptyText:channels.length?'没有符合条件的通道':'暂无收款通道'});
         document.querySelector('#configuration-channels + .layui-table-view').hidden=!channels.length;
@@ -234,7 +236,13 @@ MpayAdmin.ready(function () {
             const content=UI.facts({'通道名称':detail.channel.name,'支付方式':UI.paymentLabels[detail.channel.pay_type],'插件':configuration.plugin.name,'单笔最小金额（元）':UI.money(detail.channel.minimum_amount),'单笔最大金额（元）':UI.money(detail.channel.maximum_amount),'每日限额（元）':detail.channel.daily_limit_amount?UI.money(detail.channel.daily_limit_amount):'不限','每日限笔':detail.channel.daily_limit_count||'不限','可用时段':detail.channel.available_from?detail.channel.available_from+'～'+detail.channel.available_to+'（上海时区）':'全天'})
                 +UI.tabs([{title:'插件参数',content:'<dl class="admin-facts">'+rows.join('')+'</dl>'+images.map(image=>'<section id="'+E(image.targetId)+'" tabindex="-1" aria-label="'+E(image.title)+'"><div class="admin-section-title">'+E(image.title)+'</div><img class="admin-qr-preview" alt="'+E(image.title)+'"></section>').join('')},
                     {title:'接入信息',content:detail.notification.path?'<div class="admin-code">'+E(location.origin+detail.notification.path)+'</div><button class="layui-btn layui-btn-primary" data-copy="'+E(location.origin+detail.notification.path)+'">复制通知地址</button>':UI.notice(detail.notification.mode==='polling'?'由后台采集任务查询到账流水。':'当前插件没有通知地址。')}]);
-            handle.node.querySelector('.channel-detail').innerHTML=UI.state(detail.enabled?'已启用':'已停用')+content;UI.render(handle.node);handle.feedback('');
+            const activity=detail.collection,error=activity?.last_error;
+            const diagnosis=activity?'<div class="layui-card"><div class="layui-card-header">采集情况 '+UI.state(activity.status_label)+'</div><div class="layui-card-body">'
+                +(error?UI.facts({'最近错误':error.message,'错误来源':error.source_label,'失败阶段':error.stage,'平台错误码':error.platform_code,'发生时间':error.occurred_at,'恢复时间':activity.recovered_at})
+                    +(activity.recovered_at?UI.badge('已恢复','green'):'')+(error.message_truncated?UI.notice('错误说明超出长度上限，仅保留前 2048 字节。'):'')
+                    :UI.notice(activity.reason_label||'暂无错误记录'))
+                +'<a class="admin-link" href="/admin/maintenance?configuration_id='+encodeURIComponent(detail.configuration_id)+'">查看运行维护</a></div></div>':'';
+            handle.node.querySelector('.channel-detail').innerHTML=UI.state(detail.enabled?'已启用':'已停用')+diagnosis+content;UI.render(handle.node);handle.feedback('');
             handle.node.querySelectorAll('[data-plugin-image]').forEach(button=>button.addEventListener('click',()=>{
                 const target=handle.node.querySelector('#'+CSS.escape(button.dataset.pluginImage));
                 target.focus({preventScroll:true});target.scrollIntoView({block:'nearest'});

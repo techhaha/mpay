@@ -19,7 +19,8 @@ interface ReceiptCollectorInterface extends PaymentInterface
      * 输入只读，不依赖单通道 init 的残留状态，也不确认本系统订单。
      * @param array<string,array{id:string,pay_no:string,channel_id:string,channel_revision_id:string,pay_type:string,pay_amount:int,ext_json:array<string,mixed>,request_at:?string,expire_at:string,created_at:string}> $orders 按支付号索引；插件检查自己的准备快照后查询，金额为整数分。
      * @param array<string,array<string,mixed>> $channels 按通道版本 ID 索引，含冻结配置和有版本的当前配置。
-     * @return iterable<array{channel_revision_ids:list<string>,records:list<array<string,mixed>>,limit_reached:bool,error:?array{reason:string,retry_after:int}}>
+     * 错误说明由插件提取并脱敏，平台错误码与 message 原意保持不变；公共服务不解释第三方协议。
+     * @return iterable<array{channel_revision_ids:list<string>,records:list<array<string,mixed>>,limit_reached:bool,error:?array{reason:string,retry_after:int,source?:string,stage?:string,platform_code?:?string,message?:string,http_status?:?int,message_truncated?:bool}}>
      */
     public function collect(array $orders, array $channels, DateTimeImmutable $deadline): iterable;
 
@@ -39,7 +40,7 @@ interface ReceiptCollectorInterface extends PaymentInterface
      *
      * @param array<string,array<string,mixed>> $channels 启用通道及待核对订单依赖的版本。
      * error=null 表示本次认证验证成功；运行展示状态由服务映射，不要求插件返回重复布尔值或状态码。
-     * @return iterable<array{channel_revision_ids:list<string>,error:?array{reason:string,retry_after:int}}>
+     * @return iterable<array{channel_revision_ids:list<string>,error:?array{reason:string,retry_after:int,source?:string,stage?:string,platform_code?:?string,message?:string,http_status?:?int,message_truncated?:bool}}>
      */
     public function prelogin(array $channels, DateTimeImmutable $deadline): iterable;
 }

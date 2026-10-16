@@ -2,7 +2,7 @@
     "plugins": ["@prettier/plugin-php"],
     "overrides": [
         {
-            "files": "app/**/*.php",
+            "files": ["app/**/*.php", "config/**/*.php"],
             "options": {
                 "parser": "php",
                 "phpVersion": "8.2",

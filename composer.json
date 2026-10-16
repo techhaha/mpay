@@ -35,7 +35,9 @@
         "topthink/think-validate": "^3.0",
         "ext-gd": "*",
         "ext-fileinfo": "*",
-        "ext-bcmath": "*"
+        "ext-bcmath": "*",
+        "topthink/think-captcha": "^3.0",
+        "topthink/think-throttle": "^3.0"
     },
     "require-dev": {
         "topthink/think-dumper": "^1.0"

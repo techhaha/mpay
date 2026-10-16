@@ -11,7 +11,7 @@ Route::group(function (): void {
     Route::rule('submit.php', [EpayV1Controller::class, 'submit'], 'GET|POST')->name('epay.submit');
     Route::post('mapi.php', [EpayV1Controller::class, 'mapi'])->name('epay.mapi');
     Route::rule('api.php', [EpayV1Controller::class, 'api'], 'GET|POST')->name('epay.api');
-});
+})->middleware('rate', ['rule' => 'epay_ip']);
 
 Route::group('api/cashier', function (): void {
     // 高频订单查询不读写 Session；订单随机凭证由入口及服务校验。
@@ -24,10 +24,10 @@ Route::group('api/cashier', function (): void {
         Route::post('select', [CashierController::class, 'selectType'])->name('cashier.select');
         Route::post('prepare', [CashierController::class, 'prepare'])->name('cashier.prepare');
     })->middleware('cashier.write');
-});
+})->middleware('rate', ['rule' => 'cashier_ip']);
 // 通道通知使用独立组；只允许 POST，原始正文由插件验签，来源与通道由服务核对。
 Route::group('api/pay', function (): void {
     Route::post(':channelId/notify', [PaymentNotifyController::class, 'notify'])
         ->pattern(['channelId' => '[1-9][0-9]{0,19}'])
         ->name('payment.channel-notify');
-});
+})->middleware('rate', ['rule' => 'channel_notify']);

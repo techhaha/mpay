@@ -10,6 +10,7 @@ layui.use('layer', function () {
     let current = null, phase = 'payment', page = null, timer = null, deadline = null;
     let fetching = false, writing = false, pending = null, generation = 0, failures = 0, initialPrepareRequested = false;
     let writeFailure = null, leaving = false;
+    let readWaitUntil = 0, writeWaitUntil = 0;
     const error = message => { find('error').textContent = message || ''; find('error').hidden = !message; };
     const notice = message => { find('notice').textContent = message; find('notice').hidden = !message; };
     const stoppedViews = {
@@ -121,6 +122,11 @@ layui.use('layer', function () {
     function schedule() {
         clearTimeout(timer);
         if (leaving || document.hidden || writing || fetching || phase === 'done' || phase === 'attention') return;
+        const wait = readWaitUntil - performance.now();
+        if (wait > 0) {
+            timer = setTimeout(() => request(pending || (phase === 'notification' ? 'completion' : current ? 'status' : 'order')), wait);
+            return;
+        }
         if (pending) { const next = pending; pending = null; timer = setTimeout(() => request(next), 0); return; }
         if (phase === 'notification' && deadline !== null && performance.now() >= deadline) { timeout(); return; }
         const base = phase === 'notification' ? 2000 : current?.expired || [3,4,5].includes(current?.status) ? 15000 : 3000;
@@ -130,7 +136,9 @@ layui.use('layer', function () {
     }
     async function request(kind) {
         if (leaving || phase === 'done') return;
+        if (performance.now() < readWaitUntil) { pending = kind; schedule(); return; }
         if (fetching || writing) { if (pending !== 'order') pending = kind; return; }
+        if (pending === kind) pending = null;
         if (phase === 'notification' && deadline !== null && performance.now() >= deadline) { timeout(); return; }
         fetching = true; clearTimeout(timer); const revision = generation;
         try {
@@ -138,6 +146,7 @@ layui.use('layer', function () {
             if (revision !== generation || leaving) return;
             if (phase === 'notification' && deadline !== null && performance.now() >= deadline) { timeout(); return; }
             failures = 0;
+            if (!writeFailure) error('');
             if (kind === 'order') apply(response.data);
             else if (kind === 'completion') { error(''); complete(response.data); }
             else {
@@ -149,11 +158,15 @@ layui.use('layer', function () {
                 }
             }
         } catch (failure) {
-            if (revision === generation && !leaving) { failures++; error(failure.message || '暂时无法查询，请稍后重试。'); }
+            if (revision === generation && !leaving) {
+                if (failure.retryAfter > 0) readWaitUntil = performance.now() + failure.retryAfter * 1000;
+                failures++; error(failure.message || '暂时无法查询，请稍后重试。');
+            }
         } finally { fetching = false; schedule(); }
     }
     async function write(path, extra) {
         if (writing || leaving || phase !== 'payment') return;
+        if (performance.now() < writeWaitUntil) { error(`操作过于频繁，请 ${Math.ceil((writeWaitUntil - performance.now()) / 1000)} 秒后重试`); return; }
         const before = {payNo:current?.pay_no ?? null, status:current?.status ?? null};
         writing = true; generation++; pending = null; writeFailure = null; clearTimeout(timer); error('');
         find('methods').querySelectorAll('button').forEach(button => button.disabled = true); find('prepare').disabled = true;
@@ -161,6 +174,7 @@ layui.use('layer', function () {
             const response = await MpayHttp.request(path, {method:'POST', data:{...identity, ...extra}});
             generation++; if (!leaving) apply(response.data);
         } catch (failure) {
+            if (failure.retryAfter > 0) writeWaitUntil = performance.now() + failure.retryAfter * 1000;
             generation++; writeFailure = {...before, message:failure.message || '操作尚未完成，请查询原订单。'};
             error(writeFailure.message); pending = 'order';
         } finally {

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7042c98758874aa70191f530cf1da115",
+    "content-hash": "989e7a89fb5e31fd1a40d4434d929099",
     "packages": [
         {
             "name": "guzzlehttp/guzzle",
@@ -1107,6 +1107,59 @@
             "time": "2026-01-15T02:45:10+00:00"
         },
         {
+            "name": "topthink/think-captcha",
+            "version": "v3.0.11",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/top-think/think-captcha.git",
+                "reference": "4f24f560a31011329e3d144732e5370d7676b3fb"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/top-think/think-captcha/zipball/4f24f560a31011329e3d144732e5370d7676b3fb",
+                "reference": "4f24f560a31011329e3d144732e5370d7676b3fb",
+                "shasum": ""
+            },
+            "require": {
+                "topthink/framework": "^6.0|^8.0"
+            },
+            "type": "library",
+            "extra": {
+                "think": {
+                    "config": {
+                        "captcha": "src/config.php"
+                    },
+                    "services": [
+                        "think\\captcha\\CaptchaService"
+                    ]
+                }
+            },
+            "autoload": {
+                "files": [
+                    "src/helper.php"
+                ],
+                "psr-4": {
+                    "think\\captcha\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "yunwuxin",
+                    "email": "448901948@qq.com"
+                }
+            ],
+            "description": "captcha package for thinkphp",
+            "support": {
+                "issues": "https://github.com/top-think/think-captcha/issues",
+                "source": "https://github.com/top-think/think-captcha/tree/v3.0.11"
+            },
+            "time": "2024-11-22T12:59:35+00:00"
+        },
+        {
             "name": "topthink/think-container",
             "version": "v3.0.2",
             "source": {
@@ -1345,6 +1398,60 @@
                 "source": "https://github.com/top-think/think-template/tree/v3.0.2"
             },
             "time": "2024-10-16T03:41:06+00:00"
+        },
+        {
+            "name": "topthink/think-throttle",
+            "version": "v3.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/top-think/think-throttle.git",
+                "reference": "be5608901cc3e2f02c58351cc45b86e0a30e7054"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/top-think/think-throttle/zipball/be5608901cc3e2f02c58351cc45b86e0a30e7054",
+                "reference": "be5608901cc3e2f02c58351cc45b86e0a30e7054",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.0.0",
+                "topthink/framework": "^8.0"
+            },
+            "require-dev": {
+                "guzzlehttp/guzzle": "^7.7",
+                "phpstan/phpstan": "^1.10",
+                "phpunit/phpunit": "^9.5",
+                "topthink/think": "^8.0.0"
+            },
+            "type": "library",
+            "extra": {
+                "think": {
+                    "config": {
+                        "throttle": "src/config.php"
+                    }
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "think\\middleware\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "hongweipeng",
+                    "email": "hongweichen8888@sina.com"
+                }
+            ],
+            "description": "throttle middleware for thinkphp8",
+            "support": {
+                "issues": "https://github.com/top-think/think-throttle/issues",
+                "source": "https://github.com/top-think/think-throttle/tree/v3.0.2"
+            },
+            "time": "2026-07-23T10:57:23+00:00"
         },
         {
             "name": "topthink/think-validate",

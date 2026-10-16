@@ -1,6 +1,6 @@
 {extend name="layouts/base" /}
 {block name="body_class"}auth-page{/block}
-{block name="styles"}<link rel="stylesheet" href="/assets/css/admin.css?v=20261015pages">{/block}
+{block name="styles"}<link rel="stylesheet" href="/assets/css/admin.css?v=20261016captcha">{/block}
 {block name="content"}
 <div class="admin-login">
     <header class="auth-brand"><img class="mpay-logo" src="/assets/brand/mpay-logo.svg" alt="MPAY 码支付" width="180"><p>让个人收款更加轻松便捷</p></header>
@@ -12,6 +12,15 @@
                     <input id="username" name="username" class="layui-input" type="text" autocomplete="username" maxlength="64" required autofocus></div>
                 <div class="layui-form-item"><label for="password" class="admin-label">密码</label>
                     <input id="password" name="password" class="layui-input" type="password" autocomplete="current-password" maxlength="72" required></div>
+                <div class="layui-form-item"><label for="captcha" class="admin-label">验证码</label>
+                    <div class="admin-captcha-row">
+                        <input id="captcha" name="captcha" class="layui-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" minlength="4" maxlength="4" required placeholder="图片中的 4 位字符">
+                        <button id="admin-captcha-refresh" class="admin-captcha-refresh" type="button" title="点击更换验证码" aria-label="更换验证码">
+                            <img id="admin-captcha-image" width="150" height="40" alt="验证码，点击刷新" hidden>
+                            <span id="admin-captcha-placeholder">加载验证码…</span>
+                        </button>
+                    </div>
+                </div>
                 <p id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></p>
                 <button class="layui-btn admin-submit" type="submit">登录</button>
             </form>

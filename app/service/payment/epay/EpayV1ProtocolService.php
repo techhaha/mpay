@@ -19,6 +19,7 @@ use app\service\payment\cashier\CashierService;
 use app\service\payment\config\PaymentAppCredentialService;
 use app\service\payment\order\PayOrderService;
 use app\service\payment\plugin\PayOrderChannelDispatchService;
+use app\service\system\access\RequestRateLimiter;
 
 /**
  * 易支付 V1 的认证及协议适配，不与后台 code=200 JSON 混用，不接受浏览器回跳作为到账确认。
@@ -39,6 +40,7 @@ final class EpayV1ProtocolService extends BaseService
         private readonly EpayV1MessageService $messages,
         private readonly Clock $clock,
         private readonly CashierService $cashier,
+        private readonly RequestRateLimiter $limiter,
     ) {}
 
     /**
@@ -53,6 +55,8 @@ final class EpayV1ProtocolService extends BaseService
         string $requestId,
     ): array {
         $identity = $this->authenticate($raw, true);
+        // 只有已验签的真实应用才消耗其额度，submit/mapi 共用同一个下单规则。
+        $this->limiter->check('epay_create', $identity['app']['id']);
         $input = $this->validator->order(
             $raw,
             $scene,
@@ -93,6 +97,7 @@ final class EpayV1ProtocolService extends BaseService
         $identity = $this->authenticate($raw, false);
         $app = $identity['app'];
         $action = $raw['act'] ?? 'query';
+        $this->limiter->check($action === 'refund' ? 'epay_refund' : 'epay_query', $app['id']);
         if ($action === 'settle') {
             return ['code' => 1, 'msg' => '本系统自收，无平台结算记录', 'data' => []];
         }

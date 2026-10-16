@@ -9,6 +9,7 @@ use app\exception\BusinessException;
 use app\http\admin\validation\AdminAuthValidator;
 use app\service\system\access\AdminAuthService;
 use app\service\system\access\AdminSessionService;
+use app\service\system\access\LoginCaptchaService;
 use think\Response;
 
 /** 后台认证 HTTP 边界；密码校验/审计在服务中，会话与公开响应留在入口，不发放可供易支付使用的身份。 */
@@ -19,8 +20,10 @@ final class AdminAuthController extends BaseAdminController
         AdminAuthValidator $validator,
         AdminAuthService $auth,
         AdminSessionService $sessions,
+        LoginCaptchaService $captcha,
     ): Response {
         $input = $validator->validateInput('login', $this->jsonBody());
+        $captcha->verify($input['captcha']);
         $identity = $auth->login(
             $input['username'],
             $input['password'],
@@ -36,6 +39,16 @@ final class AdminAuthController extends BaseAdminController
             ],
             '登录成功',
         );
+    }
+
+    /** 图片入口由路由先限流再初始化 Session，不接受客户端选择验证码配置。 */
+    public function captcha(LoginCaptchaService $captcha): Response
+    {
+        return response($captcha->image(), 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'no-store, private',
+            'Pragma' => 'no-cache',
+        ]);
     }
 
     /** 由受保护 GET 路由调用，只输出公开账户名和当前表单 token，不输出认证版本或密码摘要。 */

@@ -15,6 +15,7 @@ final class AdminAuthValidator extends Validate
     protected $rule = [
         'username' => ['require', 'string', 'max' => 64],
         'password' => ['require', 'string', 'passwordBytes'],
+        'captcha' => ['require', 'string', 'regex' => '/^[a-zA-Z0-9]{4}$/D'],
         'current_password' => ['require', 'string', 'passwordBytes'],
         'new_password' => ['require', 'string', 'passwordBytes', 'min' => 12],
         'password_confirmation' => [
@@ -26,13 +27,14 @@ final class AdminAuthValidator extends Validate
     ];
 
     protected $scene = [
-        'login' => ['username', 'password'],
+        'login' => ['username', 'password', 'captcha'],
         'password' => ['current_password', 'new_password', 'password_confirmation'],
     ];
 
     protected $message = [
         'username' => '用户名需要 1～64 个字符',
         'password' => '请填写有效密码，最多 72 字节',
+        'captcha' => '请输入图片中的 4 位验证码',
         'current_password' => '请填写有效的当前密码',
         'new_password' => '新密码至少 12 个字符、最多 72 字节，不能含空字符',
         'password_confirmation' => '两次输入的新密码必须一致',

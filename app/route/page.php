@@ -53,7 +53,9 @@ Route::group('admin', function (): void {
     Route::rule('poll-groups', [AdminController::class, 'pollGroups'], 'GET|HEAD')
         ->name('admin.page.poll-groups')
         ->middleware('admin.auth');
-})->middleware('session');
+})
+    ->middleware('rate', ['rule' => 'admin_ip'])
+    ->middleware('session');
 Route::group('cashier', function (): void {
     Route::rule('success', [CashierController::class, 'completed'], 'GET|HEAD')->name(
         'cashier.success',
@@ -62,4 +64,4 @@ Route::group('cashier', function (): void {
         ->name('cashier.pay')
         ->middleware('session');
     Route::rule('return', [CashierController::class, 'back'], 'GET|HEAD')->name('cashier.return');
-});
+})->middleware('rate', ['rule' => 'cashier_ip']);

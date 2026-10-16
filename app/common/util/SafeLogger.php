@@ -10,7 +10,9 @@ use app\exception\PaymentUncertainException;
 use app\exception\ReceiptCollectionException;
 use app\exception\ReceiptMessageException;
 use think\db\exception\PDOException as DatabaseException;
+use think\facade\Cache;
 use think\Log;
+use Throwable;
 
 /**
  * 技术日志的结构化白名单与受限异常诊断；平台说明仅接受 SDK 脱敏后的采集诊断，不保存完整报文、SQL 或凭证。
@@ -43,6 +45,8 @@ final class SafeLogger
         'platform_code',
         'error_message',
         'message_truncated',
+        'rate_rule',
+        'rejected_count',
     ];
     private const SQLSTATES = [
         '23000',
@@ -83,6 +87,31 @@ final class SafeLogger
         private readonly Log $log,
         private readonly RequestContext $context,
     ) {}
+
+    /**
+     * 入站保护故障通过普通原生缓存约每分钟记录一次，允许并发汇总偏差。
+     * runtime 同样不可写时不递归抛错，不能用诊断失败覆盖原拒绝响应或中断商户通知。
+     */
+    public function rateStorageFailure(): void
+    {
+        try {
+            // access 可能位于故障的 tmpfs；诊断节流使用原有 runtime 文件缓存。
+            $store = Cache::store('file');
+            $key = 'request.rate_storage_unavailable';
+            if ($store->has($key) || !$store->set($key, 1, 60)) {
+                return;
+            }
+            $this->record(
+                'request.rate_storage_unavailable',
+                [
+                    'reason_code' => 'rate_storage_unavailable',
+                ],
+                'error',
+            );
+        } catch (Throwable) {
+            // 日志只承担诊断；存储故障仍由调用方按入口语义处理。
+        }
+    }
 
     /**
      * 记录固定事件编码和允许的标量关联字段；未知字段/嵌套对象丢弃，允许字段仍须由调用方脱敏。

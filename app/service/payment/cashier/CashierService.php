@@ -23,6 +23,7 @@ use app\service\payment\order\PayOrderService;
 use app\service\payment\plugin\PayOrderChannelDispatchService;
 use app\service\payment\plugin\PaymentPluginPayResultValidator;
 use app\service\payment\routing\PaymentRouteService;
+use app\service\system\access\RequestRateLimiter;
 use DateTimeImmutable;
 use RuntimeException;
 use think\Config;
@@ -53,6 +54,7 @@ final class CashierService extends BaseService
         private readonly Clock $clock,
         private readonly Config $config,
         private readonly PaymentCatalogService $management,
+        private readonly RequestRateLimiter $limiter,
     ) {}
 
     /**
@@ -63,47 +65,52 @@ final class CashierService extends BaseService
     {
         return $this->transaction(function () use ($bizNo, $accessToken, $now): array {
             [$biz, $pay] = $this->authorisedOrders($bizNo, $accessToken);
-            $context = $pay === null ? [] : $pay['ext_json']['payment_context'] ?? [];
-            $material = $pay === null ? null : $pay['ext_json']['presentation'] ?? null;
-            $state = $this->state(
-                $biz,
-                $pay,
-                $context['execution'] ?? null,
-                is_array($material),
-                $now,
-            );
-            $type = $context['pay_type'] ?? null;
-            if ($pay !== null && !PaymentTypeCode::valid($type)) {
-                throw new RuntimeException('支付方式快照缺失');
-            }
-            $presentation = null;
-            if ($state['can_pay']) {
-                // 直接读取插件公开快照；公共状态已有 expires_at/server_time，不为页面重算材料。
-                $presentation = PaymentPluginPayResultValidator::presentation($material);
-                if ($presentation['pay_type'] !== $type) {
-                    throw new RuntimeException('支付展示与原单方式不一致');
-                }
-            }
-            $amount =
-                $state['status'] === TradeConstant::ORDER_STATUS_SUCCESS
-                    ? $pay?->receivedAmount()
-                    : ($state['can_pay']
-                        ? $pay->receiptAmount()
-                        : null);
-            return $state + [
-                'subject' => $biz['subject'],
-                'amount' => $amount === null ? null : Money::format($amount),
-                'pay_type' => $type,
-                'presentation' => $presentation,
-                'payment_methods' => $state['can_select']
-                    ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount'])
-                    : [],
-                'payment_brands' => $this->management->brands(),
-                'test_mode' =>
-                    ($pay['ext_json']['personal_receipt']['test_only'] ?? false) === true ||
-                    $this->config->get('mpay.environment') === 'testing',
-            ];
+            $this->limiter->check('cashier_read', $bizNo);
+            return $this->present($biz, $pay, $now);
         });
+    }
+
+    /**
+     * 已授权订单的公开展示投影，调用方须在一致性事务内；不派发支付或再次检查请求额度。
+     * 查询和写后响应共用此处组装，避免把已经执行的写入误报为入口拒绝。
+     * @return CashierView
+     */
+    private function present(BizOrder $biz, ?PayOrder $pay, DateTimeImmutable $now): array
+    {
+        $context = $pay === null ? [] : $pay['ext_json']['payment_context'] ?? [];
+        $material = $pay === null ? null : $pay['ext_json']['presentation'] ?? null;
+        $state = $this->state($biz, $pay, $context['execution'] ?? null, is_array($material), $now);
+        $type = $context['pay_type'] ?? null;
+        if ($pay !== null && !PaymentTypeCode::valid($type)) {
+            throw new RuntimeException('支付方式快照缺失');
+        }
+        $presentation = null;
+        if ($state['can_pay']) {
+            // 直接读取插件公开快照；公共状态已有 expires_at/server_time，不为页面重算材料。
+            $presentation = PaymentPluginPayResultValidator::presentation($material);
+            if ($presentation['pay_type'] !== $type) {
+                throw new RuntimeException('支付展示与原单方式不一致');
+            }
+        }
+        $amount =
+            $state['status'] === TradeConstant::ORDER_STATUS_SUCCESS
+                ? $pay?->receivedAmount()
+                : ($state['can_pay']
+                    ? $pay->receiptAmount()
+                    : null);
+        return $state + [
+            'subject' => $biz['subject'],
+            'amount' => $amount === null ? null : Money::format($amount),
+            'pay_type' => $type,
+            'presentation' => $presentation,
+            'payment_methods' => $state['can_select']
+                ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount'])
+                : [],
+            'payment_brands' => $this->management->brands(),
+            'test_mode' =>
+                ($pay['ext_json']['personal_receipt']['test_only'] ?? false) === true ||
+                $this->config->get('mpay.environment') === 'testing',
+        ];
     }
 
     /** @return CashierState 最多两次定点投影查询；不查路由、品牌、流水或通知。 */
@@ -112,6 +119,7 @@ final class CashierService extends BaseService
         return $this->transaction(function () use ($bizNo, $accessToken, $now): array {
             $biz = $this->bizOrders->cashierState($bizNo);
             $this->orders->assertAccess($biz, $accessToken);
+            $this->limiter->check('cashier_read', $bizNo);
             $pay =
                 $biz['active_pay_no'] === null
                     ? null
@@ -146,6 +154,7 @@ final class CashierService extends BaseService
         return $this->transaction(function () use ($bizNo, $accessToken): array {
             $biz = $this->bizOrders->cashierState($bizNo, true);
             $this->orders->assertAccess($biz, $accessToken);
+            $this->limiter->check('cashier_read', $bizNo);
             $result = [
                 'biz_no' => $bizNo,
                 'status' => (int) $biz['status'],
@@ -291,9 +300,11 @@ final class CashierService extends BaseService
         string $payType,
         string $requestId,
     ): array {
+        // 在创建支付尝试前核验凭证并计数；选路服务仍在自己的事务里复核原单访问权限。
+        $this->orders->assertAccess($this->bizOrders->find($bizNo), $accessToken);
+        $this->limiter->check('cashier_write', $bizNo);
         $pay = $this->orders->selectPayType($bizNo, $accessToken, $payType);
-        $this->dispatch->dispatch($pay['pay_no'], $this->clock->now(), $requestId);
-        return $this->view($bizNo, $accessToken, $this->clock->now());
+        return $this->dispatchAndView($bizNo, $accessToken, $pay['pay_no'], $requestId);
     }
 
     /**
@@ -304,11 +315,29 @@ final class CashierService extends BaseService
     public function prepare(string $bizNo, string $accessToken, string $requestId): array
     {
         [, $pay] = $this->transaction(fn(): array => $this->authorisedOrders($bizNo, $accessToken));
+        $this->limiter->check('cashier_write', $bizNo);
         if ($pay === null) {
             throw new BusinessException('请先选择支付方式', ApiResponseConstant::CONFLICT);
         }
-        $this->dispatch->dispatch($pay['pay_no'], $this->clock->now(), $requestId);
-        return $this->view($bizNo, $accessToken, $this->clock->now());
+        return $this->dispatchAndView($bizNo, $accessToken, $pay['pay_no'], $requestId);
+    }
+
+    /**
+     * 写请求已完成授权和额度检查；事务外派发后，在独立一致性事务中读取当前展示。
+     * 不复用受读额度限制的公开查询入口，不因写后回读超限而鼓励重发已执行的支付动作。
+     * @return CashierView
+     */
+    private function dispatchAndView(
+        string $bizNo,
+        string $accessToken,
+        string $payNo,
+        string $requestId,
+    ): array {
+        $this->dispatch->dispatch($payNo, $this->clock->now(), $requestId);
+        return $this->transaction(function () use ($bizNo, $accessToken): array {
+            [$biz, $pay] = $this->authorisedOrders($bizNo, $accessToken);
+            return $this->present($biz, $pay, $this->clock->now());
+        });
     }
 
     /**

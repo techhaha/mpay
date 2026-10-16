@@ -9,10 +9,16 @@
     const pending = new Set();
     /** 保存稳定应用码、字段错误和关联号，页面不应通过解析 message 文案判断业务分支。 */
     class ApiError extends Error {
-        constructor(message, code, data, requestId, outcomeUnknown = false) {
+        constructor(message, code, data, requestId, outcomeUnknown = false, retryAfter = 0) {
             super(message); this.code = code; this.data = data; this.requestId = requestId;
             this.outcomeUnknown = outcomeUnknown;
+            this.retryAfter = retryAfter;
         }
+    }
+    /** 优先读取服务端等待秒数；只影响下一次读取/用户操作，不自动重发写请求。 */
+    function retryAfter(response, body) {
+        const seconds = Number(response.headers.get('Retry-After') || body?.data?.retry_after || 0);
+        return Number.isFinite(seconds) && seconds > 0 ? Math.min(3600, Math.ceil(seconds)) : 0;
     }
     /**
      * 发送一次请求。data 为写请求 JSON 或 FormData，timeout 单位为毫秒，默认 15000。
@@ -63,7 +69,7 @@
             // HTTP 状态和应用码同时满足才认定处理中，不能把任意成功解析的响应当作操作完成。
             if (response.status === 202 && body.code === 20200) return {...body, processing: true};
             if (!response.ok || body.code !== 200) throw new ApiError(body.message || '请求未完成', body.code, body.data, body.request_id,
-                write && (response.status >= 500 || body.code >= 50000));
+                write && response.headers.get('X-Request-Rejected') !== '1' && (response.status >= 500 || body.code >= 50000), retryAfter(response, body));
             return body;
         } finally { clearTimeout(timer); if (write) pending.delete(key); }
     }
@@ -89,7 +95,7 @@
                 if (body.code === 40100 && !sessionExpired) {
                     sessionExpired = true; global.dispatchEvent(new CustomEvent('mpay:session-expired', {detail:body}));
                 }
-                throw new ApiError(body.message || '下载未完成', body.code, body.data, body.request_id);
+                throw new ApiError(body.message || '下载未完成', body.code, body.data, body.request_id, false, retryAfter(response, body));
             }
             const file = await response.blob();
             if (file.size === 0) throw new ApiError('导出内容为空，请重新导出或联系管理员检查日志', 50000);

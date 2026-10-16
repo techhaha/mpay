@@ -12,11 +12,18 @@ use app\http\admin\controller\RuntimeController;
 use app\http\admin\controller\SystemSettingsController;
 use think\facade\Route;
 
-// Session 仅在后台组初始化；登录仍校验同源 JSON 和 CSRF，其余接口统一认证后再执行写保护。
+// 匿名认证入口先限制 IP，再创建 Session；验证码只开放此固定入口，不接受配置名称参数。
+Route::post('adminapi/login', [AdminAuthController::class, 'login'])
+    ->name('admin.login')
+    ->middleware('rate', ['rule' => 'login'])
+    ->middleware(['session', 'admin.write']);
+Route::get('adminapi/captcha', [AdminAuthController::class, 'captcha'])
+    ->name('admin.captcha')
+    ->middleware('rate', ['rule' => 'captcha'])
+    ->middleware('session');
+
+// 后台 API 的 IP 粗限流先于 Session/认证；管理员额度在身份核验后执行。
 Route::group('adminapi', function (): void {
-    Route::post('login', [AdminAuthController::class, 'login'])
-        ->name('admin.login')
-        ->middleware('admin.write');
     Route::group('', function (): void {
         Route::rule('me', [AdminAuthController::class, 'me'], 'GET|HEAD')->name('admin.me');
         Route::post('logout', [AdminAuthController::class, 'logout'])
@@ -24,6 +31,11 @@ Route::group('adminapi', function (): void {
             ->middleware('admin.write');
         Route::post('password', [AdminAuthController::class, 'password'])
             ->name('admin.password')
+            ->middleware('rate', [
+                'rule' => 'admin_sensitive',
+                'identity' => 'admin',
+                'action' => 'password',
+            ])
             ->middleware('admin.write');
         Route::rule('dashboard', [OperationsController::class, 'dashboard'], 'GET|HEAD')->name(
             'admin.dashboard',
@@ -43,6 +55,11 @@ Route::group('adminapi', function (): void {
                 ->middleware('admin.configuration.write');
             Route::post('refresh', [PaymentCatalogController::class, 'refresh'])
                 ->name('admin.catalog.refresh')
+                ->middleware('rate', [
+                    'rule' => 'admin_expensive',
+                    'identity' => 'admin',
+                    'action' => 'catalog_refresh',
+                ])
                 ->middleware('admin.configuration.write');
             Route::post('enabled', [PaymentCatalogController::class, 'enabled'])
                 ->name('admin.catalog.enabled')
@@ -56,9 +73,13 @@ Route::group('adminapi', function (): void {
             Route::rule('collections', [RuntimeController::class, 'collections'], 'GET|HEAD')->name(
                 'admin.maintenance.collections',
             );
-            Route::rule('doctor', [RuntimeController::class, 'doctor'], 'GET|HEAD')->name(
-                'admin.maintenance.doctor',
-            );
+            Route::rule('doctor', [RuntimeController::class, 'doctor'], 'GET|HEAD')
+                ->name('admin.maintenance.doctor')
+                ->middleware('rate', [
+                    'rule' => 'admin_expensive',
+                    'identity' => 'admin',
+                    'action' => 'doctor',
+                ]);
         });
         // 应用与轮询组共用外层认证；全部 POST（包括预览）使用同源 JSON/CSRF 保护。
         Route::group('applications', function (): void {
@@ -73,9 +94,19 @@ Route::group('adminapi', function (): void {
                 ->middleware('admin.configuration.write');
             Route::post('reveal', [PaymentAppController::class, 'reveal'])
                 ->name('admin.applications.reveal')
+                ->middleware('rate', [
+                    'rule' => 'admin_sensitive',
+                    'identity' => 'admin',
+                    'action' => 'key_reveal',
+                ])
                 ->middleware('admin.configuration.write');
             Route::post('rotate', [PaymentAppController::class, 'rotate'])
                 ->name('admin.applications.rotate')
+                ->middleware('rate', [
+                    'rule' => 'admin_sensitive',
+                    'identity' => 'admin',
+                    'action' => 'key_rotate',
+                ])
                 ->middleware('admin.configuration.write');
             Route::post('signature', [PaymentAppController::class, 'signature'])
                 ->name('admin.applications.signature')
@@ -215,18 +246,36 @@ Route::group('adminapi', function (): void {
             Route::rule('history', [PayOrderController::class, 'history'], 'GET|HEAD')->name(
                 'admin.orders.history',
             );
-            Route::get('export', [PayOrderController::class, 'export'])->name(
-                'admin.orders.export',
-            );
+            Route::get('export', [PayOrderController::class, 'export'])
+                ->name('admin.orders.export')
+                ->middleware('rate', [
+                    'rule' => 'admin_expensive',
+                    'identity' => 'admin',
+                    'action' => 'export',
+                ]);
             Route::post('confirm', [PayOrderController::class, 'confirm'])
                 ->name('admin.orders.confirm')
+                ->middleware('rate', [
+                    'rule' => 'admin_sensitive',
+                    'identity' => 'admin',
+                    'action' => 'confirm',
+                ])
                 ->middleware('admin.write');
             Route::post('close', [PayOrderController::class, 'close'])
                 ->name('admin.orders.close')
                 ->middleware('admin.write');
             Route::post('retry-notification', [PayOrderController::class, 'retryNotification'])
                 ->name('admin.orders.retry')
+                ->middleware('rate', [
+                    'rule' => 'admin_sensitive',
+                    'identity' => 'admin',
+                    'action' => 'retry_notification',
+                ])
                 ->middleware('admin.write');
         });
-    })->middleware('admin.auth');
-})->middleware('session');
+    })
+        ->middleware('admin.auth')
+        ->middleware('rate', ['rule' => 'admin', 'identity' => 'admin']);
+})
+    ->middleware('rate', ['rule' => 'admin_ip'])
+    ->middleware('session');

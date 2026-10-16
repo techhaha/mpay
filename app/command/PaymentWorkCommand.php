@@ -5,6 +5,7 @@ namespace app\command;
 
 use app\common\util\CliWorkerControl;
 use app\common\util\SafeLogger;
+use app\exception\RateLimitStorageException;
 use app\service\payment\notify\MerchantNotifyDispatcherService;
 use app\service\payment\runtime\PaymentRuntimeMaintenanceService;
 use app\service\system\config\SystemConfigService;
@@ -63,6 +64,7 @@ final class PaymentWorkCommand extends Command
             $round = 0;
             $idleRounds = 0;
             $nextPrune = 30;
+            $nextRatePrune = 60;
             $counts = [
                 'acknowledged' => 0,
                 'retry' => 0,
@@ -96,6 +98,16 @@ final class PaymentWorkCommand extends Command
                     $maintenanceCounts[$key] += $batch[$key];
                 }
                 $idleRounds = $result === 'idle' && $actions === 0 ? $idleRounds + 1 : 0;
+                // 原生短期缓存仅回收超过最大有效期的旧文件，不增加守护入口或限流锁。
+                if ($elapsed >= $nextRatePrune) {
+                    $nextRatePrune = $elapsed + 60;
+                    try {
+                        $this->app->make(RuntimePruneService::class)->pruneAccessCache(20);
+                    } catch (RateLimitStorageException) {
+                        // 入站保护存储故障不能终止既有商户通知，按维护周期汇总一次诊断。
+                        $this->app->make(SafeLogger::class)->rateStorageFailure();
+                    }
+                }
                 // 仅通知暂时空闲时进行小批次文件保留清理；交易/流水/审计不在清理范围。
                 if ($result === 'idle' && $elapsed >= $nextPrune) {
                     $days = $this->app->make(SystemConfigService::class)->values('maintenance')[

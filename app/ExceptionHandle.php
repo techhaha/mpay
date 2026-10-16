@@ -7,6 +7,8 @@ use app\common\constant\ApiResponseConstant as Code;
 use app\common\util\RequestContext;
 use app\common\util\SafeLogger;
 use app\exception\BusinessException;
+use app\exception\RateLimitException;
+use app\exception\RateLimitStorageException;
 use think\exception\Handle;
 use think\exception\HttpException;
 use think\exception\HttpResponseException;
@@ -27,6 +29,14 @@ final class ExceptionHandle extends Handle
      */
     public function report(Throwable $exception): void
     {
+        if ($exception instanceof RateLimitException) {
+            // 公共限流器已经按规则汇总，不逐请求输出堆栈。
+            return;
+        }
+        if ($exception instanceof RateLimitStorageException) {
+            $this->app->make(SafeLogger::class)->rateStorageFailure();
+            return;
+        }
         if (
             !($exception instanceof BusinessException) &&
             !($exception instanceof HttpResponseException) &&
@@ -52,8 +62,16 @@ final class ExceptionHandle extends Handle
         $code = Code::INTERNAL_ERROR;
         $message = '服务暂时出现问题，请稍后重试';
         $data = null;
-        // 只有 BusinessException 的构造合同允许直接公开 message 和字段错误。
-        if ($e instanceof BusinessException) {
+        // 只公开有固定构造合同的业务/保护异常，未知故障不透出原始 message。
+        if ($e instanceof RateLimitException) {
+            $code = Code::TOO_MANY_REQUESTS;
+            $message = $e->getMessage();
+            $data = ['retry_after' => $e->retryAfter];
+        } elseif ($e instanceof RateLimitStorageException) {
+            $code = Code::SERVICE_UNAVAILABLE;
+            $message = $e->getMessage();
+            $data = ['retry_after' => 5];
+        } elseif ($e instanceof BusinessException) {
             $code = $e->getCode();
             $message = $e->getMessage();
             $data = $e->errors === [] ? null : ['errors' => $e->errors];
@@ -89,6 +107,12 @@ final class ExceptionHandle extends Handle
             $response = view('error/error', ['message' => $message, 'request_id' => $id], $status);
         }
         $headers = ['X-Request-Id' => $id, 'Cache-Control' => 'no-store'];
+        if ($e instanceof RateLimitException || $e instanceof RateLimitStorageException) {
+            $headers['Retry-After'] =
+                (string) ($e instanceof RateLimitException ? $e->retryAfter : 5);
+            // 明确在业务执行前拒绝，前端可以保留表单后由用户重试，不误判为交易结果未知。
+            $headers['X-Request-Rejected'] = '1';
+        }
         // 保留路由声明的 Allow 头，客户端才能知道该路径允许的方法。
         if ($e instanceof HttpException && $status === 405) {
             $headers += $e->getHeaders();

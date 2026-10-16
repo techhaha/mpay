@@ -12,6 +12,7 @@
 | 日常查单、系统设置与密码 | [订单查询](wiki/V1-09-订单与到账流水.md) · [后台日常操作](wiki/V1-29-后台设置与日常检查.md) |
 | 接入业务网站 | [接入指南](wiki/V1-15-业务网站接入.md) · [接口参考](wiki/V1-16-易支付V1接口参考.md) |
 | 部署和维护 | [后台任务](wiki/V1-18-部署与后台任务.md) · [备份恢复](wiki/V1-19-备份恢复与域名迁移.md) |
+| 登录与访问保护 | [登录验证码与请求限流](wiki/V1-31-登录验证码与请求限流.md) |
 | 二次开发 | [目录结构](wiki/V1-21-开发环境与目录结构.md) · [插件开发](wiki/V1-23-支付插件开发.md) · [字段规则](wiki/V1-24-config-schema字段规则.md) |
 
 在线文档：[Gitee Wiki](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub Wiki](https://github.com/techhaha/mpay/wiki)。

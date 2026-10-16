@@ -4,12 +4,70 @@ declare(strict_types=1);
 namespace app\service\system\runtime;
 
 use app\common\util\Clock;
+use app\exception\RateLimitStorageException;
+use app\service\system\access\RequestRateLimiter;
+use ErrorException;
+use FilesystemIterator;
 use think\App;
+use UnexpectedValueException;
 
-/** 清理应用运行目录内的旧技术日志和已退出进程心跳；交易、流水、通知、审计和密钥不在此范围。 */
+/** 清理旧技术日志、已退出进程心跳及短期访问缓存；交易、流水、通知、审计和密钥不在此范围。 */
 final class RuntimePruneService
 {
     public function __construct(private readonly App $app, private readonly Clock $clock) {}
+
+    /**
+     * 原生 File 在读取时处理 TTL；维护额外回收长期不再访问的文件，不解析缓存格式。
+     * 保守地超过所有短期数据的最大有效期再清理；不删除目录或其他缓存连接的数据。
+     */
+    public function pruneAccessCache(int $budgetMilliseconds = 20): void
+    {
+        $root = rtrim($this->app->config->get('cache.stores.access.path'), '/\\');
+        if (!is_dir($root) || is_link($root)) {
+            return;
+        }
+        $before =
+            time() -
+            max(
+                RequestRateLimiter::MAX_WINDOW_SECONDS,
+                (int) $this->app->config->get('captcha.expire', 120),
+            ) -
+            60;
+        $until = hrtime(true) + max(1, min(100, $budgetMilliseconds)) * 1000000;
+        $start = random_int(0, 255);
+        try {
+            // 轮换起点，避免大量历史文件让后面的分区长期得不到维护。
+            for ($i = 0; $i < 256 && hrtime(true) < $until; $i++) {
+                $directory = $root . '/' . sprintf('%02x', ($start + $i) % 256);
+                if (!is_dir($directory) || is_link($directory)) {
+                    continue;
+                }
+                foreach (
+                    new FilesystemIterator($directory, FilesystemIterator::SKIP_DOTS)
+                    as $file
+                ) {
+                    if (hrtime(true) >= $until) {
+                        return;
+                    }
+                    if ($file->isLink() || !$file->isFile() || $file->getExtension() !== 'php') {
+                        continue;
+                    }
+                    $path = $file->getPathname();
+                    clearstatcache(true, $path);
+                    if (
+                        is_file($path) &&
+                        filemtime($path) < $before &&
+                        !@unlink($path) &&
+                        is_file($path)
+                    ) {
+                        throw new RateLimitStorageException();
+                    }
+                }
+            }
+        } catch (ErrorException | UnexpectedValueException $error) {
+            throw new RateLimitStorageException($error);
+        }
+    }
 
     /**
      * 默认仅预览；执行时再次核对范围、类型、修改时间和心跳状态，不递归删除目录。

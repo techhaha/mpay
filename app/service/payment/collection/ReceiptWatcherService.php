@@ -14,10 +14,13 @@ use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\receipt\PayOrderCallbackService;
+use PDOException;
 use RuntimeException;
 use think\Cache;
 use think\Config;
+use think\db\exception\DbException;
 use think\Validate;
+use Throwable;
 use UnexpectedValueException;
 
 /**
@@ -33,6 +36,9 @@ final class ReceiptWatcherService
     /** @var array<string,int> 最近 10 秒内成功写入的单调时间，过期项随循环清理，不长期积累通道。 */
     private array $activityWrittenAt = [];
 
+    /** @var array<string,int> 未能形成正常账号批次的插件退避；不接管插件已有的账号重试状态。 */
+    private array $retryAt = [];
+
     public function __construct(
         private readonly PayOrderRepository $orders,
         private readonly PaymentChannelRepository $channels,
@@ -46,7 +52,7 @@ final class ReceiptWatcherService
     ) {}
 
     /**
-     * 一个角色锁下执行一轮；已分类平台故障不终止其他账号，程序/数据库错误向命令抛出。
+     * 一个角色锁下执行一轮；账号故障按插件批次返回，额外的插件任务故障退避后继续其他插件。数据库和入口故障仍上抛。
      * @param callable|null $heartbeat 批次之间刷新本地进程心跳，不代表平台在线。
      * @return array{queried:int,verified:int,matched:int,failed:int}
      */
@@ -70,102 +76,76 @@ final class ReceiptWatcherService
                 if ($counts['queried'] + $counts['verified'] + $counts['failed'] >= $limit) {
                     break;
                 }
-                $plugin = $this->plugins->make($code);
-                if (!($plugin instanceof ReceiptCollectorInterface)) {
+                if (($this->retryAt[$code] ?? 0) > hrtime(true)) {
                     continue;
                 }
-                $prelogin = $this->plugins->preloginEnabled($plugin);
+                unset($this->retryAt[$code]);
+                // 心跳是共享运行设施，不能将其写入故障归为某个插件的问题。
                 if ($heartbeat !== null) {
                     $heartbeat();
                 }
-                $next = $code;
                 try {
+                    $plugin = $this->plugins->make($code);
+                    if (!($plugin instanceof ReceiptCollectorInterface)) {
+                        continue;
+                    }
+                    $prelogin = $this->plugins->preloginEnabled($plugin);
+                    $next = $code;
                     // 保活需要没有待付订单的启用通道；未声明时只读取原单依赖的版本。
                     [$orders, $channels] = $this->input($code, $upper, $prelogin);
-                } catch (ReceiptCollectionException $error) {
-                    // 不能拿截断候选匹配，但单个插件超容量也不能阻断其他插件。
-                    $this->logger->record(
-                        'receipt.collection',
-                        ['plugin_code' => $code, 'reason_code' => $error->reasonCode],
-                        'warning',
-                    );
-                    $counts['failed']++;
-                    continue;
-                }
-                $deadline = $this->clock
-                    ->now()
-                    ->modify(
-                        '+' .
-                            (int) $this->config->get('receipt.plugin_budget_seconds', 30) .
-                            ' seconds',
-                    );
-                $started = hrtime(true);
-                foreach ($plugin->collect($orders, $channels, $deadline) as $batch) {
-                    $covered = $this->batchChannels($batch, $channels);
-                    $this->validateError($batch['error'] ?? null);
-                    if (
-                        !isset($batch['records'], $batch['limit_reached']) ||
-                        !is_array($batch['records']) ||
-                        !array_is_list($batch['records']) ||
-                        count($batch['records']) > 200 ||
-                        !is_bool($batch['limit_reached']) ||
-                        ($batch['error'] !== null && $batch['records'] !== [])
-                    ) {
-                        throw new UnexpectedValueException('采集批次结构无效');
-                    }
-                    $matched = 0;
-                    if ($batch['error'] === null) {
-                        $selected = array_filter(
-                            $orders,
-                            static fn(array $pay): bool => isset(
-                                $covered[$pay['channel_revision_id']],
-                            ),
+                    $deadline = $this->clock
+                        ->now()
+                        ->modify(
+                            '+' .
+                                (int) $this->config->get('receipt.plugin_budget_seconds', 30) .
+                                ' seconds',
                         );
-                        if ($selected === []) {
-                            throw new UnexpectedValueException('采集批次没有原单来源');
-                        }
-                        $matched = $this->callbacks->receiveCollected(
-                            $plugin,
-                            $covered,
-                            $selected,
-                            $batch['records'],
-                            bin2hex(random_bytes(16)),
-                        );
-                        $counts['queried']++;
-                        $counts['matched'] += $matched;
-                    } else {
-                        $counts['failed']++;
-                    }
-                    $this->activity(
-                        $code,
-                        $covered,
-                        $batch['error'],
-                        false,
-                        $matched,
-                        $batch['limit_reached'],
-                        $started,
-                    );
-                    if ($heartbeat !== null) {
-                        $heartbeat();
-                    }
-                    if ($counts['queried'] + $counts['verified'] + $counts['failed'] >= $limit) {
-                        break;
-                    }
                     $started = hrtime(true);
-                }
-                if (
-                    $prelogin &&
-                    $this->clock->now() < $deadline &&
-                    $counts['queried'] + $counts['verified'] + $counts['failed'] < $limit
-                ) {
-                    foreach ($plugin->prelogin($channels, $deadline) as $batch) {
+                    foreach ($plugin->collect($orders, $channels, $deadline) as $batch) {
                         $covered = $this->batchChannels($batch, $channels);
                         $this->validateError($batch['error'] ?? null);
-                        $counts[$batch['error'] === null ? 'verified' : 'failed']++;
-                        $this->activity($code, $covered, $batch['error'], true, 0, false, $started);
-                        if ($heartbeat !== null) {
-                            $heartbeat();
+                        if (
+                            !isset($batch['records'], $batch['limit_reached']) ||
+                            !is_array($batch['records']) ||
+                            !array_is_list($batch['records']) ||
+                            count($batch['records']) > 200 ||
+                            !is_bool($batch['limit_reached']) ||
+                            ($batch['error'] !== null && $batch['records'] !== [])
+                        ) {
+                            throw new UnexpectedValueException('采集批次结构无效');
                         }
+                        $matched = 0;
+                        if ($batch['error'] === null) {
+                            $selected = array_filter(
+                                $orders,
+                                static fn(array $pay): bool => isset(
+                                    $covered[$pay['channel_revision_id']],
+                                ),
+                            );
+                            if ($selected === []) {
+                                throw new UnexpectedValueException('采集批次没有原单来源');
+                            }
+                            $matched = $this->callbacks->receiveCollected(
+                                $plugin,
+                                $covered,
+                                $selected,
+                                $batch['records'],
+                                bin2hex(random_bytes(16)),
+                            );
+                            $counts['queried']++;
+                            $counts['matched'] += $matched;
+                        } else {
+                            $counts['failed']++;
+                        }
+                        $this->activity(
+                            $code,
+                            $covered,
+                            $batch['error'],
+                            false,
+                            $matched,
+                            $batch['limit_reached'],
+                            $started,
+                        );
                         if (
                             $counts['queried'] + $counts['verified'] + $counts['failed'] >=
                             $limit
@@ -174,6 +154,59 @@ final class ReceiptWatcherService
                         }
                         $started = hrtime(true);
                     }
+                    if (
+                        $prelogin &&
+                        $this->clock->now() < $deadline &&
+                        $counts['queried'] + $counts['verified'] + $counts['failed'] < $limit
+                    ) {
+                        foreach ($plugin->prelogin($channels, $deadline) as $batch) {
+                            $covered = $this->batchChannels($batch, $channels);
+                            $this->validateError($batch['error'] ?? null);
+                            $counts[$batch['error'] === null ? 'verified' : 'failed']++;
+                            $this->activity(
+                                $code,
+                                $covered,
+                                $batch['error'],
+                                true,
+                                0,
+                                false,
+                                $started,
+                            );
+                            if (
+                                $counts['queried'] + $counts['verified'] + $counts['failed'] >=
+                                $limit
+                            ) {
+                                break;
+                            }
+                            $started = hrtime(true);
+                        }
+                    }
+                } catch (DbException | PDOException $error) {
+                    throw $error;
+                } catch (Throwable $error) {
+                    // 不重跑已经提交的确认、不伪造空批次成功；未处理账号留待原查询窗口重试。
+                    $wait =
+                        $error instanceof ReceiptCollectionException
+                            ? $error->retryAfterSeconds ?? 60
+                            : 60;
+                    $this->retryAt[$code] = hrtime(true) + $wait * 1000000000;
+                    // 只有插件返回的批次才更新通道摘要；任务异常不推断平台原因或受影响账号。
+                    $this->logger->record(
+                        'receipt.task_failed',
+                        [
+                            'plugin_code' => $code,
+                            'reason_code' =>
+                                $error instanceof ReceiptCollectionException
+                                    ? $error->reasonCode
+                                    : 'task_fault',
+                        ],
+                        'error',
+                    );
+                    $this->logger->exception($error);
+                    $counts['failed']++;
+                }
+                if ($heartbeat !== null) {
+                    $heartbeat();
                 }
             }
         } finally {

@@ -24,8 +24,11 @@ final class BizOrderRepository extends BaseRepository
         parent::__construct($model);
     }
 
-    /** @return list<string> 到期候选号；生命周期逐条锁定并核验，扫描本身不改变支付事实。 */
-    public function dueExpirationNumbers(string $now, int $limit): array
+    /**
+     * @param list<string> $excluded 服务暂缓的失败单号，不决定重试策略。
+     * @return list<string> 到期候选号；暂缓失败单不占用整批名额，扫描不改变支付事实。
+     */
+    public function dueExpirationNumbers(string $now, int $limit, array $excluded = []): array
     {
         return $this->model
             ->whereIn('status', [
@@ -33,6 +36,7 @@ final class BizOrderRepository extends BaseRepository
                 TradeConstant::ORDER_STATUS_PAYING,
             ])
             ->where('expire_at', '<=', $now)
+            ->when($excluded !== [], static fn($query) => $query->whereNotIn('biz_no', $excluded))
             ->order('expire_at,id')
             ->limit($limit)
             ->column('biz_no');

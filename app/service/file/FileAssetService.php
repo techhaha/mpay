@@ -172,7 +172,7 @@ final class FileAssetService extends BaseService
         }
     }
 
-    /** @return array{id:string,url:string,mime_type:string,size:int} 供受保护后台预览，缺失文件仍报故障，不能替换历史引用。 */
+    /** @return array{id:string,url:string,mime_type:string,size:int} 供后台预览；材料不可用给出业务提示，不能替换历史引用。 */
     public function image(string $id): array
     {
         $asset =
@@ -191,14 +191,19 @@ final class FileAssetService extends BaseService
      * 路径检查不证明图片对应真实收款账号，也不证明设备可以扫码，真实来源验证另行完成。
      *
      * @return string|null 相对站点根的受控路径，不返回服务器绝对路径。
-     * @throws \RuntimeException 资产缺失、存储合同不符或符号链接越出公开目录。
+     * @throws BusinessException 资产缺失、不可读取或越出公开目录；仅拒绝使用该材料。
      */
     public function publicImagePath(?string $id): ?string
     {
         if ($id === null) {
             return null;
         }
-        $asset = $this->files->find($id) ?? throw new \RuntimeException('原二维码图片资产缺失');
+        $asset =
+            $this->files->find($id) ??
+            throw new BusinessException(
+                '收款码图片记录不存在，请联系管理员检查通道配置',
+                ApiResponseConstant::CONFLICT,
+            );
         return $this->assetPath($asset);
     }
 
@@ -211,7 +216,10 @@ final class FileAssetService extends BaseService
             !in_array($asset['mime_type'], ['image/png', 'image/jpeg', 'image/webp'], true) ||
             !preg_match('#^[a-zA-Z0-9_-][a-zA-Z0-9/_-]*\.(png|jpg|jpeg|webp)$#D', $path)
         ) {
-            throw new \RuntimeException('二维码图片资产不符合公开存储合同');
+            throw new BusinessException(
+                '收款码图片记录无效，请联系管理员重新上传',
+                ApiResponseConstant::CONFLICT,
+            );
         }
         $root = realpath($this->app->getRootPath() . 'public/storage');
         $file = $root === false ? false : realpath($root . '/' . $path);
@@ -222,7 +230,10 @@ final class FileAssetService extends BaseService
             !is_readable($file) ||
             !str_starts_with(str_replace('\\', '/', $file), str_replace('\\', '/', $root) . '/')
         ) {
-            throw new \RuntimeException('二维码图片缺失或越出公开存储目录');
+            throw new BusinessException(
+                '收款码图片缺失或不可读取，请联系管理员重新上传',
+                ApiResponseConstant::CONFLICT,
+            );
         }
         return '/storage/' . $path;
     }

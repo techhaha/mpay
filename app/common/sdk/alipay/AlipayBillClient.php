@@ -53,7 +53,10 @@ final class AlipayBillClient
             $toTimestamp - $fromTimestamp > 31 * 86400 ||
             $toTimestamp > $now->getTimestamp()
         ) {
-            throw new InvalidArgumentException('账单查询窗口无效');
+            throw new ReceiptCollectionException('protocol_error', null, [
+                'stage' => '查询准备',
+                'message' => '支付宝账单查询时间范围无效',
+            ]);
         }
         if ($deadline <= $now) {
             throw new ReceiptCollectionException('budget_exhausted', null, [
@@ -84,12 +87,18 @@ final class AlipayBillClient
                 !is_string($account[$field] ?? null) ||
                 !preg_match('/^[1-9][0-9]{15,31}$/D', $account[$field])
             ) {
-                throw new InvalidArgumentException('支付宝应用或账单主体标识无效');
+                throw new ReceiptCollectionException('configuration_conflict', null, [
+                    'stage' => '检查账号配置',
+                    'message' => '支付宝应用或账单主体标识应为 16～32 位数字',
+                ]);
             }
         }
         foreach (['private_key', 'alipay_public_key'] as $field) {
             if (!is_string($account[$field] ?? null)) {
-                throw new InvalidArgumentException('支付宝密钥配置无效');
+                throw new ReceiptCollectionException('configuration_conflict', null, [
+                    'stage' => '检查账号配置',
+                    'message' => '支付宝密钥配置必须是文本',
+                ]);
             }
         }
         $zone = new DateTimeZone('Asia/Shanghai');
@@ -123,7 +132,10 @@ final class AlipayBillClient
                 strlen($account['app_auth_token']) > 4096 ||
                 preg_match('/[\x00-\x20\x7f]/', $account['app_auth_token'])
             ) {
-                throw new InvalidArgumentException('支付宝授权凭证无效');
+                throw new ReceiptCollectionException('configuration_conflict', null, [
+                    'stage' => '检查账号配置',
+                    'message' => '支付宝授权凭证格式无效',
+                ]);
             }
             $parameters['app_auth_token'] = $account['app_auth_token'];
         }

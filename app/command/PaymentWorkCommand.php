@@ -14,6 +14,7 @@ use think\console\Command;
 use think\console\Input;
 use think\console\input\Option;
 use think\console\Output;
+use Throwable;
 
 /** 通知与维护的原生常驻入口；账单采集由 payment:watch 隔离，外部守护负责启动和重启。 */
 final class PaymentWorkCommand extends Command
@@ -21,13 +22,13 @@ final class PaymentWorkCommand extends Command
     protected function configure(): void
     {
         $this->setName('payment:work')
-            ->setDescription('持续派发业务通知并轮换处理订单过期、匹配、恢复和运行文件清理')
+            ->setDescription('持续派发业务通知、处理订单过期并清理运行文件')
             ->addOption('once', null, Option::VALUE_NONE, '只执行有界批次，不常驻')
             ->addOption(
                 'limit',
                 null,
                 Option::VALUE_REQUIRED,
-                '单次批次最多轮数（1～1000），每轮一条通知及一个小维护阶段',
+                '单次批次最多轮数（1～1000），每轮一条通知及一小批到期订单',
                 '100',
             )
             ->addOption(
@@ -38,7 +39,7 @@ final class PaymentWorkCommand extends Command
             );
     }
 
-    /** 单笔恢复业务拒绝由维护服务记录并跳过；数据库/程序故障仍非零退出，通知网络失败按原策略重试。 */
+    /** 订单及单次通知故障在任务边界记录并退避；数据库、进程初始化等共享故障仍非零退出。 */
     protected function execute(Input $input, Output $output): int
     {
         $control = new CliWorkerControl();
@@ -62,7 +63,6 @@ final class PaymentWorkCommand extends Command
             $maintenance = $this->app->make(PaymentRuntimeMaintenanceService::class);
             $started = hrtime(true);
             $round = 0;
-            $idleRounds = 0;
             $nextPrune = 30;
             $nextRatePrune = 60;
             $counts = [
@@ -73,12 +73,7 @@ final class PaymentWorkCommand extends Command
                 'lease_lost' => 0,
                 'idle' => 0,
             ];
-            $maintenanceCounts = [
-                'expired' => 0,
-                'executions_checked' => 0,
-                'executions_rejected' => 0,
-            ];
-            $phases = ['expire', 'execution'];
+            $expired = 0;
             while (!$control->stopping() && (!$once || $round < $limit)) {
                 $elapsed = (hrtime(true) - $started) / 1000000000;
                 if ($maximum !== null && $elapsed >= $maximum) {
@@ -86,18 +81,14 @@ final class PaymentWorkCommand extends Command
                 }
                 $control->heartbeat($this->app->getRuntimePath(), 'work', $owner, true);
                 $heartbeat = true;
-                // 一条通知后轮换一个维护阶段；不先清空全部账务或历史记录才发送业务通知。
+                // 每条通知后只处理一小批到期订单；付款准备由下单及收银台请求完成。
                 $result = $dispatcher->dispatchOne($owner);
                 if (!array_key_exists($result, $counts)) {
                     throw new \LogicException('通知派发返回未知状态');
                 }
                 $counts[$result]++;
-                $batch = $maintenance->runOnce(5, 1, $phases[$round % count($phases)]);
-                $actions = $batch['expired'] + $batch['executions_checked'];
-                foreach ($maintenanceCounts as $key => $unused) {
-                    $maintenanceCounts[$key] += $batch[$key];
-                }
-                $idleRounds = $result === 'idle' && $actions === 0 ? $idleRounds + 1 : 0;
+                $batchExpired = $maintenance->runOnce(5, 1);
+                $expired += $batchExpired;
                 // 原生短期缓存仅回收超过最大有效期的旧文件，不增加守护入口或限流锁。
                 if ($elapsed >= $nextRatePrune) {
                     $nextRatePrune = $elapsed + 60;
@@ -113,12 +104,24 @@ final class PaymentWorkCommand extends Command
                     $days = $this->app->make(SystemConfigService::class)->values('maintenance')[
                         'technical_log_days'
                     ];
-                    $this->app->make(RuntimePruneService::class)->run(true, 20, $days, 500);
                     $nextPrune = $elapsed + 3600;
+                    try {
+                        $this->app->make(RuntimePruneService::class)->run(true, 20, $days, 500);
+                    } catch (Throwable $error) {
+                        // 日志/旧心跳清理不是交易前置条件；保留诊断，等下次维护周期再尝试。
+                        $this->app->make(SafeLogger::class)->record(
+                            'runtime.prune_failed',
+                            [
+                                'reason_code' => 'cleanup_failed',
+                            ],
+                            'error',
+                        );
+                        $this->app->make(SafeLogger::class)->exception($error);
+                    }
                 }
                 $this->app->log->save();
                 $round++;
-                if ($once && $idleRounds >= count($phases)) {
+                if ($once && $result === 'idle' && $batchExpired === 0) {
                     break;
                 }
                 if (!$once && $result === 'idle') {
@@ -127,12 +130,12 @@ final class PaymentWorkCommand extends Command
             }
             $output->writeln(
                 json_encode(
-                    ['notifications' => $counts, 'maintenance' => $maintenanceCounts],
+                    ['notifications' => $counts, 'maintenance' => ['expired' => $expired]],
                     JSON_THROW_ON_ERROR,
                 ),
             );
             return 0;
-        } catch (\Throwable $error) {
+        } catch (Throwable $error) {
             $this->app->make(SafeLogger::class)->exception($error);
             $this->app->log->save();
             $output->writeln(

@@ -170,6 +170,7 @@ final class PaymentPluginConfService extends BaseService
         $now = $this->clock->now()->format('Y-m-d H:i:s');
         $this->management->assertNew($configuration['plugin_code']);
         $this->validator->validate($definition->configSchema, $configuration['config_json']);
+        $this->validateAssets($definition, $configuration['config_json']);
         $this->configurations->setEnabled($id, true, $now);
         $this->audit->record(
             $actor,

@@ -18,6 +18,9 @@ use app\repository\payment\notify\NotifyAttemptRepository;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\service\payment\epay\EpayV1MessageService;
 use DateTimeImmutable;
+use PDOException;
+use think\db\exception\DbException;
+use Throwable;
 
 /**
  * 直接派发持久商户通知：短事务认领和追加意图，事务外 HTTP，再按原 token/租约回写结果。
@@ -40,7 +43,7 @@ final class MerchantNotifyDispatcherService extends BaseService
      *
      * @param string $owner 当前进程随机身份，不使用主机名、用户名或敏感路径。
      * @return string idle/acknowledged/retry/exhausted/quarantined/lease_lost；失去租约的 ACK 不冒充入库成功。
-     * @throws \Throwable 数据库/配置/程序故障继续向 CLI 抛出，已提交的意图由租约恢复承担。
+     * @throws Throwable 认领/回写或数据库故障继续上抛；单次请求失败按原通知策略登记和重试。
      */
     public function dispatchOne(string $owner): string
     {
@@ -81,9 +84,11 @@ final class MerchantNotifyDispatcherService extends BaseService
                     'result_code' => $e->reasonCode,
                     'response_digest' => null,
                 ] + $this->responseEvidence($e->responsePrefix(), true, $claim);
-        } catch (\Throwable $e) {
-            // 程序故障不伪装成网络失败：尽力登记本次失败后仍抛出，让守护进程看到非零退出。
-            $this->complete($claim, false, [
+        } catch (DbException | PDOException $e) {
+            throw $e;
+        } catch (Throwable $e) {
+            // 本次请求故障仍明确记为 application_error，沿用通知退避，不阻断其他通知。
+            $outcome = $this->complete($claim, false, [
                 'http_status' => null,
                 'duration_ms' => null,
                 'result_code' => Result::APPLICATION_ERROR,
@@ -91,7 +96,16 @@ final class MerchantNotifyDispatcherService extends BaseService
                 'response_body' => null,
                 'response_truncated' => false,
             ]);
-            throw $e;
+            $this->logger->record(
+                'notification.failed',
+                [
+                    'notify_no' => $claim->notifyNo,
+                    'reason_code' => Result::APPLICATION_ERROR,
+                ],
+                'error',
+            );
+            $this->logger->exception($e);
+            return $outcome;
         }
         return $this->complete($claim, $acknowledged, $result);
     }

@@ -312,43 +312,6 @@ final class PayOrderRepository extends BaseRepository
     }
 
     /**
-     * 新单提交后尚未执行，或明确安全的旧执行租约到期，才进入恢复候选。
-     * JSON 路径交给 ThinkORM MySQL 构造器，replay_safe 经 JSON_UNQUOTE 后为字符串 true。
-     *
-     * @param string $afterId 上次扫描到的主键；按 ID 续扫，避免固定的异常订单占满每批候选。
-     * @return list<array{id:string,pay_no:string}> 派发仍须以原版本及执行 token 再核验，查询条件不是执行授权。
-     */
-    public function recoverableExecutionPage(string $now, string $afterId, int $limit): array
-    {
-        return $this->model
-            ->where('id', '>', $afterId)
-            ->where('expire_at', '>', $now)
-            ->where(function (Query $query) use ($now): void {
-                $query
-                    ->where('status', TradeConstant::ORDER_STATUS_CREATED)
-                    ->whereOr(function (Query $retry) use ($now): void {
-                        $retry
-                            ->where('status', TradeConstant::ORDER_STATUS_PAYING)
-                            ->where('ext_json->payment_context->execution->replay_safe', 'true')
-                            ->whereIn('ext_json->payment_context->execution->phase', [
-                                'claimed',
-                                'uncertain',
-                            ])
-                            ->where(
-                                'ext_json->payment_context->execution->lease_until',
-                                '<=',
-                                $now,
-                            );
-                    });
-            })
-            ->field('id,pay_no')
-            ->order('id')
-            ->limit($limit)
-            ->select()
-            ->toArray();
-    }
-
-    /**
      * @param list<string> $bizNos 已按认证主体筛出的业务号，空列表不会退化成全表查询。
      * @return array<string,PayOrder> 按 biz_no 索引，供分页适配一次取齐唯一支付尝试。
      */

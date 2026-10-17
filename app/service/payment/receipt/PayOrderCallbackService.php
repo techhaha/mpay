@@ -24,7 +24,9 @@ use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
 use DateTimeImmutable;
+use PDOException;
 use RuntimeException;
+use think\db\exception\DbException;
 use think\Request;
 use think\Response;
 use Throwable;
@@ -227,7 +229,28 @@ final class PayOrderCallbackService extends BaseService
                 $channel['configuration'],
                 $this->clock->now(),
             );
-            $matched += (int) $this->confirmResult($result, $context, $requestId)['matched'];
+            try {
+                $matched += (int) $this->confirmResult($result, $context, $requestId)['matched'];
+            } catch (DbException | PDOException $error) {
+                throw $error;
+            } catch (Throwable $error) {
+                // 本笔事务已结束；拒绝/故障不算匹配成功，也不能阻断批次里其他订单的独立确认。
+                $this->logger->record(
+                    'receipt.confirmation_rejected',
+                    [
+                        'pay_no' => $pay['pay_no'],
+                        'channel_id' => $channel['channel_id'],
+                        'plugin_code' => $plugin->getCode(),
+                        'trace_no' => $requestId,
+                        'reason_code' =>
+                            $error instanceof BusinessException
+                                ? 'business_rejected'
+                                : 'task_fault',
+                    ],
+                    'warning',
+                );
+                $this->logger->exception($error);
+            }
         }
         return $matched;
     }
@@ -261,6 +284,7 @@ final class PayOrderCallbackService extends BaseService
             $this->orders->find($result['pay_no']) ??
             throw new BusinessException('通知支付单不存在', ApiResponseConstant::NOT_FOUND);
         $channel = $this->channels->find($pay['channel_id']);
+        $revision = $pay->channelRevision;
         // 首次自动确认仍须命中识别金额；原成功交易的重报/补证据只核对已确认实收。
         // 这里是入口校验，最终关联及幂等结论仍由生命周期在锁内复核。
         $confirmed = (int) $pay['status'] === TradeConstant::ORDER_STATUS_SUCCESS;
@@ -269,7 +293,8 @@ final class PayOrderCallbackService extends BaseService
             ($pay['ext_json']['personal_receipt']['event_key'] ?? null) === $record['event_key'];
         if (
             $channel === null ||
-            $pay->channelRevision['api_config_id'] !== $context->configurationId ||
+            $revision === null ||
+            $revision['api_config_id'] !== $context->configurationId ||
             $pay['channel_id'] !== $context->channelId ||
             $pay['receipt_scope_key'] !== $context->scopeKey ||
             $context->payType !== $record['pay_type'] ||

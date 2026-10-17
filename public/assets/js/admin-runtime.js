@@ -22,7 +22,7 @@ MpayAdmin.ready(function () {
                     ? (row.recovered_at?UI.badge('已恢复','green')+' ':'')+E(row.last_error.message.slice(0,100)) : '—'},
                 {field:'last_success_at',title:'最近查单成功',minWidth:175,templet:row=>E(row.last_success_at||'暂无记录')},
                 {field:'pending_count',title:'待核对订单',width:120,align:'center',templet:row=>E(row.pending_count??0)},
-                {field:'retry_count',title:'重试次数',width:110,align:'center',templet:row=>E(row.retry_count??'—')},
+                {field:'consecutive_failures',title:'连续失败批次',width:130,align:'center',templet:row=>E(row.consecutive_failures??'—')},
                 {title:'操作',width:100,align:'center',fixed:'right',templet:()=>'<button type="button" class="admin-link" lay-event="detail">详情</button>'}
             ]]});
     }
@@ -31,7 +31,7 @@ MpayAdmin.ready(function () {
         const diagnosis=error?'<div class="admin-section-title">最近一次错误 '+(item.recovered_at?UI.badge('已恢复','green'):'')+'</div>'
             +UI.facts({'来源':error.source_label,'失败阶段':error.stage,'平台错误码':error.platform_code,'错误说明':error.message,'HTTP 状态':error.http_status,'发生时间':error.occurred_at,'恢复时间':item.recovered_at})
             +(error.message_truncated?UI.notice('错误说明超出长度上限，仅保留前 2048 字节。'):''):'';
-        UI.open({title:'采集详情 · '+item.name,drawer:true,content:UI.state(item.status_label)+diagnosis+UI.facts({'收款通道':item.name,'通道启用':item.enabled,'待核对订单':item.pending_count,'最近查单成功':item.last_success_at,'最近登录验证':item.last_verified_at,'最早允许尝试':item.next_run_at,'关联批次确认笔数':item.matched_count,'重试次数':item.retry_count,'最近耗时（毫秒）':item.last_duration_ms,'处理说明':item.reason_label})
+        UI.open({title:'采集详情 · '+item.name,drawer:true,content:UI.state(item.status_label)+diagnosis+UI.facts({'收款通道':item.name,'通道启用':item.enabled,'待核对订单':item.pending_count,'最近查单成功':item.last_success_at,'最近登录验证':item.last_verified_at,'关联批次确认笔数':item.matched_count,'连续失败批次':item.consecutive_failures,'最近耗时（毫秒）':item.last_duration_ms,'处理说明':item.reason_label})
             +'<details class="admin-details"><summary>技术信息</summary>'+UI.facts({'插件':item.plugin_code,'配置版本':item.configuration_version,'最近更新':item.updated_at})+'</details><a class="layui-btn layui-btn-primary" href="/admin/configurations?configuration_id='+encodeURIComponent(item.configuration_id)+'">查看收款通道</a>'});
     });
     document.getElementById('runtime-doctor').addEventListener('click',()=>{

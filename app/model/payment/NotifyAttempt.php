@@ -33,7 +33,6 @@ final class NotifyAttempt extends BaseModel
                 'http_status' => 'int',
                 'duration_ms' => 'int',
                 'result_code' => 'string',
-                'response_digest' => 'string',
                 'response_body' => 'string',
                 'response_truncated' => 'bool',
                 'created_at' => 'string',

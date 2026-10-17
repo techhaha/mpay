@@ -82,7 +82,7 @@ final class PaymentWorkCommand extends Command
                 $control->heartbeat($this->app->getRuntimePath(), 'work', $owner, true);
                 $heartbeat = true;
                 // 每条通知后只处理一小批到期订单；付款准备由下单及收银台请求完成。
-                $result = $dispatcher->dispatchOne($owner);
+                $result = $dispatcher->dispatchOne();
                 if (!array_key_exists($result, $counts)) {
                     throw new \LogicException('通知派发返回未知状态');
                 }

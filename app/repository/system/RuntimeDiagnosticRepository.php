@@ -23,7 +23,7 @@ final class RuntimeDiagnosticRepository
             'quarantined' => (int) $this->notifications
                 ->whereIn('last_response', [
                     'quarantined_frozen_payload_invalid',
-                    'quarantined_attempt_ledger_inconsistent',
+                    'quarantined_attempt_state_invalid',
                     'quarantined_schedule_invalid',
                 ])
                 ->count(),

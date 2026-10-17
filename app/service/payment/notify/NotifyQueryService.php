@@ -73,7 +73,6 @@ final class NotifyQueryService extends BaseService
                         'http_status',
                         'duration_ms',
                         'result_code',
-                        'response_digest',
                         'response_body',
                         'response_truncated',
                     ]

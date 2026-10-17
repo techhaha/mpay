@@ -34,7 +34,7 @@ final class PaymentResultCode
     public const LEASE_EXPIRED_UNKNOWN = 'lease_expired_unknown';
     public const AUTOMATIC_LIMIT_REACHED = 'automatic_limit_reached';
     public const QUARANTINED_FROZEN_PAYLOAD_INVALID = 'quarantined_frozen_payload_invalid';
-    public const QUARANTINED_ATTEMPT_LEDGER_INCONSISTENT = 'quarantined_attempt_ledger_inconsistent';
+    public const QUARANTINED_ATTEMPT_STATE_INVALID = 'quarantined_attempt_state_invalid';
     public const QUARANTINED_SCHEDULE_INVALID = 'quarantined_schedule_invalid';
     public const REFUND_PROCESSING = 'refund_processing';
     public const REFUND_SUCCESS = 'refund_success';
@@ -79,7 +79,7 @@ final class PaymentResultCode
             self::LEASE_EXPIRED_UNKNOWN => '工作者结果未提交，不能确定远端是否收到',
             self::AUTOMATIC_LIMIT_REACHED => '自动次数或期限已用尽，需要人工核对',
             self::QUARANTINED_FROZEN_PAYLOAD_INVALID => '通知内容异常，已暂停发送',
-            self::QUARANTINED_ATTEMPT_LEDGER_INCONSISTENT => '通知发送记录异常，已暂停发送',
+            self::QUARANTINED_ATTEMPT_STATE_INVALID => '通知发送记录异常，已暂停发送',
             self::QUARANTINED_SCHEDULE_INVALID => '通知调度异常，已暂停发送',
             self::REFUND_PROCESSING => '退款请求已认领',
             self::REFUND_SUCCESS => '退款成功',

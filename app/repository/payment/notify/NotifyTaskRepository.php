@@ -213,7 +213,6 @@ final class NotifyTaskRepository extends BaseRepository
     public function claim(
         NotifyTask $task,
         string $token,
-        string $owner,
         int $attempt,
         string $now,
         string $until,
@@ -226,7 +225,6 @@ final class NotifyTaskRepository extends BaseRepository
             ->update([
                 'status' => NotifyConstant::STATUS_SENDING,
                 'claim_token' => $token,
-                'lease_owner' => $owner,
                 'lease_until' => $until,
                 'retry_count' => $attempt,
                 'last_notify_at' => $now,
@@ -282,7 +280,6 @@ final class NotifyTaskRepository extends BaseRepository
                 'first_ack_at' => $firstAckAt,
                 'manual_attempt_no' => null,
                 'claim_token' => null,
-                'lease_owner' => null,
                 'lease_until' => null,
                 'updated_at' => $now,
             ]) === 1;
@@ -307,7 +304,6 @@ final class NotifyTaskRepository extends BaseRepository
                 'last_response' => 'lease_expired_unknown',
                 'manual_attempt_no' => null,
                 'claim_token' => null,
-                'lease_owner' => null,
                 'lease_until' => null,
                 'updated_at' => $now,
             ]);
@@ -328,7 +324,6 @@ final class NotifyTaskRepository extends BaseRepository
                 'status' => NotifyConstant::STATUS_EXHAUSTED,
                 'next_retry_at' => null,
                 'claim_token' => null,
-                'lease_owner' => null,
                 'lease_until' => null,
                 'last_response' => 'automatic_limit_reached',
                 'updated_at' => $now,
@@ -349,7 +344,7 @@ final class NotifyTaskRepository extends BaseRepository
         if (
             !in_array(
                 $reason,
-                ['frozen_payload_invalid', 'attempt_ledger_inconsistent', 'schedule_invalid'],
+                ['frozen_payload_invalid', 'attempt_state_invalid', 'schedule_invalid'],
                 true,
             )
         ) {
@@ -363,7 +358,6 @@ final class NotifyTaskRepository extends BaseRepository
                 'status' => NotifyConstant::STATUS_EXHAUSTED,
                 'next_retry_at' => null,
                 'lease_until' => null,
-                'lease_owner' => null,
                 'claim_token' => null,
                 'last_response' => 'quarantined_' . $reason,
                 'updated_at' => $now,

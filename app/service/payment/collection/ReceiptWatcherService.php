@@ -426,20 +426,8 @@ final class ReceiptWatcherService
             } elseif (isset($state['last_error']) && empty($state['recovered_at'])) {
                 $state['recovered_at'] = $state['updated_at'];
             }
-            $state['retry_count'] = $error === null ? 0 : (int) ($state['retry_count'] ?? 0) + 1;
-            $state['next_run_at'] = $now
-                ->modify(
-                    '+' .
-                        ($error['retry_after'] ??
-                            (int) $this->config->get(
-                                $probe
-                                    ? 'receipt.prelogin_interval_seconds'
-                                    : 'receipt.query_interval_seconds',
-                                $probe ? 600 : 3,
-                            )) .
-                        ' seconds',
-                )
-                ->format('Y-m-d H:i:s');
+            $state['consecutive_failures'] =
+                $error === null ? 0 : (int) ($state['consecutive_failures'] ?? 0) + 1;
             if ($error === null) {
                 $state['last_verified_at'] = $state['updated_at'];
                 if (!$probe) {

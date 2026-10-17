@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace app\repository\payment\notify;
 
-use app\common\constant\PaymentResultCode as Result;
-
 use app\common\base\BaseRepository;
+use app\common\constant\PaymentResultCode as Result;
 use app\model\payment\NotifyAttempt;
 
 /**
@@ -34,32 +33,15 @@ final class NotifyAttemptRepository extends BaseRepository
         ];
     }
 
-    /**
-     * 调用方已持有 NotifyTask 锁，所有尝试写入遵守同一前缀；聚合读取不与正常回写竞争。
-     *
-     * @return array{count:int,minimum:int,last:NotifyAttempt|null,unfinished_earlier:int} 检查缺号及非当前未结束意图。
-     */
-    public function ledger(string $notifyNo): array
+    /** 当前尝试按唯一序号读取；调用方持有任务锁，不审计历史日志是否连续。 */
+    public function current(string $notifyNo, int $attempt): ?NotifyAttempt
     {
         $this->requireTransaction();
-        $last = $this->model
+        return $this->model
             ->where('notify_no', $notifyNo)
-            ->order('attempt_no', 'desc')
+            ->where('attempt_no', $attempt)
             ->lock(true)
             ->find();
-        return [
-            'count' => (int) $this->model->where('notify_no', $notifyNo)->count(),
-            'minimum' => (int) $this->model->where('notify_no', $notifyNo)->min('attempt_no'),
-            'last' => $last,
-            'unfinished_earlier' =>
-                $last === null
-                    ? 0
-                    : (int) $this->model
-                        ->where('notify_no', $notifyNo)
-                        ->where('attempt_no', '<>', (int) $last['attempt_no'])
-                        ->whereNull('finished_at')
-                        ->count(),
-        ];
     }
 
     /**
@@ -83,7 +65,7 @@ final class NotifyAttemptRepository extends BaseRepository
     /**
      * 只完成相同尝试及 token 的未完成记录。调用方须已核对有效租约，或确认该原租约过期。
      *
-     * @param array{http_status:?int,duration_ms:?int,result_code:string,response_digest:?string,response_body:?string,response_truncated:bool} $result 正文为已限制的 UTF-8 片段。
+     * @param array{http_status:?int,duration_ms:?int,result_code:string,response_body:?string,response_truncated:bool} $result 正文为已限制的 UTF-8 片段。
      * @throws \RuntimeException 尝试缺失或已完成，回滚本次任务回写，避免责任和审计分裂。
      */
     public function finish(
@@ -96,8 +78,6 @@ final class NotifyAttemptRepository extends BaseRepository
         $this->requireTransaction();
         if (
             !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $result['result_code']) ||
-            ($result['response_digest'] !== null &&
-                !preg_match('/^[a-f0-9]{64}$/D', $result['response_digest'])) ||
             ($result['response_body'] !== null &&
                 (strlen($result['response_body']) > 4096 ||
                     !mb_check_encoding($result['response_body'], 'UTF-8'))) ||

@@ -243,9 +243,8 @@ final class RuntimeQueryService extends BaseService
                 'last_success_at' => $state['last_success_at'] ?? null,
                 'last_verified_at' => $state['last_verified_at'] ?? null,
                 'last_duration_ms' => $state['last_duration_ms'] ?? null,
-                'next_run_at' => $state['next_run_at'] ?? null,
                 'matched_count' => $state['matched_count'] ?? null,
-                'retry_count' => $state['retry_count'] ?? 0,
+                'consecutive_failures' => $state['consecutive_failures'] ?? 0,
                 'updated_at' => $state['updated_at'] ?? null,
                 'device_status' => 'unknown',
             ];

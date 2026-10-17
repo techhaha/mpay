@@ -11,6 +11,7 @@ use app\common\util\HttpClient;
 use app\common\util\HttpTargetPolicy;
 use app\common\util\Money;
 use app\common\util\SafeLogger;
+use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
 use app\exception\HttpRequestException;
 use app\model\payment\NotifyTask;
@@ -18,7 +19,9 @@ use app\repository\payment\notify\NotifyAttemptRepository;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\service\payment\epay\EpayV1MessageService;
 use DateTimeImmutable;
+use InvalidArgumentException;
 use PDOException;
+use RuntimeException;
 use think\db\exception\DbException;
 use Throwable;
 
@@ -41,24 +44,19 @@ final class MerchantNotifyDispatcherService extends BaseService
     /**
      * 至多认领并发送一条；CLI 常驻与一次批次共用此用例，调用前不能持有外层事务。
      *
-     * @param string $owner 当前进程随机身份，不使用主机名、用户名或敏感路径。
      * @return string idle/acknowledged/retry/exhausted/quarantined/lease_lost；失去租约的 ACK 不冒充入库成功。
      * @throws Throwable 认领/回写或数据库故障继续上抛；单次请求失败按原通知策略登记和重试。
      */
-    public function dispatchOne(string $owner): string
+    public function dispatchOne(): string
     {
-        if (!preg_match('/^[a-f0-9]{32}$/D', $owner)) {
-            throw new \InvalidArgumentException('工作进程身份必须为随机 32 位十六进制');
-        }
-        $claim = $this->claim($owner);
+        $claim = $this->claim();
         if (!($claim instanceof NotificationClaim)) {
             return $claim;
         }
         try {
-            $url = $this->messages->targetUrl($claim->target, $claim->parameters);
             // 预留两秒提交结果；慢 DNS 结束后 HTTP 客户端会再次检查这个绝对截止时间。
             $started = hrtime(true);
-            $response = $this->http->get($url, $claim->leaseUntil->modify('-2 seconds'));
+            $response = $this->http->get($claim->target, $claim->leaseUntil->modify('-2 seconds'));
             $durationMs = (int) min(4294967295, (hrtime(true) - $started) / 1000000);
             $acknowledged = $this->policy->acknowledged($response);
             $status = $response->getStatusCode();
@@ -73,7 +71,6 @@ final class MerchantNotifyDispatcherService extends BaseService
                     'http_status' => $status,
                     'duration_ms' => $durationMs,
                     'result_code' => $reason,
-                    'response_digest' => hash('sha256', $body),
                 ] + $this->responseEvidence($body, false, $claim);
         } catch (HttpRequestException $e) {
             $acknowledged = false;
@@ -82,7 +79,6 @@ final class MerchantNotifyDispatcherService extends BaseService
                     'http_status' => $e->httpStatus,
                     'duration_ms' => $e->durationMs,
                     'result_code' => $e->reasonCode,
-                    'response_digest' => null,
                 ] + $this->responseEvidence($e->responsePrefix(), true, $claim);
         } catch (DbException | PDOException $e) {
             throw $e;
@@ -92,7 +88,6 @@ final class MerchantNotifyDispatcherService extends BaseService
                 'http_status' => null,
                 'duration_ms' => null,
                 'result_code' => Result::APPLICATION_ERROR,
-                'response_digest' => null,
                 'response_body' => null,
                 'response_truncated' => false,
             ]);
@@ -115,13 +110,12 @@ final class MerchantNotifyDispatcherService extends BaseService
      *
      * @return NotificationClaim|string 已持久认领，或 idle/retry/exhausted；不返回闭包/任务类名。
      */
-    private function claim(string $owner): NotificationClaim|string
+    private function claim(): NotificationClaim|string
     {
         $numbers = $this->tasks->dueNumbers($this->clock->now()->format('Y-m-d H:i:s'));
         foreach ($numbers as $number) {
             $claimed = $this->transaction(function () use (
                 $number,
-                $owner,
             ): NotificationClaim|string|array|null {
                 $task = $this->tasks->lock($number);
                 // 等锁也可能消耗时间，取锁之后重读时钟，不能以扫描时刻创建租约。
@@ -150,6 +144,19 @@ final class MerchantNotifyDispatcherService extends BaseService
                     return null;
                 }
                 $damage = $this->damageReason($task);
+                $target = null;
+                if ($damage === null) {
+                    try {
+                        // 本次认领只构造一次完整 URL；网络目标检查仍在事务外的 HTTP 层执行。
+                        $target = $this->messages->targetUrl(
+                            $task['notify_url'],
+                            $task['notify_data'],
+                        );
+                        HttpTargetPolicy::uri($target, 16384);
+                    } catch (InvalidArgumentException | BusinessException) {
+                        $damage = 'frozen_payload_invalid';
+                    }
+                }
                 if ($damage !== null) {
                     $this->tasks->quarantine($task, $damage, $time);
                     return ['notify_no' => $number, 'reason_code' => $damage];
@@ -163,7 +170,6 @@ final class MerchantNotifyDispatcherService extends BaseService
                             'http_status' => null,
                             'duration_ms' => null,
                             'result_code' => Result::LEASE_EXPIRED_UNKNOWN,
-                            'response_digest' => null,
                             'response_body' => null,
                             'response_truncated' => false,
                         ],
@@ -185,21 +191,14 @@ final class MerchantNotifyDispatcherService extends BaseService
                 $parameters = $task['notify_data'];
                 $token = bin2hex(random_bytes(16));
                 $until = $now->modify('+' . $this->policy->leaseSeconds . ' seconds');
-                $this->tasks->claim(
-                    $task,
-                    $token,
-                    $owner,
-                    $used + 1,
-                    $time,
-                    $until->format('Y-m-d H:i:s'),
-                );
+                $this->tasks->claim($task, $token, $used + 1, $time, $until->format('Y-m-d H:i:s'));
                 $this->attempts->begin($number, $used + 1, $token, $time);
                 return new NotificationClaim(
                     $number,
                     $token,
                     $used + 1,
-                    $task['notify_url'],
-                    $parameters,
+                    $target,
+                    $parameters['sign'],
                     $created,
                     $until,
                     $manual,
@@ -235,32 +234,29 @@ final class MerchantNotifyDispatcherService extends BaseService
         ) {
             return 'schedule_invalid';
         }
-        $ledger = $this->attempts->ledger($task['notify_no']);
         $used = (int) $task['retry_count'];
         if (
+            ($sending && $used < 1) ||
             (!$sending && $used >= 4294967295) ||
             ($task['manual_attempt_no'] !== null &&
                 (int) $task['manual_attempt_no'] !== ($sending ? $used : $used + 1))
         ) {
             return 'schedule_invalid';
         }
-        $last = $ledger['last'];
-        if (
-            $ledger['count'] !== $used ||
-            $ledger['unfinished_earlier'] !== 0 ||
-            ($used === 0 && ($last !== null || $sending)) ||
-            ($used > 0 &&
-                ($ledger['minimum'] !== 1 ||
-                    $last === null ||
-                    (int) $last['attempt_no'] !== $used ||
-                    ($sending &&
-                        ($last['claim_token'] !== $task['claim_token'] ||
-                            $last['result_code'] !== 'claimed' ||
-                            $last['finished_at'] !== null)) ||
-                    (!$sending &&
-                        ($last['finished_at'] === null || $last['result_code'] === 'claimed'))))
-        ) {
-            return 'attempt_ledger_inconsistent';
+        if ($used > 0) {
+            $attempt = $this->attempts->current($task['notify_no'], $used);
+            if (
+                $attempt === null ||
+                ($sending &&
+                    ($attempt['claim_token'] !== $task['claim_token'] ||
+                        $attempt['result_code'] !== Result::CLAIMED ||
+                        $attempt['finished_at'] !== null)) ||
+                (!$sending &&
+                    ($attempt['finished_at'] === null ||
+                        $attempt['result_code'] === Result::CLAIMED))
+            ) {
+                return 'attempt_state_invalid';
+            }
         }
         $parameters = $task['notify_data'];
         if (
@@ -281,7 +277,7 @@ final class MerchantNotifyDispatcherService extends BaseService
             ($parameters['sign_type'] ?? null) !== 'MD5' ||
             !preg_match('/^[a-f0-9]{32}$/D', $parameters['sign'] ?? '') ||
             !preg_match('/^[1-9][0-9]{0,31}$/D', $parameters['pid'] ?? '') ||
-            !\app\common\validation\PaymentTypeCode::valid($parameters['type'] ?? null) ||
+            !PaymentTypeCode::valid($parameters['type'] ?? null) ||
             ($parameters['out_trade_no'] ?? '') === '' ||
             mb_strlen($parameters['out_trade_no'], 'UTF-8') > 64 ||
             ($parameters['name'] ?? '') === '' ||
@@ -295,12 +291,7 @@ final class MerchantNotifyDispatcherService extends BaseService
             if ($cents < 1 || Money::format($cents) !== $parameters['money']) {
                 return 'frozen_payload_invalid';
             }
-            // 仅语法及编码边界；部署允许列表改变仍属于可恢复派发失败，不在这里查询 DNS。
-            HttpTargetPolicy::uri(
-                $this->messages->targetUrl($task['notify_url'], $parameters),
-                16384,
-            );
-        } catch (\InvalidArgumentException | BusinessException) {
+        } catch (InvalidArgumentException | BusinessException) {
             return 'frozen_payload_invalid';
         }
         return null;
@@ -309,7 +300,7 @@ final class MerchantNotifyDispatcherService extends BaseService
     /**
      * 任务调度结果与尝试审计同事务提交；旧 token/过期 ACK 不更新任何当前责任。
      *
-     * @param array{http_status:?int,duration_ms:?int,result_code:string,response_digest:?string,response_body:?string,response_truncated:bool} $result
+     * @param array{http_status:?int,duration_ms:?int,result_code:string,response_body:?string,response_truncated:bool} $result
      */
     private function complete(NotificationClaim $claim, bool $acknowledged, array $result): string
     {
@@ -349,7 +340,7 @@ final class MerchantNotifyDispatcherService extends BaseService
                     $task['first_ack_at'] ?? ($acknowledged ? $time : null),
                 )
             ) {
-                throw new \RuntimeException('已锁定通知的回写条件发生变化');
+                throw new RuntimeException('已锁定通知的回写条件发生变化');
             }
             $this->attempts->finish(
                 $claim->notifyNo,
@@ -384,7 +375,7 @@ final class MerchantNotifyDispatcherService extends BaseService
         }
         $text = mb_convert_encoding($body, 'UTF-8', 'UTF-8');
         $text = preg_replace('/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/u', '', $text);
-        $signature = $claim->parameters['sign'] ?? '';
+        $signature = $claim->signature;
         if ($signature !== '') {
             $text = str_replace($signature, '[签名已隐藏]', $text);
         }

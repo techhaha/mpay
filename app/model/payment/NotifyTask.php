@@ -46,7 +46,6 @@ final class NotifyTask extends BaseModel
                 'released_at' => 'string',
                 'last_response' => 'string',
                 'claim_token' => 'string',
-                'lease_owner' => 'string',
                 'lease_until' => 'string',
                 'created_at' => 'string',
                 'updated_at' => 'string',

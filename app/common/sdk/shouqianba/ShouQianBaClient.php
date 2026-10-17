@@ -83,17 +83,7 @@ final class ShouQianBaClient
         }
         $token = $this->text($state['token'] ?? null);
         $terminalFilter = self::terminalFilter($settings);
-        $selector = hash(
-            'sha256',
-            json_encode(
-                [
-                    $settings['receipt_account_no'],
-                    $settings['receipt_merchant_name'] ?? '',
-                    $terminalFilter,
-                ],
-                JSON_THROW_ON_ERROR,
-            ),
-        );
+        $selector = self::scopeKey($settings);
         if (
             ($state['scope_selector'] ?? null) !== $selector ||
             !is_array($state['scope'] ?? null)
@@ -144,6 +134,22 @@ final class ShouQianBaClient
             'rows' => $data['records'],
             'limit_reached' => $total > $limit || count($data['records']) === $limit,
         ];
+    }
+
+    /** 插件分组与 SDK 范围缓存共用身份规则；认证凭据不参与收款范围标识。 */
+    public static function scopeKey(array $settings): string
+    {
+        return hash(
+            'sha256',
+            json_encode(
+                [
+                    $settings['receipt_account_no'],
+                    $settings['receipt_merchant_name'] ?? '',
+                    self::terminalFilter($settings),
+                ],
+                JSON_THROW_ON_ERROR,
+            ),
+        );
     }
 
     /**

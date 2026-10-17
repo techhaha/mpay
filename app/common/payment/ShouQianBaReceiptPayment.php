@@ -385,6 +385,8 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         $results = [];
         $used = [];
         $seen = [];
+        // 本批按需解析候选，每笔订单的识别信息和时间只计算一次；不跨批次缓存。
+        $prepared = [];
         foreach ($receipts as $entry) {
             $record = $entry['record'];
             if (
@@ -405,7 +407,13 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                 ) {
                     continue;
                 }
-                $meta = $this->receiptMeta($pay['ext_json'] ?? []);
+                if (!array_key_exists($pay['pay_no'], $prepared)) {
+                    $prepared[$pay['pay_no']] = [
+                        'meta' => $this->receiptMeta($pay['ext_json'] ?? []),
+                        'requested_at' => strtotime($pay['request_at']),
+                    ];
+                }
+                $meta = $prepared[$pay['pay_no']]['meta'];
                 if (
                     $meta === null ||
                     $meta['receipt_amount'] !== $record['amount'] ||
@@ -439,14 +447,15 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             $paid = strtotime($record['paid_at']);
             usort(
                 $candidates,
-                static fn(array $a, array $b): int => abs(strtotime($a['request_at']) - $paid) <=>
-                abs(strtotime($b['request_at']) - $paid) ?:
+                static fn(array $a, array $b): int => abs(
+                    $prepared[$a['pay_no']]['requested_at'] - $paid,
+                ) <=> abs($prepared[$b['pay_no']]['requested_at'] - $paid) ?:
                 strcmp($a['created_at'], $b['created_at']) ?:
                 strlen($a['id']) <=> strlen($b['id']) ?:
                 strcmp($a['id'], $b['id']),
             );
             $pay = $candidates[0];
-            $meta = $this->receiptMeta($pay['ext_json']);
+            $meta = $prepared[$pay['pay_no']]['meta'];
             $used[$pay['pay_no']] = true;
             $results[] = [
                 'status' => 'success',
@@ -581,17 +590,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                 }
             }
             $login = hash('sha256', $this->getCode() . ':' . $settings['watcher_username']);
-            $scope = hash(
-                'sha256',
-                json_encode(
-                    [
-                        $settings['receipt_account_no'],
-                        $settings['receipt_merchant_name'] ?? '',
-                        ShouQianBaClient::terminalFilter($settings),
-                    ],
-                    JSON_THROW_ON_ERROR,
-                ),
-            );
+            $scope = ShouQianBaClient::scopeKey($settings);
             $password = $settings['watcher_password'];
             $digest = hash(
                 'sha256',

@@ -272,6 +272,11 @@ a.admin-reference{color:var(--mpay-link)}
 .admin-inline-actions .admin-channel-more{color:var(--mpay-muted)}
 .admin-inline-actions .admin-channel-more:hover,.admin-inline-actions .admin-channel-more:focus-visible{color:var(--mpay-link)}
 
+/* 最近错误以正文对齐列起点，恢复标记居中跟随；长文省略，完整诊断仍由详情展示。 */
+.admin-runtime-error{display:flex;align-items:center;gap:8px;min-width:0;height:100%}
+.admin-runtime-error-message{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.admin-runtime-error>.admin-tag{flex-shrink:0}
+
 /* Layui eye 点缀切换 type；多行私钥保留原 textarea、行数和换行，仅随 type 切换遮罩。 */
 .channel-settings textarea[type="password"][lay-affix="eye"]{-webkit-text-security:disc}
 

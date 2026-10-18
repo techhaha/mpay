@@ -142,14 +142,6 @@ final class RuntimeQueryService extends BaseService
         return $counts;
     }
 
-    /** 通道页批量复用同一只读视图，避免逐行查询订单或复制状态解释。 */
-    public function forConfigurations(array $ids): array
-    {
-        return $ids === []
-            ? []
-            : array_column($this->collectionItems($ids), null, 'configuration_id');
-    }
-
     private function collectionItems(array $configurationIds = []): array
     {
         $rows = $this->records->collectionRows($configurationIds);

@@ -17,9 +17,10 @@ MpayAdmin.ready(function () {
         UI.table({elem:'#runtime-collections',id:'runtime-collections',url:'/adminapi/maintenance/collections',where,
             page:{curr:current},feedback,done(result,curr){page=curr;},emptyText:'暂无采集记录',cols:[[
                 {field:'name',title:'收款通道',minWidth:180,templet:row=>E(row.name)},
-                {title:'状态',width:170,align:'center',templet:row=>UI.state(row.status_label)},
-                {title:'最近错误',minWidth:240,templet:row=>row.last_error
-                    ? (row.recovered_at?UI.badge('已恢复','green')+' ':'')+E(row.last_error.message.slice(0,100)) : '—'},
+                {title:'状态',width:220,align:'center',templet:row=>UI.state(row.status_label)},
+                {title:'最近错误',minWidth:280,templet:row=>row.last_error
+                    ? '<div class="admin-runtime-error"><span class="admin-runtime-error-message" title="'+E(row.last_error.message)+'">'+E(row.last_error.message)+'</span>'
+                        +(row.recovered_at?UI.badge('已恢复','green'):'')+'</div>' : '—'},
                 {field:'last_success_at',title:'最近查单成功',minWidth:175,templet:row=>E(row.last_success_at||'暂无记录')},
                 {field:'pending_count',title:'待核对订单',width:120,align:'center',templet:row=>E(row.pending_count??0)},
                 {field:'consecutive_failures',title:'连续失败批次',width:130,align:'center',templet:row=>E(row.consecutive_failures??'—')},

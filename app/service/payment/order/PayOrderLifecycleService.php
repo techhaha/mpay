@@ -566,7 +566,6 @@ final class PayOrderLifecycleService extends BaseService
         return $this->transactionRetry(function () use (
             $event,
             $received,
-            $receivedAt,
             $requestId,
             $target,
             $ignore,

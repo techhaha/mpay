@@ -91,23 +91,21 @@ final class PaymentPluginConfService extends BaseService
     }
 
     /**
-     * 组合编辑保存完整插件配置，并复核版本与范围；调用方负责唯一外层事务。
-     * 调用方先锁插件支持的全部方式及默认组，再锁当前配置和通道，禁止在此补取新的方式锁。
+     * Editor 已在外层事务鉴权、锁定配置及关联通道并核对版本；复用该模型保存完整参数。
+     * 调用方先锁插件支持的全部方式及默认组，禁止在此补取新的方式锁；本方法继续核验参数、材料及范围。
      * 参数或插件版本改变时创建新快照并停用当前通道；存量快照不改写。
      * @param array<string,mixed> $settings
      * @return array{id:string,config_version:int,enabled:bool}
      */
     public function saveInTransaction(
-        string $id,
-        int $expectedVersion,
+        PaymentPluginConf $configuration,
         string $name,
         array $settings,
         ConfigurationActionContext $actor,
     ): array {
         $this->requireTransaction();
-        $configuration = $this->configurations->lock($id);
-        $this->assertVersion($configuration['config_version'], $expectedVersion);
-        $this->channels->lockForConfiguration($id);
+        $id = $configuration['id'];
+        $currentVersion = (int) $configuration['config_version'];
         $definition = $this->plugins->definition($configuration['plugin_code']);
         $old = $configuration['config_json'];
         if (!is_array($old)) {
@@ -123,7 +121,7 @@ final class PaymentPluginConfService extends BaseService
         }
         $this->lockScopes($keys, $definition);
         $revision =
-            $this->configurations->revision($id, $expectedVersion) ??
+            $this->configurations->revision($id, $currentVersion) ??
             throw new RuntimeException('插件配置版本缺失');
         // 原配置快照保留；普通保存不触发登录，也不比较平台账号或凭证。
         if (
@@ -133,7 +131,7 @@ final class PaymentPluginConfService extends BaseService
         ) {
             return [
                 'id' => $id,
-                'config_version' => $expectedVersion,
+                'config_version' => $currentVersion,
                 'enabled' => (int) $configuration['enabled'] === 1,
             ];
         }
@@ -148,7 +146,7 @@ final class PaymentPluginConfService extends BaseService
         $this->channels->disableForConfiguration($id, $now);
         // 参数修改不改变配置 ID 与支付方式，通道范围沿用原关联；接入切换由 Editor 保存通道规则。
         $this->audit->record($actor, 'configuration.save', 'payment_plugin_conf', $id, 'updated', [
-            'old_version' => $expectedVersion,
+            'old_version' => $currentVersion,
             'new_version' => $version,
         ]);
         return [
@@ -209,16 +207,6 @@ final class PaymentPluginConfService extends BaseService
             if ($field['type'] === 'upload' && ($settings[$field['field']] ?? '') !== '') {
                 $this->files->publicImagePath($settings[$field['field']]);
             }
-        }
-    }
-
-    private function assertVersion(int $current, int $expected): void
-    {
-        if ($current !== $expected) {
-            throw new BusinessException(
-                '插件配置已修改，请刷新',
-                ApiResponseConstant::STALE_VERSION,
-            );
         }
     }
 

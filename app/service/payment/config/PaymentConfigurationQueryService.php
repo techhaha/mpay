@@ -61,7 +61,6 @@ final class PaymentConfigurationQueryService extends BaseService
                 ];
                 $items[] = $item + [
                     'configuration_id' => $row['api_config_id'],
-                    'scope_key' => $row['receipt_scope_key'],
                     'pay_types' => $row['pay_types'],
                     'revision_id' => $row['current_revision_id'],
                 ];
@@ -96,7 +95,7 @@ final class PaymentConfigurationQueryService extends BaseService
             if ($revision['config_json'] !== $configuration['config_json']) {
                 throw new RuntimeException('配置正文与版本不一致');
             }
-            $plugin = $this->plugin($configuration['plugin_code']);
+            $plugin = $this->management->definition($configuration['plugin_code']);
 
             $original = $revision['config_json'];
             if (!is_array($original)) {
@@ -156,14 +155,12 @@ final class PaymentConfigurationQueryService extends BaseService
                 // 只返回通知路径；后台按浏览器当前站点展示完整地址，不存入通道快照。
                 'notification' => [
                     'mode' => $push ? 'push' : ($polling ? 'polling' : 'unavailable'),
-                    'method' => $push ? 'POST' : null,
                     'path' => $push ? '/api/pay/' . $id . '/notify' : null,
                 ],
                 'revision_id' => $channel['current_revision_id'],
                 'participates_default_route' => $this->defaults->participates($id, $types[0]),
                 'channel' => [
                     'name' => $channel['name'],
-                    'scope_key' => $channel['receipt_scope_key'],
                     'pay_type' => $types[0],
                     'minimum_amount' => (int) $channel['min_amount'],
                     'maximum_amount' => (int) $channel['max_amount'],
@@ -174,19 +171,5 @@ final class PaymentConfigurationQueryService extends BaseService
                 ],
             ];
         });
-    }
-
-    /** @return array<string,mixed> 表单 schema 来自已同步定义，不能混用新代码与旧数据库定义。 */
-    private function plugin(string $code): array
-    {
-        foreach ($this->management->definitions() as $definition) {
-            if ($definition['code'] === $code) {
-                return $definition;
-            }
-        }
-        throw new BusinessException(
-            '插件定义未同步或文件缺失，请先到插件管理刷新',
-            ApiResponseConstant::CONFLICT,
-        );
     }
 }

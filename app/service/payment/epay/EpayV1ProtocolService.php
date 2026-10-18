@@ -153,7 +153,11 @@ final class EpayV1ProtocolService extends BaseService
                 if ($biz === null || $biz['app_id'] !== $app['id']) {
                     throw new BusinessException('订单不存在', ApiResponseConstant::NOT_FOUND);
                 }
-                return $this->messages->order($biz, $this->payFor($biz), $biz['pid']);
+                // 按支付号已读取原单；只在商户订单号入口补读，消息映射仍核验双单关联。
+                if ($selector['trade_no'] === null) {
+                    $pay = $this->payFor($biz);
+                }
+                return $this->messages->order($biz, $pay, $biz['pid']);
             }
             if ($action === 'orders') {
                 $page = $this->validator->pagination($raw);

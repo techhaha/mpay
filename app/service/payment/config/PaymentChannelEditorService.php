@@ -233,8 +233,7 @@ final class PaymentChannelEditorService extends BaseService
             $channel = $this->channels->lock($input['id']);
             $this->assertCurrent($configuration, $channel, $input);
             $saved = $this->configurationService->saveInTransaction(
-                $configuration['id'],
-                $input['expected_configuration_version'],
+                $configuration,
                 $configuration['name'],
                 $input['settings'],
                 $actor,

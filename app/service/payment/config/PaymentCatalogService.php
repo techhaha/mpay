@@ -3,17 +3,20 @@ declare(strict_types=1);
 
 namespace app\service\payment\config;
 
-use app\service\system\audit\ConfigurationAuditService;
-use app\service\system\audit\ConfigurationActionContext;
-use app\service\payment\plugin\PluginDefinition;
-use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant as Code;
 use app\common\util\Clock;
 use app\exception\BusinessException;
+use app\model\payment\PaymentPlugin;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentPluginRepository;
+use app\repository\payment\config\PaymentPollGroupRepository;
 use app\service\file\FileAssetService;
+use app\service\payment\plugin\PaymentPluginFactoryService;
+use app\service\payment\plugin\PluginDefinition;
+use app\service\payment\routing\DefaultRoutingService;
+use app\service\system\audit\ConfigurationActionContext;
+use app\service\system\audit\ConfigurationAuditService;
 
 /** 支付方式及本地插件目录的管理用例；开关只控制新单，存量执行继续按原配置完成。 */
 final class PaymentCatalogService extends BaseService
@@ -31,8 +34,8 @@ final class PaymentCatalogService extends BaseService
         private readonly FileAssetService $files,
         private readonly ConfigurationAuditService $audit,
         private readonly Clock $clock,
-        private readonly \app\service\payment\routing\DefaultRoutingService $defaults,
-        private readonly \app\repository\payment\config\PaymentPollGroupRepository $groups,
+        private readonly DefaultRoutingService $defaults,
+        private readonly PaymentPollGroupRepository $groups,
     ) {}
 
     /** @return list<array<string,mixed>> 标识图片只来自内置白名单或已登记的本地图片。 */
@@ -90,6 +93,7 @@ final class PaymentCatalogService extends BaseService
             $stored[$row['code']] = $row;
         }
         $installed = $this->plugins->codes();
+        $counts = $withCounts ? $this->records->channelCounts() : [];
         $items = [];
         foreach (array_unique([...$installed, ...array_keys($stored)]) as $code) {
             $row = $stored[$code] ?? null;
@@ -109,18 +113,10 @@ final class PaymentCatalogService extends BaseService
                     'synchronized' =>
                         $row !== null &&
                         (!$present ||
-                            ($row['version'] === $definition->version &&
-                                PluginDefinition::sameSchema(
-                                    $definition->configSchema,
-                                    $row['config_schema'],
-                                ) &&
-                                $row['description'] === $definition->description &&
-                                $row['class_name'] === $definition->className &&
-                                $row['name'] === $definition->name &&
-                                $row['pay_types'] === $definition->payTypes)),
+                            $this->definitionMatches($row, $definition)),
                     'enabled' => $row !== null && (int) $row['enabled'] === 1,
                     'revision' => $row === null ? 0 : (int) $row['revision'],
-                ] + ($withCounts ? ['channel_count' => $this->records->channelCount($code)] : []);
+                ] + ($withCounts ? ['channel_count' => $counts[$code] ?? 0] : []);
         }
         return $items;
     }
@@ -163,17 +159,51 @@ final class PaymentCatalogService extends BaseService
             if (!$row['installed'] || !$row['synchronized']) {
                 continue;
             }
-            $items[] = [
-                'code' => $row['code'],
-                'name' => $row['name'],
-                'version' => $row['version'],
-                'schema' => $row['config_schema'],
-                'description' => $row['description'],
-                'pay_types' => $row['pay_types'],
-                'enabled' => $row['enabled'],
-            ];
+            $items[] = $this->formDefinition($row);
         }
         return $items;
+    }
+
+    /** 单个配置按编码读取数据库定义；保留安装及同步核验，不组装整个插件列表。 */
+    public function definition(string $code): array
+    {
+        $row = $this->records->find($code);
+        if (
+            $row === null ||
+            !in_array($code, $this->plugins->codes(), true) ||
+            !$this->definitionMatches($row, $this->plugins->definition($code))
+        ) {
+            throw new BusinessException(
+                '插件定义未同步或文件缺失，请先到插件管理刷新',
+                Code::CONFLICT,
+            );
+        }
+        return $this->formDefinition($row->toArray());
+    }
+
+    /** 列表与单项共用同步标准；停用仅阻止新单，不妨碍管理员读取原配置进行修正。 */
+    private function definitionMatches(PaymentPlugin $row, PluginDefinition $definition): bool
+    {
+        return $row['version'] === $definition->version &&
+            PluginDefinition::sameSchema($definition->configSchema, $row['config_schema']) &&
+            $row['description'] === $definition->description &&
+            $row['class_name'] === $definition->className &&
+            $row['name'] === $definition->name &&
+            $row['pay_types'] === $definition->payTypes;
+    }
+
+    /** @return array{code:string,name:string,version:string,schema:array,description:string,pay_types:array,enabled:bool} */
+    private function formDefinition(array $row): array
+    {
+        return [
+            'code' => $row['code'],
+            'name' => $row['name'],
+            'version' => $row['version'],
+            'schema' => $row['config_schema'],
+            'description' => $row['description'],
+            'pay_types' => $row['pay_types'],
+            'enabled' => (bool) $row['enabled'],
+        ];
     }
 
     /** 新单选路在自身事务内当前读；读取插件类仍以代码注册表为准。 */

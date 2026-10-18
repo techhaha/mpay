@@ -154,7 +154,6 @@ final class PayOrderChannelDispatchService
             $this->lifecycle->finishExecution($payNo, $token, 'uncertain', null, $requestId);
             throw $exception;
         }
-        $finishedAt = $this->clock->now();
         if ($result['status'] === 'pending') {
             return $this->lifecycle->finishExecution(
                 $payNo,
@@ -174,7 +173,7 @@ final class PayOrderChannelDispatchService
             $context->scopeKey,
             $context->payType,
             $context->configuration,
-            $finishedAt,
+            $this->clock->now(),
         );
         $this->callbacks->acceptPluginResult($result, $callback, $requestId);
         // 返回生命周期已经提交的实际状态，不能仅依据插件字符串向客户端宣称支付成功。

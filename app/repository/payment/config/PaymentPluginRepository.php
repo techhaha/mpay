@@ -38,9 +38,20 @@ final class PaymentPluginRepository extends BaseRepository
         return $query->find();
     }
 
-    public function channelCount(string $code): int
+    /** @return array<string,int> 管理列表一次统计全部插件，已删除通道不计入；没有关联时由调用方显示零。 */
+    public function channelCounts(): array
     {
-        return $this->channels->where('plugin_code', $code)->whereNull('deleted_at')->count();
+        $counts = [];
+        foreach (
+            $this->channels
+                ->whereNull('deleted_at')
+                ->field('plugin_code,COUNT(*) AS channel_count')
+                ->group('plugin_code')
+                ->select() as $row
+        ) {
+            $counts[$row['plugin_code']] = (int) $row['channel_count'];
+        }
+        return $counts;
     }
 
     /** 元信息完整同步；仅写定义，不改人工启停。无变化刷新不递增版本。 */

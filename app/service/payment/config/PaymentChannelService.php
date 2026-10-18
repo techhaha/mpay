@@ -52,13 +52,11 @@ final class PaymentChannelService extends BaseService
         $this->requireTransaction();
         $configuration = $this->configurations->lock($configurationId);
         $this->assertVersion($configuration, $expectedConfigurationVersion);
-        foreach ($this->channels->activeForConfiguration($configurationId) as $bound) {
-            if ($bound['id'] !== $id) {
-                throw new BusinessException(
-                    '插件配置已经属于其他通道',
-                    ApiResponseConstant::CONFLICT,
-                );
-            }
+        if ($this->channels->usedByOtherChannel($configurationId, $id)) {
+            throw new BusinessException(
+                '插件配置已经属于其他通道',
+                ApiResponseConstant::CONFLICT,
+            );
         }
         if ($id !== null) {
             $channel = $this->channels->lock($id);

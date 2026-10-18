@@ -325,7 +325,7 @@ final class PayOrderCallbackService extends BaseService
             $context->configurationId,
             $pay['pay_no'],
         );
-        return $this->lifecycle->confirmReceipt($event, $context->receivedAt, $requestId);
+        return $this->lifecycle->confirmReceipt($pay, $event, $context->receivedAt, $requestId);
     }
 
     /**

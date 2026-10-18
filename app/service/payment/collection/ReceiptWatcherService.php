@@ -231,7 +231,6 @@ final class ReceiptWatcherService
         $size = (int) $this->config->get('receipt.order_page_size', 500);
         $maximum = (int) $this->config->get('receipt.max_orders_per_plugin', 10000);
         $orders = [];
-        $versions = [];
         $after = '0';
         $scanned = 0;
         do {
@@ -242,16 +241,11 @@ final class ReceiptWatcherService
                     throw new ReceiptCollectionException('capacity_exceeded');
                 }
                 // 原单扩展原样交插件解释；采集器不推断任何插件的准备字段或匹配方式。
-                $revision = $pay->channelRevision;
-                if (!$revision || $revision['channel_id'] !== $pay['channel_id']) {
-                    throw new RuntimeException('订单通道快照缺失');
-                }
-                $versions[$revision['id']] = $revision;
                 $orders[$pay['pay_no']] = [
                     'id' => $pay['id'],
                     'pay_no' => $pay['pay_no'],
                     'channel_id' => $pay['channel_id'],
-                    'channel_revision_id' => $revision['id'],
+                    'channel_revision_id' => $pay['channel_revision_id'],
                     'pay_type' => $pay['ext_json']['payment_context']['pay_type'],
                     'pay_amount' => (int) $pay['pay_amount'],
                     'ext_json' => $pay['ext_json'] ?? [],
@@ -261,13 +255,24 @@ final class ReceiptWatcherService
                 ];
             }
         } while (count($rows) === $size);
-        if ($prelogin) {
-            $enabled = $this->channels->preloginChannels($code);
-            $ids = array_map(
-                static fn($channel): string => $channel['current_revision_id'],
-                $enabled,
-            );
-            $versions += $this->channels->revisionsForIds($ids);
+        // 订单与保活共用本轮不可变快照；不在每页重复预载，也不跨轮缓存。
+        $enabled = $prelogin ? $this->channels->preloginChannels($code) : [];
+        $ids = array_column($orders, 'channel_revision_id');
+        foreach ($enabled as $channel) {
+            $ids[] = $channel['current_revision_id'];
+        }
+        $versions = $this->channels->revisionsForIds($ids);
+        foreach ($orders as $pay) {
+            $revision = $versions[$pay['channel_revision_id']] ?? null;
+            if ($revision === null || $revision['channel_id'] !== $pay['channel_id']) {
+                throw new RuntimeException('订单通道快照缺失或归属不一致');
+            }
+        }
+        foreach ($enabled as $channel) {
+            $revision = $versions[$channel['current_revision_id']] ?? null;
+            if ($revision === null || $revision['channel_id'] !== $channel['id']) {
+                throw new RuntimeException('保活通道快照缺失或归属不一致');
+            }
         }
         $ids = array_map(
             static fn(PaymentChannelRevision $version): string => $version['api_config_id'],
@@ -399,8 +404,7 @@ final class ReceiptWatcherService
         $now = $this->clock->now();
         foreach ($channels as $channel) {
             $key = 'collection.summary.' . $channel['api_config_id'];
-            $saved = $store->get($key, []);
-            $previous = $this->pendingActivity[$key]['state'] ?? $saved;
+            $previous = $this->pendingActivity[$key]['state'] ?? $store->get($key, []);
             $previous = is_array($previous) ? $previous : [];
             $state = $previous;
             $versionChanged = ($state['config_version'] ?? null) !== $channel['config_version'];

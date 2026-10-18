@@ -227,16 +227,15 @@ final class PaymentChannelRepository extends BaseRepository
             ->update(['deleted_at' => $now, 'enabled' => 0, 'updated_at' => $now]);
     }
 
-    /** @return list<array{id:string,name:string}> 编辑共享参数前用于展示影响范围。 */
-    public function activeForConfiguration(string $id): array
+    /** 调用方已锁配置；只判断是否被其他未删除通道占用，维持每通道独立配置。 */
+    public function usedByOtherChannel(string $configurationId, ?string $exceptId): bool
     {
-        return $this->model
-            ->where('api_config_id', $id)
-            ->whereNull('deleted_at')
-            ->field('id,name')
-            ->order('id')
-            ->select()
-            ->toArray();
+        $this->requireTransaction();
+        $query = $this->model->where('api_config_id', $configurationId)->whereNull('deleted_at');
+        if ($exceptId !== null) {
+            $query->where('id', '<>', $exceptId);
+        }
+        return $query->value('id') !== null;
     }
 
     /**

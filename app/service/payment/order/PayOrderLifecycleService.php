@@ -540,9 +540,11 @@ final class PayOrderLifecycleService extends BaseService
      * 插件已逐条定位订单；按 Biz → Pay → Scope → Flow 锁序复核后才写最终流水。
      * 流水、订单成功和通知责任同事务提交。无匹配或证据冲突不保存流水，也没有后台补匹配队列。
      * receivedAt 是 Clock 记录的接收时间，保留原值；状态更新时间在取得锁后另行读取。
+     * @param PayOrder $target 回调入口已读取的目标，仅用于定位锁；交易事实仍取锁内的新读数。
      * @return array{flow_id:?string,pay_no:?string,matched:bool,reason:string}
      */
     public function confirmReceipt(
+        PayOrder $target,
         ReceiptEvent $event,
         DateTimeImmutable $receivedAt,
         string $requestId,
@@ -553,9 +555,9 @@ final class PayOrderLifecycleService extends BaseService
             'matched' => false,
             'reason' => $reason,
         ];
-        $target =
-            $this->payOrders->find($event->payNo) ??
-            throw new RuntimeException('插件所选支付单不存在');
+        if ($target['pay_no'] !== $event->payNo) {
+            throw new InvalidArgumentException('到账证据与目标支付单不一致');
+        }
         $received = $receivedAt->format('Y-m-d H:i:s');
         // 来源认证由入口和插件完成；最终确认仍必须具有合理时间及事务内的金额、归属证据。
         if ($event->paidAt === null || $event->paidAt > $received) {

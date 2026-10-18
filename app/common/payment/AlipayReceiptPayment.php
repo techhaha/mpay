@@ -171,8 +171,8 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
             'chan_order_no' => null,
             'chan_trade_no' => null,
             'pay_type' => $order['pay_type_code'],
-            'pay_product' => 'receipt',
-            'pay_action' => 'qrcode',
+            'pay_product' => 'alipay_qrcode',
+            'pay_action' => 'display_qrcode',
             'presentation' => [
                 'pay_page' => 'page',
                 'pay_params' => [
@@ -352,7 +352,6 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
             'paid_amount' => $pay->originalAmount(),
             'chan_order_no' => $record['trade_no'],
             'chan_trade_no' => $record['trade_no'],
-            'paid_at' => $record['paid_at'],
             'receipt' => $record,
         ];
     }

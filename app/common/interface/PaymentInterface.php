@@ -41,13 +41,14 @@ interface PaymentInterface
 
     /**
      * @param array{pay_no:string,biz_no:string,pay_type_code:string,amount:int,expire_at:string,extra:array<string,mixed>} $order
-     * pending 必须包含 pay_type/pay_product/pay_action 和 presentation；公开 pay_params 由插件生成并冻结。
+     * pending 必须包含 pay_type/pay_product/pay_action 和 presentation；产品及动作由插件按实际准备路径填写。
+     * 这两个标识用于追踪，不等同于支付成功或采集接口方法；公开 pay_params 由插件生成并冻结。
      * 平台地址/材料由插件校验，前端按 pay_page/_page 选择已交付组件；核心不注册平台专用展示类。
      * paid_amount 为通知业务的原金额（分），实收证据在 receipt 中保存；pending 为 null。
      *
      * @return array{status:string,pay_no:string,paid_amount:?int,chan_order_no:?string,chan_trade_no:?string,
      *     pay_type?:string,pay_product?:string,pay_action?:string,
-     *     presentation?:array{pay_page:string,pay_params:array<string,mixed>},receipt?:array,paid_at?:?string}
+     *     presentation?:array{pay_page:string,pay_params:array<string,mixed>},receipt?:array}
      * @throws PaymentDefinitiveException 渠道确定拒绝。
      * @throws PaymentUncertainException 请求结果未知，服务不能另建订单重试。
      */

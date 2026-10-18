@@ -104,13 +104,18 @@ final class PayOrderQueryService extends BaseService
                     'remark' => $receipt['remark'],
                 ];
             }
+            // 只取原单保存的产品/动作标识，不读取活动插件推测，也不公开其他展示参数。
+            $presentation = $pay === null ? [] : $pay['ext_json']['presentation'] ?? [];
             return [
                 'order' => $this->row(
                     $biz,
                     $pay,
                     $task,
                     $pay === null ? [] : $this->catalog->typeCodes(),
-                ),
+                ) + [
+                    'pay_product' => $presentation['pay_product'] ?? null,
+                    'pay_action' => $presentation['pay_action'] ?? null,
+                ],
                 'notification' => $this->notificationQuery->summary($task),
                 'refunds' =>
                     $pay === null

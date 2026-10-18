@@ -31,7 +31,7 @@ final class PayOrderRepository extends BaseRepository
     }
 
     /**
-     * 分页只控制数据库取数，不拆分插件的账号查询；原通道版本用 ORM 预载避免逐单查询。
+     * 分页只控制订单取数，不拆分插件的账号查询；通道版本由采集服务合并 ID 后一次批读。
      * 停用通道不取消原订单责任，到期/本地关闭在给定补查范围内仍返回。
      * @return list<PayOrder>
      */
@@ -43,7 +43,6 @@ final class PayOrderRepository extends BaseRepository
         int $limit,
     ): array {
         return $this->model
-            ->with(['channelRevision'])
             ->where('plugin_code', $plugin)
             ->whereIn('status', [
                 TradeConstant::ORDER_STATUS_CREATED,

@@ -196,8 +196,8 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             'chan_order_no' => null,
             'chan_trade_no' => null,
             'pay_type' => $order['pay_type_code'],
-            'pay_product' => 'receipt',
-            'pay_action' => 'qrcode',
+            'pay_product' => 'shouqianba_qrcode',
+            'pay_action' => 'display_qrcode',
             'presentation' => [
                 'pay_page' => 'page',
                 'pay_params' => [
@@ -463,7 +463,6 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                 'paid_amount' => $meta['original_amount'],
                 'chan_order_no' => $record['trade_no'],
                 'chan_trade_no' => $record['trade_no'],
-                'paid_at' => $record['paid_at'],
                 'receipt' => $record,
             ];
         }

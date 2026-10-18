@@ -189,8 +189,9 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
     {
         $prepared = $this->prepareReceipt($order['pay_no']);
         $meta = $this->receiptMeta($prepared['ext_json']);
+        $transfer = $this->getConfig('receipt_match_mode') === 'alipay_transfer';
         $params =
-            $this->getConfig('receipt_match_mode') === 'alipay_transfer'
+            $transfer
                 ? $this->transferParams($meta['receipt_amount'], $meta['remark'])
                 : [
                     '_page' => 'receiptQrcode',
@@ -206,8 +207,9 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
             'chan_order_no' => null,
             'chan_trade_no' => null,
             'pay_type' => $order['pay_type_code'],
-            'pay_product' => 'receipt',
-            'pay_action' => 'qrcode',
+            // 与实际生成材料的分支一致；此处只生成转账入口，不代表已向平台发起转账。
+            'pay_product' => $transfer ? 'alipay_transfer' : 'alipay_qrcode',
+            'pay_action' => $transfer ? 'create_transfer_link' : 'display_qrcode',
             'presentation' => ['pay_page' => 'page', 'pay_params' => $params],
         ];
     }
@@ -527,7 +529,6 @@ final class AlipayBillReceiptPayment implements ReceiptCollectorInterface
                 'paid_amount' => $meta['original_amount'],
                 'chan_order_no' => $record['trade_no'],
                 'chan_trade_no' => $record['trade_no'],
-                'paid_at' => $record['paid_at'],
                 'receipt' => $record,
             ];
         }

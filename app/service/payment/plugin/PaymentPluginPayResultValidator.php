@@ -54,7 +54,6 @@ final class PaymentPluginPayResultValidator extends Validate
                 'pay_action',
                 'presentation',
                 'receipt',
-                'paid_at',
             ]),
         );
     }

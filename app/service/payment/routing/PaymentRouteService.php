@@ -44,7 +44,7 @@ final class PaymentRouteService
      * 外层持应用/业务单锁；本层依次锁支付方式、绑定、组和配置/通道。
      *
      * @param bool $advance 仅新支付尝试为 true；预览为 false，仍在短事务内取一致的配置。
-     * @return array{channel:PaymentChannel,config_version:int,plugin_version:string,poll_group_id:string,route_mode:int}
+     * @return array{channel:PaymentChannel,pay_type_id:string,config_version:int,plugin_version:string,poll_group_id:string,route_mode:int}
      */
     public function selectFor(
         string $appId,
@@ -165,6 +165,7 @@ final class PaymentRouteService
                 'poll_group_id' => $group['id'],
                 'route_mode' => $group['route_mode'],
                 'channel' => $channel,
+                'pay_type_id' => $type['id'],
                 'config_version' => (int) $configuration['config_version'],
                 'plugin_version' => $definition->version,
             ];

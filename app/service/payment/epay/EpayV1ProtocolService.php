@@ -3,21 +3,26 @@ declare(strict_types=1);
 
 namespace app\service\payment\epay;
 
+use RuntimeException;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
+use app\common\constant\PaymentResultCode;
+use app\common\constant\RefundConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\Clock;
+use app\common\util\Money;
 use app\exception\BusinessException;
 use app\exception\PaymentDefinitiveException;
 use app\model\payment\BizOrder;
-use app\model\payment\PaymentApp;
 use app\model\payment\PayOrder;
+use app\model\payment\PaymentApp;
 use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\cashier\CashierService;
 use app\service\payment\config\PaymentAppCredentialService;
 use app\service\payment\order\PayOrderService;
+use app\service\payment\order\RefundService;
 use app\service\payment\plugin\PayOrderChannelDispatchService;
 use app\service\system\access\RequestRateLimiter;
 
@@ -33,7 +38,7 @@ final class EpayV1ProtocolService extends BaseService
         private readonly EpayV1Signer $signer,
         private readonly EpayV1Validator $validator,
         private readonly PayOrderService $orders,
-        private readonly \app\service\payment\order\RefundService $refunds,
+        private readonly RefundService $refunds,
         private readonly PayOrderChannelDispatchService $dispatch,
         private readonly BizOrderRepository $bizOrders,
         private readonly PayOrderRepository $payOrders,
@@ -122,15 +127,14 @@ final class EpayV1ProtocolService extends BaseService
             );
             $status = (int) $refund['status'];
             return [
-                'code' => $status === \app\common\constant\RefundConstant::SUCCESS ? 1 : 0,
+                'code' => $status === RefundConstant::SUCCESS ? 1 : 0,
                 'msg' =>
-                    $refund['result_code'] ===
-                    \app\common\constant\PaymentResultCode::REFUND_UNSUPPORTED
+                    $refund['result_code'] === PaymentResultCode::REFUND_UNSUPPORTED
                         ? '此订单的插件不支持接口退款，请联系收款方处理'
-                        : \app\common\constant\RefundConstant::label($status),
+                        : RefundConstant::label($status),
                 'refund_no' => $refund['refund_no'],
                 'trade_no' => $payNo,
-                'money' => \app\common\util\Money::format((int) $refund['refund_amount']),
+                'money' => Money::format((int) $refund['refund_amount']),
                 'refund_status' => $status,
             ];
         }
@@ -161,7 +165,7 @@ final class EpayV1ProtocolService extends BaseService
                 foreach ($orders as $biz) {
                     $pay = $payments[$biz['biz_no']] ?? null;
                     if ($biz['active_pay_no'] !== ($pay === null ? null : $pay['pay_no'])) {
-                        throw new \RuntimeException('分页查询的支付关联不一致');
+                        throw new RuntimeException('分页查询的支付关联不一致');
                     }
                     $items[] = $this->messages->order($biz, $pay, $biz['pid']);
                 }
@@ -195,16 +199,10 @@ final class EpayV1ProtocolService extends BaseService
      */
     public function returnUrl(string $bizNo, string $accessToken): string
     {
-        // 首次 ACK 不会因后续补发失败撤销；先完成独立读取，避免嵌套事务，签名前仍重核订单与冻结目标。
-        if ($this->cashier->completion($bizNo, $accessToken)['action'] !== 'return') {
-            throw new BusinessException(
-                '订单尚未完成商户确认或未设置返回地址',
-                ApiResponseConstant::CONFLICT,
-            );
-        }
         return $this->transaction(function () use ($bizNo, $accessToken): string {
             $biz = $this->bizOrders->find($bizNo);
             $this->orders->assertAccess($biz, $accessToken);
+            $this->limiter->check('cashier_read', $bizNo);
             $pay = $this->payFor($biz);
             if ($pay === null || (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) {
                 throw new BusinessException('订单尚未确认支付成功', ApiResponseConstant::CONFLICT);
@@ -214,6 +212,13 @@ final class EpayV1ProtocolService extends BaseService
                     '此订单未设置回跳地址，请留在结果页',
                     ApiResponseConstant::CONFLICT,
                 );
+            }
+            // 同一一致性事务内核对首次 ACK 并签名，不调用收银台响应入口重复读取订单。
+            if ($biz['notify_url'] === null) {
+                throw new RuntimeException('订单返回地址缺少通知责任');
+            }
+            if ($this->cashier->notificationStatus($bizNo, $pay['pay_no']) !== 'success') {
+                throw new BusinessException('订单尚未完成商户确认', ApiResponseConstant::CONFLICT);
             }
             // 使用原单冻结目标，格式由签名/编码方法核验；浏览器回跳不执行服务器出站检查。
             $parameters = $this->messages->signForTarget(
@@ -257,10 +262,7 @@ final class EpayV1ProtocolService extends BaseService
             $valid =
                 $version !== null &&
                 ($signed
-                    ? $this->signer->verify(
-                        $raw,
-                        $this->credentials->secretForVersion($app['id'], $version['id']),
-                    )
+                    ? $this->signer->verify($raw, $version['secret'])
                     : hash_equals($version['key_fingerprint'], hash('sha256', $raw['key'])));
             if (!$valid) {
                 throw new BusinessException(
@@ -281,11 +283,11 @@ final class EpayV1ProtocolService extends BaseService
                 (int) $biz['attempt_count'] !== 0 ||
                 (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS
             ) {
-                throw new \RuntimeException('业务单的支付关联缺失');
+                throw new RuntimeException('业务单的支付关联缺失');
             }
             return null;
         }
         return $this->payOrders->find($biz['active_pay_no']) ??
-            throw new \RuntimeException('业务单引用的支付单缺失');
+            throw new RuntimeException('业务单引用的支付单缺失');
     }
 }

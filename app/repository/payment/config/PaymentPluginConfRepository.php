@@ -21,7 +21,7 @@ final class PaymentPluginConfRepository extends BaseRepository
     /** config_json 含凭证，读取后只用于插件调用或已认证的配置表单。 */
     public function create(array $data): string
     {
-        return $this->insert($data, ['plugin_code', 'name', 'config_json']);
+        return $this->insert($data, ['plugin_code', 'name', 'config_json', 'enabled']);
     }
 
     /** 配置事务先锁配置再锁通道，禁止网络请求进入此事务。 */

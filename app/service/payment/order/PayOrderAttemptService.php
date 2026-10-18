@@ -48,7 +48,7 @@ final class PayOrderAttemptService
      * 首次建立先核对配置与选路策略，再锁内部匹配范围并插入支付单；识别准备在创建提交后由插件执行。
      * 已有支付单时先锁 PayOrder，不重新评估通道策略或分配金额，终态也不创建第二次尝试。
      *
-     * @param BizOrder $biz 调用方已在同一连接上锁定的业务单；再次当前读防止模型过期。
+     * @param BizOrder $biz 调用方在同一事务内刚锁定的业务单；复用当前模型，不重新查询。
      * @return PayOrder 内部模型，公开响应必须另行取白名单字段。
      * @throws BusinessException 方式冲突、订单不可继续或没有可用的收款方案。
      * @throws RuntimeException 快照损坏或内部关联失效；不能退回活动配置掩盖故障。
@@ -58,7 +58,6 @@ final class PayOrderAttemptService
         if (!PaymentTypeCode::valid($payType)) {
             throw new BusinessException('不支持该支付方式', ApiResponseConstant::VALIDATION_FAILED);
         }
-        $biz = $this->bizOrders->lock($biz['biz_no']);
         $context = $biz['ext_json'] ?? [];
         $requestedType = $context['requested_pay_type'] ?? null;
         if ($requestedType !== null && $requestedType !== $payType) {
@@ -86,15 +85,8 @@ final class PayOrderAttemptService
         ) {
             throw new BusinessException('订单已不能建立支付尝试', ApiResponseConstant::CONFLICT);
         }
-        $type = $this->catalog->lockType($payType);
-        if ($type === null || (int) $type['enabled'] !== 1) {
-            throw new BusinessException(
-                '该支付方式暂不可用',
-                ApiResponseConstant::SERVICE_UNAVAILABLE,
-            );
-        }
         $selection = $this->routes->selectFor($biz['app_id'], (int) $biz['order_amount'], $payType);
-        return $this->persist($biz, $type['id'], $payType, $selection);
+        return $this->persist($biz, $selection['pay_type_id'], $payType, $selection);
     }
 
     /**
@@ -106,7 +98,6 @@ final class PayOrderAttemptService
      */
     public function prepareByChannel(BizOrder $biz, string $channelId): PayOrder
     {
-        $biz = $this->bizOrders->lock($biz['biz_no']);
         if ($biz['active_pay_no'] !== null) {
             $pay = $this->payOrders->lock($biz['active_pay_no']);
             if (

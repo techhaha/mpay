@@ -7,6 +7,7 @@ use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
 use app\exception\BusinessException;
+use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
@@ -33,7 +34,6 @@ final class PaymentChannelService extends BaseService
         private readonly PaymentPluginFactoryService $plugins,
         private readonly ReceiptScopeService $scopeAccess,
         private readonly Clock $clock,
-        private readonly PaymentCatalogService $management,
         private readonly DefaultRoutingService $defaults,
     ) {}
 
@@ -50,9 +50,6 @@ final class PaymentChannelService extends BaseService
         ConfigurationActionContext $actor,
     ): array {
         $this->requireTransaction();
-        $old = $id === null ? null : $this->channels->find($id);
-        $this->defaults->lockTypes(array_unique([...$old['pay_types'] ?? [], $input->payType]));
-
         $configuration = $this->configurations->lock($configurationId);
         $this->assertVersion($configuration, $expectedConfigurationVersion);
         foreach ($this->channels->activeForConfiguration($configurationId) as $bound) {
@@ -77,34 +74,8 @@ final class PaymentChannelService extends BaseService
                     ApiResponseConstant::STALE_VERSION,
                 );
             }
-            // 通道组合入口在事务内再次保护接入切换，不能绕过组合表单的在途订单/组类型检查。
-            if (
-                $channel['pay_types'] !== [$input->payType] ||
-                $channel['receipt_scope_key'] !== $input->scopeKey
-            ) {
-                if ($this->channels->hasPendingPayments($id)) {
-                    throw new BusinessException(
-                        '通道仍有待付款订单，处理完成后可切换接入',
-                        ApiResponseConstant::CONFLICT,
-                    );
-                }
-                if (
-                    $channel['pay_types'] !== [$input->payType] &&
-                    $this->defaults->customGroupsUsingChannel($id) !== []
-                ) {
-                    throw new BusinessException(
-                        '请先从原支付方式的轮询组移除此通道',
-                        ApiResponseConstant::CONFLICT,
-                    );
-                }
-                $this->management->assertNew($configuration['plugin_code']);
-                $this->assertPaymentTypeEnabled($input->payType);
-            }
         }
-        if ($id === null) {
-            $this->management->assertNew($configuration['plugin_code']);
-            $this->assertPaymentTypeEnabled($input->payType);
-        }
+        // Editor 已核对接入切换、在途订单、组引用和新单开关；这里保存通道规则及快照。
         $definition = $this->plugins->definition($configuration['plugin_code']);
         $authorized = $this->scopeAccess->current($configuration, true);
         $scope = $authorized[$input->scopeKey] ?? null;
@@ -145,46 +116,24 @@ final class PaymentChannelService extends BaseService
         return ['id' => $id, 'revision_id' => $revision, 'enabled' => false];
     }
 
-    /** 组合启停入口；既有事务内仍完整核对账号、快照和材料，停用不会停止历史采集。 */
+    /** Editor 已完成授权、锁和版本核对；启用时核对冻结规则及范围，停用不阻断历史采集。 */
     public function setEnabledInTransaction(
-        string $id,
-        string $expectedRevision,
-        int $expectedConfigurationVersion,
+        PaymentPluginConf $configuration,
+        PaymentChannel $channel,
         bool $enabled,
         ConfigurationActionContext $actor,
     ): void {
         $this->requireTransaction();
-        $observed =
-            $this->channels->find($id) ??
-            throw new BusinessException('通道不存在', ApiResponseConstant::NOT_FOUND);
-        $this->defaults->lockTypes($observed['pay_types']);
-
-        $configuration = $this->configurations->lock($observed['api_config_id']);
-        $channel = $this->channels->lock($id);
-        if ($channel['deleted_at'] !== null) {
-            throw new BusinessException('通道已删除', ApiResponseConstant::NOT_FOUND);
-        }
-        $this->assertVersion($configuration, $expectedConfigurationVersion);
-        if (
-            $channel['api_config_id'] !== $configuration['id'] ||
-            $channel['plugin_code'] !== $configuration['plugin_code'] ||
-            $channel['current_revision_id'] !== $expectedRevision
-        ) {
-            throw new BusinessException(
-                '通道已改变，请刷新后再操作',
-                ApiResponseConstant::STALE_VERSION,
-            );
-        }
+        $id = $channel['id'];
         if ($enabled) {
-            $this->management->assertNew($configuration['plugin_code']);
             if ((int) $configuration['enabled'] !== 1) {
                 throw new BusinessException('请先启用收款账号采集', ApiResponseConstant::CONFLICT);
             }
             $definition = $this->plugins->definition($configuration['plugin_code']);
-            $snapshot = $this->revisions->snapshot($id, $expectedRevision, true);
+            $snapshot = $this->revisions->snapshot($id, $channel['current_revision_id'], true);
             if (
                 !$this->revisions->rulesMatch($channel, $snapshot['channel']) ||
-                $snapshot['config_version'] !== $expectedConfigurationVersion
+                $snapshot['config_version'] !== (int) $configuration['config_version']
             ) {
                 throw new BusinessException(
                     '收款账号配置已更新，请重新保存通道后再启用',
@@ -216,7 +165,7 @@ final class PaymentChannelService extends BaseService
             'payment_channel',
             $id,
             $enabled ? 'enabled' : 'disabled',
-            ['new_version' => $expectedConfigurationVersion, 'enabled' => $enabled],
+            ['new_version' => (int) $configuration['config_version'], 'enabled' => $enabled],
         );
     }
 

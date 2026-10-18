@@ -23,7 +23,6 @@ use app\repository\payment\trade\PayOrderRepository;
 use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
-use DateTimeImmutable;
 use PDOException;
 use RuntimeException;
 use think\db\exception\DbException;
@@ -311,14 +310,13 @@ final class PayOrderCallbackService extends BaseService
                 ApiResponseConstant::FORBIDDEN,
             );
         }
-        $paidAt = $record['paid_at'] === null ? null : new DateTimeImmutable($record['paid_at']);
         $event = new ReceiptEvent(
             $pay['receipt_scope_key'],
             $context->configurationVersion,
             $record['pay_type'],
             $record['event_key'],
             $record['amount'],
-            $paidAt,
+            $record['paid_at'],
             $record['trade_no'],
             $record['remark'],
             $record['payload_digest'],

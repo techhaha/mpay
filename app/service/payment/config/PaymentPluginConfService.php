@@ -8,6 +8,7 @@ use app\common\constant\ApiResponseConstant;
 use app\common\util\Clock;
 use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
+use app\model\payment\PaymentPluginConf;
 use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
@@ -32,7 +33,6 @@ final class PaymentPluginConfService extends BaseService
         private readonly PluginConfigValidator $validator,
         private readonly ConfigurationAuditService $audit,
         private readonly Clock $clock,
-        private readonly PaymentCatalogService $management,
         private readonly FileAssetService $files,
         private readonly ReceiptScopeService $scopeService,
     ) {}
@@ -40,6 +40,7 @@ final class PaymentPluginConfService extends BaseService
     /**
      * 在通道统一创建事务内保存插件参数，不独立提交或执行外部请求。
      * Editor 已按支付方式 ID 取齐插件支持方式及默认组锁，登记范围只重入已有方式锁。
+     * 保存并启用与仅保存使用相同参数检查；新配置在本事务内直接写入目标启用状态。
      * @param array<string,mixed> $settings
      * @return array{id:string,config_version:int,enabled:bool}
      */
@@ -47,16 +48,17 @@ final class PaymentPluginConfService extends BaseService
         string $code,
         string $name,
         array $settings,
+        bool $enabled,
         ConfigurationActionContext $actor,
     ): array {
         $this->requireTransaction();
-        $this->management->assertNew($code);
         $definition = $this->plugins->definition($code);
         $settings = $this->validator->validate($definition->configSchema, $settings, true);
         $this->validateAssets($definition, $settings);
         $id = $this->configurations->create([
             'plugin_code' => $definition->code,
             'name' => $name,
+            'enabled' => (int) $enabled,
             'config_json' => json_encode(
                 (object) $settings,
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE,
@@ -82,9 +84,10 @@ final class PaymentPluginConfService extends BaseService
                 'plugin_code' => $definition->code,
                 'plugin_version' => $definition->version,
                 'new_version' => 1,
+                'enabled' => $enabled,
             ],
         );
-        return ['id' => $id, 'config_version' => 1, 'enabled' => false];
+        return ['id' => $id, 'config_version' => 1, 'enabled' => $enabled];
     }
 
     /**
@@ -155,28 +158,24 @@ final class PaymentPluginConfService extends BaseService
         ];
     }
 
-    /** Editor 已在事务入口鉴权；这里复核并启用参数，通道停用仍由通道服务处理。 */
+    /** Editor 已锁定配置/通道并核对版本和插件开关；这里检查实际参数及材料后启用配置。 */
     public function enableInTransaction(
-        string $id,
-        int $expectedVersion,
+        PaymentPluginConf $configuration,
         ConfigurationActionContext $actor,
     ): void {
         $this->requireTransaction();
-        $configuration = $this->configurations->lock($id);
-        $this->assertVersion($configuration['config_version'], $expectedVersion);
-        $this->channels->lockForConfiguration($id);
         $definition = $this->plugins->definition($configuration['plugin_code']);
-        $this->scopeService->current($configuration, true);
         $now = $this->clock->now()->format('Y-m-d H:i:s');
-        $this->management->assertNew($configuration['plugin_code']);
         $this->validator->validate($definition->configSchema, $configuration['config_json']);
         $this->validateAssets($definition, $configuration['config_json']);
-        $this->configurations->setEnabled($id, true, $now);
+        $this->configurations->setEnabled($configuration['id'], true, $now);
+        // 同事务的通道启用继续使用这份已锁定模型，无需重新查询配置。
+        $configuration['enabled'] = 1;
         $this->audit->record(
             $actor,
             'configuration.enabled',
             'payment_plugin_conf',
-            $id,
+            $configuration['id'],
             'enabled',
             ['enabled' => true],
         );

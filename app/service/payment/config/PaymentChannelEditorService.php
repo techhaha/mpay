@@ -57,9 +57,9 @@ final class PaymentChannelEditorService extends BaseService
             if ($type === null || (int) $type['enabled'] !== 1) {
                 throw new BusinessException('支付方式已停用或不存在', Code::CONFLICT);
             }
-            [$configurationId, $version, $scopeKey] = $this->createConfiguration($input, $actor);
-            // 新配置尚未对其他事务可见；后续通道保存复用已持有的目录锁。
             $this->management->assertNew($definition->code);
+            [$configurationId, $version, $scopeKey] = $this->createConfiguration($input, $actor);
+            // 新配置已核对插件开关及参数，通道保存复用本事务的检查结果。
             $channel = $this->channelService->writeInTransaction(
                 null,
                 null,
@@ -74,15 +74,9 @@ final class PaymentChannelEditorService extends BaseService
                 $actor,
             );
             if ($input['enabled'] ?? false) {
-                $this->configurationService->enableInTransaction(
-                    $configurationId,
-                    $version,
-                    $actor,
-                );
                 $this->channelService->setEnabledInTransaction(
-                    $channel['id'],
-                    $channel['revision_id'],
-                    $version,
+                    $this->configurations->lock($configurationId),
+                    $this->channels->lock($channel['id']),
                     true,
                     $actor,
                 );
@@ -192,6 +186,7 @@ final class PaymentChannelEditorService extends BaseService
             $input['plugin_code'],
             $input['channel']['name'],
             $input['settings'],
+            $input['enabled'] ?? false,
             $actor,
         );
         return [
@@ -267,20 +262,15 @@ final class PaymentChannelEditorService extends BaseService
             $this->audit->authorize($actor);
             $this->defaults->lockTypes($observed['pay_types']);
             $configuration = $this->configurations->lock($observed['api_config_id']);
-            $this->channels->lockForConfiguration($configuration['id']);
-            $this->assertCurrent($configuration, $this->channels->lock($input['id']), $input);
+            $channel = $this->channels->lock($input['id']);
+            $this->assertCurrent($configuration, $channel, $input);
             if ($input['enabled']) {
                 $this->management->assertNew($configuration['plugin_code']);
-                $this->configurationService->enableInTransaction(
-                    $configuration['id'],
-                    $input['expected_configuration_version'],
-                    $actor,
-                );
+                $this->configurationService->enableInTransaction($configuration, $actor);
             }
             $this->channelService->setEnabledInTransaction(
-                $input['id'],
-                $input['expected_revision'],
-                $input['expected_configuration_version'],
+                $configuration,
+                $channel,
                 $input['enabled'],
                 $actor,
             );
@@ -341,6 +331,7 @@ final class PaymentChannelEditorService extends BaseService
         }
         if (
             $channel['api_config_id'] !== $configuration['id'] ||
+            $channel['plugin_code'] !== $configuration['plugin_code'] ||
             $channel['current_revision_id'] !== $input['expected_revision'] ||
             (int) $configuration['config_version'] !== $input['expected_configuration_version']
         ) {

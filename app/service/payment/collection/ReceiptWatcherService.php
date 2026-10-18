@@ -89,7 +89,7 @@ final class ReceiptWatcherService
                     if (!($plugin instanceof ReceiptCollectorInterface)) {
                         continue;
                     }
-                    $prelogin = $this->plugins->preloginEnabled($plugin);
+                    $prelogin = $plugin->isPreloginEnabled();
                     $next = $code;
                     // 保活需要没有待付订单的启用通道；未声明时只读取原单依赖的版本。
                     [$orders, $channels] = $this->input($code, $upper, $prelogin);
@@ -290,8 +290,6 @@ final class ReceiptWatcherService
                 'configuration' => $snapshot['configuration'],
                 'current_configuration' =>
                     $configuration === null ? null : $configuration['config_json'],
-                'current_config_version' =>
-                    $configuration === null ? null : $configuration['config_version'],
             ];
         }
         return [$orders, $channels];

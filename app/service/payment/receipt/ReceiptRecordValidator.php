@@ -15,9 +15,10 @@ final class ReceiptRecordValidator extends Validate
         'pay_type' => ['require', 'string', 'regex' => PaymentTypeCode::PATTERN],
         'event_key' => ['require', 'string', 'utf8Text', 'byteLength' => 128],
         'amount' => ['require', 'integerValue', 'between' => [1, Money::MAX_CENTS]],
+        // MySQL DATETIME 年份下限为 1000；平台已转为上海时区，内部不再来回转换。
         'paid_at' => [
             'requireNullableText' => 19,
-            'regex' => '/^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D',
+            'regex' => '/^[1-9][0-9]{3}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}$/D',
             'dateFormat' => 'Y-m-d H:i:s',
         ],
         'trade_no' => ['requireNullableText' => 128],

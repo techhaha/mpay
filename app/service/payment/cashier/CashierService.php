@@ -171,27 +171,11 @@ final class CashierService extends BaseService
                 throw new RuntimeException('成功订单缺少支付单');
             }
             if ($result['required']) {
-                $task = $this->notifications->cashierConfirmation(
-                    NotifyConstant::EVENT_PAY_SUCCESS,
+                $result['notification_status'] = $this->notificationStatus(
+                    $bizNo,
                     $biz['active_pay_no'],
                 );
-                if (
-                    $task === null ||
-                    $task['biz_no'] !== $bizNo ||
-                    $task['pay_no'] !== $biz['active_pay_no']
-                ) {
-                    throw new RuntimeException('成功订单缺少原商户通知');
-                }
-                $result['confirmed'] = $task['first_ack_at'] !== null;
-                $result['notification_status'] = $result['confirmed']
-                    ? 'success'
-                    : match ((int) $task['status']) {
-                        NotifyConstant::STATUS_PENDING => 'pending',
-                        NotifyConstant::STATUS_SENDING => 'sending',
-                        NotifyConstant::STATUS_HELD => 'held',
-                        NotifyConstant::STATUS_EXHAUSTED => 'exhausted',
-                        default => throw new RuntimeException('商户通知状态与确认事实不一致'),
-                    };
+                $result['confirmed'] = $result['notification_status'] === 'success';
                 if (!$result['confirmed']) {
                     $result['action'] = in_array(
                         $result['notification_status'],
@@ -214,6 +198,32 @@ final class CashierService extends BaseService
                 http_build_query(['biz_no' => $bizNo, 'token' => $accessToken]);
             return $result;
         });
+    }
+
+    /**
+     * 已授权成功订单的商户应答状态；调用方须在一致性事务中读取订单，不在此重复授权或计数。
+     * 完成页及签名回跳共用首次 ACK 规则，人工补发失败不能撤销已确认事实。
+     */
+    public function notificationStatus(string $bizNo, string $payNo): string
+    {
+        $this->requireTransaction();
+        $task = $this->notifications->cashierConfirmation(
+            NotifyConstant::EVENT_PAY_SUCCESS,
+            $payNo,
+        );
+        if ($task === null || $task['biz_no'] !== $bizNo || $task['pay_no'] !== $payNo) {
+            throw new RuntimeException('成功订单缺少原商户通知');
+        }
+        if ($task['first_ack_at'] !== null) {
+            return 'success';
+        }
+        return match ((int) $task['status']) {
+            NotifyConstant::STATUS_PENDING => 'pending',
+            NotifyConstant::STATUS_SENDING => 'sending',
+            NotifyConstant::STATUS_HELD => 'held',
+            NotifyConstant::STATUS_EXHAUSTED => 'exhausted',
+            default => throw new RuntimeException('商户通知状态与确认事实不一致'),
+        };
     }
 
     /**

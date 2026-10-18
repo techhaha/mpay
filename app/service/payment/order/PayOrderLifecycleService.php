@@ -302,8 +302,6 @@ final class PayOrderLifecycleService extends BaseService
             throw new InvalidArgumentException('支付执行认领期限越界');
         }
         $target = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
-        // 到期处理拥有独立事务；先完成它，再认领，避免嵌套事务和给已到期订单展示付款材料。
-        $this->expire($target['biz_no']);
         return $this->transaction(function () use (
             $target,
             $payNo,
@@ -314,7 +312,7 @@ final class PayOrderLifecycleService extends BaseService
             $biz = $this->bizOrders->lock($target['biz_no']);
             $pay = $this->payOrders->lock($payNo);
             $this->assertOrderLink($biz, $pay);
-            // 前置到期扫描与本事务之间可能再次等锁；调用权必须按取锁后的时间判断。
+            // 在认领事务内按取锁后的时间处理到期，不另开一次前置到期事务。
             $now = $this->clock->now();
             if ($this->expireWaiting($biz, $now)) {
                 return [
@@ -434,8 +432,6 @@ final class PayOrderLifecycleService extends BaseService
             throw new InvalidArgumentException('支付执行回写合同不一致');
         }
         $target = $this->payOrders->find($payNo) ?? throw new RuntimeException('支付单不存在');
-        // 调用期间可能跨过付款截止点，回写前先结束到期待付，避免再发布过期二维码材料。
-        $this->expire($target['biz_no']);
         return $this->transaction(function () use (
             $target,
             $payNo,
@@ -562,7 +558,7 @@ final class PayOrderLifecycleService extends BaseService
             throw new RuntimeException('插件所选支付单不存在');
         $received = $receivedAt->format('Y-m-d H:i:s');
         // 来源认证由入口和插件完成；最终确认仍必须具有合理时间及事务内的金额、归属证据。
-        if ($event->paidAt === null || $event->paymentTime() > $received) {
+        if ($event->paidAt === null || $event->paidAt > $received) {
             return $ignore('insufficient_receipt_evidence');
         }
         return $this->transactionRetry(function () use (
@@ -641,7 +637,7 @@ final class PayOrderLifecycleService extends BaseService
                     }
                     if (
                         (int) $primary['amount'] !== $event->amount ||
-                        $primary['paid_at'] !== $event->paymentTime()
+                        $primary['paid_at'] !== $event->paidAt
                     ) {
                         return $ignore('event_content_conflict');
                     }
@@ -701,7 +697,7 @@ final class PayOrderLifecycleService extends BaseService
                 'platform_trade_no' => $event->platformTradeNo,
                 'amount' => $event->amount,
                 'remark' => $event->remark,
-                'paid_at' => $event->paymentTime(),
+                'paid_at' => $event->paidAt,
                 'received_at' => $received,
                 'pay_no' => $payNo,
                 'reason_code' => $reason,
@@ -732,12 +728,12 @@ final class PayOrderLifecycleService extends BaseService
                         'receipt_flow_id' => $flowId,
                         'confirmation_source' => TradeConstant::CONFIRMATION_RECEIPT,
                         'channel_trade_no' => $event->platformTradeNo,
-                        'paid_at' => $event->paymentTime(),
+                        'paid_at' => $event->paidAt,
                     ] +
                         $this->receiptAmountChanges(
                             $pay,
                             $event->amount,
-                            $event->paymentTime(),
+                            $event->paidAt,
                             $event->platformTradeNo,
                             $event->eventKey,
                         ),
@@ -749,7 +745,7 @@ final class PayOrderLifecycleService extends BaseService
                     [
                         'status' => TradeConstant::ORDER_STATUS_SUCCESS,
                         'paid_amount' => (int) $biz['order_amount'],
-                        'paid_at' => $event->paymentTime(),
+                        'paid_at' => $event->paidAt,
                     ],
                     $time,
                 );

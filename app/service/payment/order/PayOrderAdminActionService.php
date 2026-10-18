@@ -61,14 +61,7 @@ final class PayOrderAdminActionService extends BaseService
         AdminActionContext $actor,
         DateTimeImmutable $now,
     ): PayOrder {
-        $admin = $this->admins->find($actor->adminId);
-        if (
-            $admin === null ||
-            (int) $admin['status'] !== 1 ||
-            (int) $admin['session_version'] !== $actor->sessionVersion
-        ) {
-            throw new BusinessException('管理员身份已失效', ApiResponseConstant::UNAUTHENTICATED);
-        }
+        // 生命周期在关闭事务内锁定管理员并核验会话版本。
         return $this->lifecycle->closeLocally($payNo, $actor, $now);
     }
 

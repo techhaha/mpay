@@ -18,11 +18,6 @@ final class ChannelNotifyLogRepository extends BaseRepository
         parent::__construct($model);
     }
 
-    public function find(string $id): ?ChannelNotifyLog
-    {
-        return $this->model->find($id);
-    }
-
     /**
      * @param array{from:string,until:string,channel_id?:string,plugin_code?:string,result_code?:string,request_id?:string} $filters
      * @return array{items:list<ChannelNotifyLog>,total:int} 接收/解析拒绝不一定产生到账事实，因此有独立只读入口。
@@ -46,7 +41,7 @@ final class ChannelNotifyLogRepository extends BaseRepository
     /**
      * 调用方拥有短审计事务；网络/来源解析已经结束，不能在本次事务中再回到订单锁。
      *
-     * @param list<string> $flowIds 已持久化事实 ID，拒绝前为空。
+     * @param string|null $flowId 本次已持久化的流水 ID；未确认流水时为 null。
      */
     public function record(
         string $channelId,
@@ -54,7 +49,7 @@ final class ChannelNotifyLogRepository extends BaseRepository
         string $pluginCode,
         string $result,
         string $digest,
-        array $flowIds,
+        ?string $flowId,
     ): void {
         if (
             !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $result) ||
@@ -70,7 +65,7 @@ final class ChannelNotifyLogRepository extends BaseRepository
                 'result_code' => $result,
                 'payload_digest' => $digest,
                 'summary_json' => json_encode(
-                    ['flow_ids' => $flowIds, 'count' => count($flowIds)],
+                    ['flow_id' => $flowId],
                     JSON_THROW_ON_ERROR,
                 ),
             ],

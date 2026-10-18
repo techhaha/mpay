@@ -91,8 +91,8 @@ final class PayOrderAttemptService
 
     /**
      * 已认证的后台建单入口直接指定通道；订单本身与普通订单共用持久化和生命周期。
-     * 调用方持有应用和业务单锁，此处按支付方式→配置→通道→范围锁序冻结当前配置。
-     * 已有支付尝试直接复用，重投不重新冻结、改通道或推进轮询游标。
+     * 调用方持有应用和业务单锁，此处按支付方式→配置→通道→范围锁序核对已保存快照。
+     * 已有支付尝试直接复用，新建或重投均不追加配置版本；重投不改通道或推进轮询游标。
      *
      * @throws BusinessException 原单通道不一致、订单不能继续或通道配置发生变化。
      */
@@ -141,10 +141,26 @@ final class PayOrderAttemptService
                 ApiResponseConstant::CONFLICT,
             );
         }
-        // 指定通道不评估运营启停与限额；已保存插件参数仍须通过 schema 校验。
-        $revision = $this->revisions->freezeLocked($configuration, $channel);
-        $channel = $this->channels->lock($channelId);
-        $snapshot = $this->revisions->snapshot($channelId, $revision, true);
+        // 测试复用保存时的快照，不修改通道版本；插件执行仍核验实际参数。
+        if ($channel['current_revision_id'] === null) {
+            throw new BusinessException('通道尚未保存配置快照', ApiResponseConstant::CONFLICT);
+        }
+        $snapshot = $this->revisions->snapshot($channelId, $channel['current_revision_id'], true);
+        $configurationRevision = $this->configurations->revision(
+            $configuration['id'],
+            (int) $configuration['config_version'],
+            true,
+        );
+        if (
+            $channel['plugin_code'] !== $configuration['plugin_code'] ||
+            $snapshot['config_version'] !== (int) $configuration['config_version'] ||
+            !$this->revisions->rulesMatch($channel, $snapshot['channel']) ||
+            $snapshot['configuration'] !== $configuration['config_json'] ||
+            $configurationRevision === null ||
+            $configurationRevision['config_json'] !== $configuration['config_json']
+        ) {
+            throw new BusinessException('通道配置与快照不一致，请重新保存', ApiResponseConstant::CONFLICT);
+        }
         return $this->persist($biz, $type['id'], $payType, [
             'channel' => $channel,
             'config_version' => $snapshot['config_version'],
@@ -180,8 +196,8 @@ final class PayOrderAttemptService
         if ($biz['expire_at'] <= $now->format('Y-m-d H:i:s')) {
             throw new BusinessException('订单付款窗口已结束', ApiResponseConstant::CONFLICT);
         }
-        if ($scope['pay_type_id'] !== $typeId) {
-            throw new BusinessException('收款范围支付方式不一致', ApiResponseConstant::CONFLICT);
+        if ($scope['pay_type_id'] !== $typeId || $scope['api_config_id'] !== $channel['api_config_id']) {
+            throw new BusinessException('收款范围归属不一致', ApiResponseConstant::CONFLICT);
         }
         // 建单只继承业务单截止；插件 pay() 准备自身付款材料时可在原截止内缩短窗口。
         $expireAt = $biz['expire_at'];

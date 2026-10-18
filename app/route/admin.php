@@ -217,11 +217,6 @@ Route::group('adminapi', function (): void {
             Route::rule('ingress', [OperationsController::class, 'ingress'], 'GET|HEAD')->name(
                 'admin.receipts.ingress',
             );
-            Route::rule(
-                'ingress-flows',
-                [OperationsController::class, 'ingressFlows'],
-                'GET|HEAD',
-            )->name('admin.receipts.ingress-flows');
         });
         Route::group('notifications', function (): void {
             Route::rule('list', [OperationsController::class, 'notifications'], 'GET|HEAD')->name(

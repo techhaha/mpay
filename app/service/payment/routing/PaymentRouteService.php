@@ -71,17 +71,13 @@ final class PaymentRouteService
             );
         }
         $members = [];
-        $candidates = [];
         foreach ($this->groups->members($group['id'], true) as $member) {
             if ((int) $member['status'] !== 1) {
                 continue;
             }
-            $channel = $this->channels->find($member['channel_id']);
-            if ($channel !== null) {
-                $members[$channel['id']] = $member;
-                $candidates[] = $channel;
-            }
+            $members[$member['channel_id']] = $member;
         }
+        $candidates = $this->channels->forIds(array_map('strval', array_keys($members)));
         // 先按配置/通道的稳定顺序加锁，再按业务顺序选择，避免共享通道的不同组反向取锁。
         usort(
             $candidates,

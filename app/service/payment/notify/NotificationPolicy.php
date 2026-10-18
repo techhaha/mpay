@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace app\service\payment\notify;
 
-use Psr\Http\Message\ResponseInterface;
 use think\Config;
 
 /** 通知自动处理期限、退避和 ACK 的唯一规则；不查询数据库，不改变付款成功事实。 */
@@ -84,10 +83,8 @@ final readonly class NotificationPolicy
     }
 
     /** ACK 固定为成功 HTTP 状态和小写 success，仅兼容首尾 SP/HT/CR/LF，不接受 BOM/NUL 或 HTML。 */
-    public function acknowledged(ResponseInterface $response): bool
+    public function acknowledged(int $status, string $body): bool
     {
-        return $response->getStatusCode() >= 200 &&
-            $response->getStatusCode() < 300 &&
-            trim((string) $response->getBody(), " \t\r\n") === 'success';
+        return $status >= 200 && $status < 300 && trim($body, " \t\r\n") === 'success';
     }
 }

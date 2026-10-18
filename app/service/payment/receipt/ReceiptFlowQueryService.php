@@ -123,7 +123,6 @@ final class ReceiptFlowQueryService extends BaseService
             $data = $this->ingress->adminPage($filters, $page, $limit);
             $items = [];
             foreach ($data['items'] as $record) {
-                $count = $record['summary_json']['count'] ?? null;
                 $items[] = [
                     'id' => $record['id'],
                     'channel_id' => $record['channel_id'],
@@ -133,7 +132,7 @@ final class ReceiptFlowQueryService extends BaseService
                     'payload_digest' => $record['payload_digest'],
                     'result_label' => $this->reasonLabel($this->reasonCode($record['result_code'])),
                     'created_at' => $record['created_at'],
-                    'flow_count' => is_int($count) && $count >= 0 ? $count : null,
+                    'flow_id' => $record['summary_json']['flow_id'],
                 ];
             }
             return [
@@ -143,32 +142,6 @@ final class ReceiptFlowQueryService extends BaseService
                 'limit' => $limit,
             ];
         });
-    }
-
-    /** @return array{items:list<array{id:string}>,total:int,page:int,limit:int} 一个接收请求的全部持久流水引用可分页查看。 */
-    public function ingressFlows(string $id, int $page, int $limit): array
-    {
-        $record =
-            $this->ingress->find($id) ??
-            throw new BusinessException('接收记录不存在', ApiResponseConstant::NOT_FOUND);
-        $ids = $record['summary_json']['flow_ids'] ?? null;
-        if (!is_array($ids) || !array_is_list($ids)) {
-            throw new \RuntimeException('接收记录缺少完整流水引用');
-        }
-        foreach ($ids as $value) {
-            if (!is_string($value) || !preg_match('/^[1-9][0-9]{0,19}$/D', $value)) {
-                throw new \RuntimeException('接收记录流水引用无效');
-            }
-        }
-        return [
-            'items' => array_map(
-                static fn(string $value): array => ['id' => $value],
-                array_slice($ids, ($page - 1) * $limit, $limit),
-            ),
-            'total' => count($ids),
-            'page' => $page,
-            'limit' => $limit,
-        ];
     }
 
     private function flow(string $id): ReceiptFlow

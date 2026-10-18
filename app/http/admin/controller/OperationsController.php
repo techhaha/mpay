@@ -57,15 +57,6 @@ final class OperationsController extends BaseAdminController
         return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
     }
 
-    public function ingressFlows(
-        OperationsQueryValidator $validator,
-        ReceiptFlowQueryService $records,
-    ): Response {
-        $input = $validator->identity('id', $this->request->get(), true);
-        $data = $records->ingressFlows($input['key'], $input['page'], $input['limit']);
-        return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
-    }
-
     public function notifications(
         OperationsQueryValidator $validator,
         NotifyQueryService $records,

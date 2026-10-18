@@ -96,6 +96,17 @@ final class PaymentChannelRepository extends BaseRepository
     }
 
     /**
+     * @param list<string> $ids 只批量读取候选；选路仍须按稳定顺序加锁并复核。
+     * @return list<PaymentChannel>
+     */
+    public function forIds(array $ids): array
+    {
+        return $ids === []
+            ? []
+            : $this->model->whereIn('id', array_values(array_unique($ids)))->select()->all();
+    }
+
+    /**
      * @param array{configuration_id?:string,enabled?:int} $filters 配置筛选只影响列表，不改变通道归属。
      * @return array{items:list<PaymentChannel>,total:int}
      */
@@ -234,14 +245,12 @@ final class PaymentChannelRepository extends BaseRepository
      *
      * @param int $configVersion 此快照冻结的活动配置版本，不是通道 revision 序号。
      * @param string $value 服务层已验证并编码的完整 JSON 快照。
-     * @param string $digest 快照的 SHA-256 摘要，用于内容一致性核对。
      * @return numeric-string 新快照的数据库 ID。
      */
     public function appendRevision(
         PaymentChannel $channel,
         int $configVersion,
         string $value,
-        string $digest,
     ): string {
         $this->requireTransaction();
         $version = (int) $this->revisions->where('channel_id', $channel['id'])->max('revision') + 1;
@@ -252,7 +261,6 @@ final class PaymentChannelRepository extends BaseRepository
                 'api_config_id' => $channel['api_config_id'],
                 'config_version' => $configVersion,
                 'snapshot_json' => $value,
-                'snapshot_digest' => $digest,
             ],
             [
                 'channel_id',
@@ -260,7 +268,6 @@ final class PaymentChannelRepository extends BaseRepository
                 'api_config_id',
                 'config_version',
                 'snapshot_json',
-                'snapshot_digest',
             ],
             model: $this->revisions,
         );

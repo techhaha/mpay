@@ -5,7 +5,7 @@ MpayAdmin.ready(function () {
     const definitions={
         receipts:{url:'/adminapi/receipts/list',detail:'/adminapi/receipts/detail',history:'/adminapi/receipts/history',key:'id',title:'到账详情',date:'按系统接收日期筛选，来源付款时间在列表及详情中单独展示。',main:['plugin_code'],advanced:{id:'流水 ID',scope_key:'收款范围',pay_no:'关联支付单号'},columns:{id:'流水编号',amount:'实际金额（元）',plugin_code:'收款来源',biz_no:'关联订单',paid_at:'来源付款时间',reason_label:'核对说明'}},
         notifications:{url:'/adminapi/notifications/list',detail:'/adminapi/notifications/detail',history:'/adminapi/notifications/attempts',key:'notify_no',title:'商户通知详情',date:'按原通知任务创建日期筛选。发送次数不是支付次数。',states:{0:'待发送 / 重试',1:'发送中',2:'最近通知成功',3:'已停止自动重试',4:'暂不通知',acknowledged:'曾确认成功'},main:['status','biz_no'],advanced:{notify_no:'通知号',pay_no:'支付单号'},columns:{notify_no:'通知号',biz_no:'关联订单',status_label:'当前安排',first_ack_at:'首次商户确认',retry_count:'已发送次数',first_ack_at:'首次商户确认',target_host:'通知目标',next_retry_at:'下次发送'}},
-        ingress:{url:'/adminapi/receipts/ingress',history:'/adminapi/receipts/ingress-flows',key:'id',title:'通道回调详情',date:'按外部通知的接收日期筛选。接收成功不代表订单支付成功。',main:['channel_id','plugin_code'],advanced:{result_code:'结果代码',request_id:'请求编号'},columns:{created_at:'接收时间',channel_id:'收款通道',result_code:'处理结果',flow_count:'保存流水数'}},
+        ingress:{url:'/adminapi/receipts/ingress',key:'id',title:'通道回调详情',date:'按外部通知的接收日期筛选。接收成功不代表订单支付成功。',main:['channel_id','plugin_code'],advanced:{result_code:'结果代码',request_id:'请求编号'},columns:{created_at:'接收时间',channel_id:'收款通道',result_code:'处理结果',flow_id:'关联流水'}},
         audit:{url:'/adminapi/audit',key:'id',title:'操作日志详情',date:'按管理员操作发生日期筛选。',main:['action','result_code'],advanced:{admin_id:'管理员 ID',request_id:'请求编号'},columns:{created_at:'操作时间',admin_user_id:'管理员',action:'操作',result_code:'结果',target_type:'对象类型'}}
     };
     const kind=form.dataset.kind,config=definitions[kind];if(!config)return;
@@ -49,10 +49,11 @@ MpayAdmin.ready(function () {
     UI.dateRange(form);UI.render(form);
     function labelValue(name,value){if(value==null)return'—';if(name==='plugin_code')return plugins.find(item=>item.code===value)?.name||value;if(name==='channel_id')return channels.find(item=>item.id===value)?.name||('#'+value);if(name==='action')return actions[value]||value;if(name==='result_code')return results[value]||value;if(name==='target_type')return targets[value]||value;return typeof value==='boolean'?(value?'是':'否'):String(value);}
     function column(name,title){
-        const centered=['id','admin_user_id','status_label','result_code','retry_count','flow_count','attempt_no','http_status','target_type'].includes(name);
+        const centered=['id','admin_user_id','status_label','result_code','retry_count','flow_id','attempt_no','http_status','target_type'].includes(name);
         const compact=['notify_no','biz_no'].includes(name);
-        const width=name==='status_label'?175:['retry_count','flow_count','attempt_no','http_status','admin_user_id','id'].includes(name)?105:name==='amount'?150:undefined;
+        const width=name==='status_label'?175:['retry_count','flow_id','attempt_no','http_status','admin_user_id','id'].includes(name)?105:name==='amount'?150:undefined;
         return {field:name,title,width,minWidth:width??(compact?190:name.includes('_at')?178:name==='result_code'?210:140),align:name==='amount'||name==='duration_ms'?'right':centered?'center':'left',templet:row=>{
+            if(name==='flow_id')return row[name]?'<a href="/admin/receipts?id='+encodeURIComponent(row[name])+'">'+E(row[name])+'</a>':'—';
             if(name==='amount')return '<span class="admin-money">'+E(row[name])+'</span>';
             if(name==='status_label')return UI.state(row[name]);
             if(name==='result_code'&&row.result_label){
@@ -78,7 +79,7 @@ MpayAdmin.ready(function () {
         if(currentDialog&&!currentDialog.closed)currentDialog.close();
         const handle=UI.open({title:config.title,drawer:true,width:870,content:'<div class="records-detail-content"></div>'});currentDialog=handle;handle.feedback('正在读取详情…','loading');
         try{const record=config.detail?(await MpayHttp.request(config.detail+'?'+new URLSearchParams({[config.key]:row[config.key]}))).data:row;if(handle.closed)return;handle.feedback('');
-            const labels={id:'记录编号',amount:'实际金额（元）',status_label:'处理状态',reason_label:'核对说明',plugin_code:'来源插件',paid_at:'来源付款时间',received_at:'系统接收时间',platform_trade_no:'平台交易号',remark:'付款备注',biz_no:'业务单号',pay_no:'支付单号',notify_no:'通知号',retry_count:'已发送次数',first_ack_at:'首次商户确认',target_host:'通知目标',next_retry_at:'下次发送',last_notify_at:'最近发送',created_at:'记录时间',channel_id:'收款通道',flow_count:'保存流水数',admin_user_id:'管理员 ID',action:'操作',result_code:'处理结果',target_type:'目标类型',target_id:'目标编号',client_ip:'连接 IP'};
+            const labels={id:'记录编号',amount:'实际金额（元）',status_label:'处理状态',reason_label:'核对说明',plugin_code:'来源插件',paid_at:'来源付款时间',received_at:'系统接收时间',platform_trade_no:'平台交易号',remark:'付款备注',biz_no:'业务单号',pay_no:'支付单号',notify_no:'通知号',retry_count:'已发送次数',first_ack_at:'首次商户确认',target_host:'通知目标',next_retry_at:'下次发送',last_notify_at:'最近发送',created_at:'记录时间',channel_id:'收款通道',flow_id:'关联流水',admin_user_id:'管理员 ID',action:'操作',result_code:'处理结果',target_type:'目标类型',target_id:'目标编号',client_ip:'连接 IP'};
             // 手机来源可能使用派生流水标识，不能将它承诺为平台官方交易号。
             labels.platform_trade_no='来源流水号';
             const facts={};Object.entries(labels).forEach(([name,label])=>{if(Object.hasOwn(record,name))facts[label]=name==='result_code'&&record.result_label?record.result_label:labelValue(name,record[name]);});
@@ -88,16 +89,16 @@ MpayAdmin.ready(function () {
             const summaries={reason:'操作原因',origin:'操作入口',old_version:'修改前版本',new_version:'修改后版本',enabled:'启用状态',before_status:'修改前状态',after_status:'修改后状态',credential_version:'KEY 版本',scope_count:'范围数量'};
             Object.entries(record.summary||{}).forEach(([name,value])=>{if(summaries[name])facts[summaries[name]]=value;else technical[name]=value;});
             let links='';if(record.biz_no)links+='<a class="layui-btn layui-btn-primary" href="/admin/orders?biz_no='+encodeURIComponent(record.biz_no)+'">查看原订单</a>';
+            if(record.flow_id)links+='<a class="layui-btn layui-btn-primary" href="/admin/receipts?id='+encodeURIComponent(record.flow_id)+'">查看到账流水</a>';
             if(kind==='audit'&&record.target_type==='biz_order'&&record.target_id)links+='<a class="layui-btn layui-btn-primary" href="/admin/orders?biz_no='+encodeURIComponent(record.target_id)+'">查看目标订单</a>';
             if(kind==='audit'&&record.target_type==='payment_channel'&&record.target_id)links+='<a class="layui-btn layui-btn-primary" href="/admin/configurations?channel_id='+encodeURIComponent(record.target_id)+'">查看通道</a>';
             const historyId='records-history-'+Date.now();
             handle.node.querySelector('.records-detail-content').innerHTML=UI.facts(facts)+(links?'<div class="admin-filter-buttons">'+links+'</div>':'')
-                +(config.history?'<div class="admin-section-title">'+(kind==='notifications'?'发送记录':kind==='ingress'?'关联流水':'处理记录')+'</div><table id="'+historyId+'" lay-filter="records-history"></table><div class="records-history-feedback admin-feedback" role="status"></div>':'')
+                +(config.history?'<div class="admin-section-title">'+(kind==='notifications'?'发送记录':'处理记录')+'</div><table id="'+historyId+'" lay-filter="records-history"></table><div class="records-history-feedback admin-feedback" role="status"></div>':'')
                 +(Object.keys(technical).length?'<details class="admin-details"><summary>技术信息</summary>'+UI.facts(technical)+'</details>':'');
             function history(current){
                 const columns=kind==='notifications'?[column('attempt_no','次数'),column('started_at','发送时间'),column('http_status','HTTP 状态'),column('duration_ms','耗时（毫秒）'),column('result_label','发送结果'),UI.responseColumn()]
-                    :kind==='receipts'?[column('created_at','时间'),column('result_label','处理说明'),column('request_id','请求编号')]
-                    :[column('id','流水编号'),{title:'操作',width:150,templet:()=>'<button type="button" class="admin-link" lay-event="flow">查看到账流水</button>'}];
+                    :[column('created_at','时间'),column('result_label','处理说明'),column('request_id','请求编号')];
                 UI.table({elem:'#'+historyId,url:config.history,where:{[config.key]:record[config.key]},page:{curr:current},
                     feedback:handle.node.querySelector('.records-history-feedback'),cols:[columns]});
             }
@@ -105,7 +106,6 @@ MpayAdmin.ready(function () {
         }catch(exception){if(!handle.closed)handle.error(exception);}
     }
     // 固定过滤器只绑定一次，重复打开详情不会累积按时间戳命名的事件。
-    layui.table.on('tool(records-history)',event=>{if(event.event==='flow')location.assign('/admin/receipts?id='+encodeURIComponent(event.data.id));});
     layui.table.on('tool(records-table)',event=>{if(event.event==='detail')show(event.data);});
     form.addEventListener('submit',event=>{event.preventDefault();load(1);});UI.onReset(form,()=>{syncDates();UI.render(form);load(1);});
     document.getElementById('records-refresh').addEventListener('click',()=>load(page));

@@ -13,7 +13,6 @@ use app\common\base\BaseModel;
  * @property int $revision 通道内递增版本序号。
  * @property int $config_version
  * @property array<string,mixed> $snapshot_json 配置快照，禁止模型公开序列化。
- * @property string $snapshot_digest
  */
 final class PaymentChannelRevision extends BaseModel
 {
@@ -28,7 +27,6 @@ final class PaymentChannelRevision extends BaseModel
                 'api_config_id' => 'string',
                 'config_version' => 'int',
                 'snapshot_json' => 'json',
-                'snapshot_digest' => 'string',
                 'created_at' => 'string',
                 'updated_at' => 'string',
             ],

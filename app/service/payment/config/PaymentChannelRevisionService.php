@@ -80,7 +80,6 @@ final class PaymentChannelRevisionService extends BaseService
             $channel,
             (int) $configuration['config_version'],
             $snapshot,
-            hash('sha256', $snapshot),
         );
     }
 

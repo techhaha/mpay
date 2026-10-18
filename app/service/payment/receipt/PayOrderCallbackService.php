@@ -78,7 +78,7 @@ final class PayOrderCallbackService extends BaseService
         $pluginCode = $channel['plugin_code'];
         // 审计只摘要通知正文；服务器重写参数不属于设备发送的通知内容。
         $digest = hash('sha256', $request->getInput());
-        $flowIds = [];
+        $flowId = null;
         try {
             $context = $this->channelContext($channelId, $channel['api_config_id']);
             $plugin = $this->plugins->initialize($context->pluginCode, $context->configuration, [
@@ -97,7 +97,7 @@ final class PayOrderCallbackService extends BaseService
                     ApiResponseConstant::CONFLICT,
                 );
             }
-            $flowIds[] = $accepted['flow_id'];
+            $flowId = $accepted['flow_id'];
             $ack = $plugin->notifySuccess();
         } catch (Throwable $error) {
             $this->recordChannel(
@@ -108,7 +108,7 @@ final class PayOrderCallbackService extends BaseService
                     ? Result::CHANNEL_REJECTED
                     : Result::CHANNEL_FAULT,
                 $digest,
-                $flowIds,
+                $flowId,
             );
             if (
                 $error instanceof BusinessException &&
@@ -128,7 +128,7 @@ final class PayOrderCallbackService extends BaseService
             $pluginCode,
             Result::CHANNEL_ACCEPTED,
             $digest,
-            $flowIds,
+            $flowId,
         );
         return $ack;
     }
@@ -387,14 +387,14 @@ final class PayOrderCallbackService extends BaseService
         });
     }
 
-    /** @param list<string> $flowIds 审计在自己的短事务中提交，失败不伪装 ACK，也不删除此前已提交的事实。 */
+    /** 审计在自己的短事务中提交，失败不伪装 ACK，也不删除此前已提交的单条流水事实。 */
     private function recordChannel(
         string $channelId,
         string $requestId,
         string $pluginCode,
         string $result,
         string $digest,
-        array $flowIds,
+        ?string $flowId,
     ): void {
         $this->transaction(
             fn() => $this->channelLogs->record(
@@ -403,7 +403,7 @@ final class PayOrderCallbackService extends BaseService
                 $pluginCode,
                 $result,
                 $digest,
-                $flowIds,
+                $flowId,
             ),
         );
     }

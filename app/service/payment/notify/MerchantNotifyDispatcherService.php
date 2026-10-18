@@ -58,14 +58,14 @@ final class MerchantNotifyDispatcherService extends BaseService
             $started = hrtime(true);
             $response = $this->http->get($claim->target, $claim->leaseUntil->modify('-2 seconds'));
             $durationMs = (int) min(4294967295, (hrtime(true) - $started) / 1000000);
-            $acknowledged = $this->policy->acknowledged($response);
             $status = $response->getStatusCode();
+            $body = (string) $response->getBody();
+            $acknowledged = $this->policy->acknowledged($status, $body);
             $reason = $acknowledged
                 ? Result::ACKNOWLEDGED
                 : ($status >= 200 && $status < 300
                     ? Result::INVALID_ACK
                     : 'http_status');
-            $body = (string) $response->getBody();
             $result =
                 [
                     'http_status' => $status,

@@ -359,7 +359,6 @@ CREATE TABLE ma_payment_channel_revision (
   `api_config_id` bigint(20) unsigned NOT NULL COMMENT '本快照的插件配置ID，关联ma_payment_plugin_conf.id',
   `config_version` int(10) unsigned NOT NULL COMMENT '本快照使用的插件配置版本，不随当前配置变化',
   `snapshot_json` json NOT NULL COMMENT '冻结的通道与插件参数JSON，可能含凭证，不得公开回显',
-  `snapshot_digest` char(64) COLLATE utf8mb4_bin NOT NULL COMMENT '快照内容SHA-256摘要，用于核对冻结内容',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间，上海时区',
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录最后更新时间，上海时区',
   PRIMARY KEY (`id`),

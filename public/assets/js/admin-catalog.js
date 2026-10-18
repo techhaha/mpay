@@ -16,7 +16,8 @@ MpayAdmin.ready(function () {
             {title:'支付方式',width:140,unresize:true,align:'center',templet:type=>'<div class="admin-two-line">'+UI.payment(type.code)+'<small class="admin-row-sub">'+E(type.code)+'</small></div>'},
             {field:'sort_order',title:'排序',width:80,align:'center'},
             {title:'状态',width:100,align:'center',templet:type=>enabledLabel(type.enabled)},
-            {title:'支持插件',width:120,align:'center',templet:type=>UI.badge(supported(type.code).length?supported(type.code).length+' 个':'暂无插件',supported(type.code).length?'blue':'orange')},
+            // 单一支付方式保持固定宽度，由此列接收余宽，避免表体右侧留白；窄屏沿用官方横向滚动。
+            {title:'支持插件',minWidth:120,align:'center',templet:type=>UI.badge(supported(type.code).length?supported(type.code).length+' 个':'暂无插件',supported(type.code).length?'blue':'orange')},
             {title:'操作',width:130,align:'center',fixed:'right',templet:type=>'<div class="admin-inline-actions"><button class="admin-link" data-edit-type="'+E(type.id)+'">编辑</button><button class="admin-link danger" data-delete-type="'+E(type.id)+'" '+(type.referenced?'disabled title="已有引用，可通过编辑停用"':'')+'>删除</button></div>'}
         ]]});
     }
@@ -29,7 +30,7 @@ MpayAdmin.ready(function () {
     }
 
     function openTypes() {
-        directoryDialog=UI.open({title:'支付方式',width:900,
+        directoryDialog=UI.open({title:'支付方式',width:720,
             content:'<div class="admin-section-title admin-catalog-toolbar"><span>支付方式 <span class="admin-muted" data-type-count>'+UI.catalog.types.length+' 种</span></span><button type="button" class="layui-btn" data-new-type>'+UI.icon('add-1')+'新增支付方式</button></div><div class="payment-type-list"></div>'});
         directoryDialog.node.addEventListener('click',event=>{
             if(event.target.closest('[data-new-type]'))editType(null);

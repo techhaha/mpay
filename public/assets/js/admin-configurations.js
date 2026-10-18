@@ -43,7 +43,7 @@ MpayAdmin.ready(function () {
             +UI.field('单笔最小金额',UI.unit('minimum_amount',channel?UI.money(channel.minimum_amount):'0.01','元','required inputmode="decimal"'),{required:true})
             +UI.field('单笔最大金额',UI.unit('maximum_amount',channel?UI.money(channel.maximum_amount):'9999999.99','元','required inputmode="decimal"'),{required:true,help:'按业务订单原金额限制是否选用本通道。'})+'</div></div>'
             +'<div class="layui-collapse admin-channel-strategies" data-admin-collapse><div class="layui-colla-item"><h2 class="layui-colla-title">高级选路策略</h2><div class="layui-colla-content"><div class="admin-form-grid">'
-            +UI.field('参与默认收款','<input type="checkbox" name="participates_default_route" lay-skin="switch" lay-text="参与|不参与"'+(participates?' checked':'')+'>',{full:true,help:'参与时，使用默认路由的应用可选用此通道。不参与时仍可加入自定义轮询组。通道自身停用后，所有轮询组均跳过它。'})
+            +UI.field('默认收款','<input type="checkbox" name="participates_default_route" lay-skin="switch" lay-text="启用|关闭"'+(participates?' checked':'')+'>',{full:true,help:'关闭后，此通道不参与默认收款，仍可用于自定义轮询组。'})
             +UI.field('每日限额',UI.unit('daily_limit_amount',UI.money(channel?.daily_limit_amount||0),'元','required inputmode="decimal"'),{help:'0 表示不限。按上海时区当天发起的支付单统计，计入已成功及有效待付款订单的原金额；失败、关闭、超时不占用额度。'})
             +UI.field('每日限笔',UI.unit('daily_limit_count',channel?.daily_limit_count||0,'笔','required type="number" min="0" max="1000000" step="1"'),{help:'0 表示不限。统计范围与每日限额一致。达到限制后跳过本通道。'})
             +UI.field('可用开始时间',UI.input('available_from',channel?.available_from||'','data-admin-date="time" placeholder="留空为全天"'),{help:'上海时区；开始与结束须同时填写。可跨午夜，例如 22:00 至次日 06:00。'})

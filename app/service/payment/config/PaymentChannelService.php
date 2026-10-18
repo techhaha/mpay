@@ -22,6 +22,8 @@ use app\service\system\audit\ConfigurationAuditService;
  * 正式通道管理：完整规则、配置授权、冻结快照与审计一起提交；新通道和修改后的通道保持停用。
  * 启用只开放新单；停用不关闭静态二维码，也不停止原账号的历史到账采集。
  * 仅由 Editor 在已授权的外层事务内调用；这里核对配置及通道版本，不重复查询管理员。
+ *
+ * @internal 管理入口使用 PaymentChannelEditorService；不得把本类直接暴露给 Controller、CLI 或插件。
  */
 final class PaymentChannelService extends BaseService
 {

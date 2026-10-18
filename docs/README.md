@@ -14,6 +14,7 @@
 | 部署和维护 | [后台任务](wiki/V1-18-部署与后台任务.md) · [备份恢复](wiki/V1-19-备份恢复与域名迁移.md) |
 | 登录与访问保护 | [登录验证码与请求限流](wiki/V1-31-登录验证码与请求限流.md) |
 | 二次开发 | [目录结构](wiki/V1-21-开发环境与目录结构.md) · [插件开发](wiki/V1-23-支付插件开发.md) · [字段规则](wiki/V1-24-config-schema字段规则.md) |
+| 维护边界与变更验收 | [完整业务入口、交易回归和发布规则](wiki/V1-32-业务边界与回归验收.md) |
 
 在线文档：[Gitee Wiki](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub Wiki](https://github.com/techhaha/mpay/wiki)。
 

@@ -21,7 +21,12 @@ use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
 use RuntimeException;
 
-/** 通道专属插件参数及版本管理；Editor 在外层事务统一鉴权，本服务保存关联与快照，不猜平台字段或维护登录态。 */
+/**
+ * 通道专属插件参数及版本管理；保存关联与快照，不猜平台字段或维护登录态。
+ * 传入模型须来自本事务的锁定读取；Editor 负责鉴权、版本检查和锁序，本类负责参数、材料及范围。
+ *
+ * @internal 仅供 PaymentChannelEditorService 的组合事务调用，不是独立管理入口。
+ */
 final class PaymentPluginConfService extends BaseService
 {
     public function __construct(

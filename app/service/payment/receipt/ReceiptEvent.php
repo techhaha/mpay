@@ -8,6 +8,8 @@ namespace app\service\payment\receipt;
  * 范围和配置版本必须来自服务端上下文，不能直接反序列化匿名 HTTP 正文。
  * 格式与持久化边界由 ReceiptRecordValidator 和服务端配置入口核验；本对象不重复验证。
  * 只保存核对需要的字段及摘要，不携带凭证、完整报文或任意平台扩展数组。
+ *
+ * @internal 仅由 PayOrderCallbackService 在标准结果验证后构造；插件返回数组，不能直接构造到账事件。
  */
 final readonly class ReceiptEvent
 {

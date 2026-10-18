@@ -361,13 +361,9 @@ final class CashierService extends BaseService
         $this->orders->assertAccess($biz, $accessToken);
         $pay =
             $biz['active_pay_no'] === null ? null : $this->payOrders->find($biz['active_pay_no']);
-        if (
-            $biz['active_pay_no'] !== null &&
-            ($pay === null ||
-                $pay['biz_no'] !== $bizNo ||
-                (int) $pay['status'] !== (int) $biz['status'] ||
-                $pay->originalAmount() !== (int) $biz['order_amount'])
-        ) {
+        $this->assertLink($biz, $pay);
+        // 完整读取额外核对金额；轻量状态查询无需加载金额快照。
+        if ($pay !== null && $pay->originalAmount() !== (int) $biz['order_amount']) {
             throw new RuntimeException('收银台业务与支付状态不一致');
         }
         return [$biz, $pay];

@@ -49,11 +49,12 @@ final class PayOrderService extends BaseService
      * 组合下单用例的同事务入口；调用方拥有最外层事务，不能在此开启嵌套事务。
      * API 和后台快捷付款共用应用凭证、外部单号幂等、金额和订单写入规则。
      * $now 是入口从 Clock 获取的创建时间；尝试分配会在取得锁后另读当前时间核对截止。
+     *
+     * @internal 仅供 create 和已认证的通道测试组合用例使用；普通入口调用 create。
      */
     public function createLocked(CreateOrderInput $input, DateTimeImmutable $now): CreatedOrder
     {
         $this->requireTransaction();
-        $validSeconds = $this->settings->values('payment_defaults')['order_valid_seconds'];
         // 同一应用的创建与凭证变更共用应用锁，防止验签后改 PID/KEY 仍以旧身份新建单。
         $app = $this->apps->lock($input->appId);
         if ((int) $app['status'] !== 1) {
@@ -68,6 +69,8 @@ final class PayOrderService extends BaseService
         $biz = $this->bizOrders->lockByAppOrder($input->appId, $input->merchantOrderNo);
         $reused = $biz !== null;
         if ($biz === null) {
+            // 默认有效期只决定新单；重投使用原单期限，不依赖当前默认设置。
+            $validSeconds = $this->settings->values('payment_defaults')['order_valid_seconds'];
             // 域名授权只决定新订单；已验签的同单重投仍使用冻结目标，下面继续核对完整业务指纹。
             $targets = $this->targets->forHosts($app['allowed_hosts']);
             if ($input->notifyUrl !== null) {

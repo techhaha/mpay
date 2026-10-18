@@ -27,6 +27,8 @@ use think\Config;
 /**
  * 在建单事务内固定支付尝试；识别准备交给服务随后调用的插件，不在创建事务内执行插件。
  * PayOrderService 持有主体和业务单锁并负责提交；已有尝试始终复用原通道与金额。
+ *
+ * @internal 仅供 PayOrderService 的建单/选方式事务使用；不接收跨事务缓存的业务单模型。
  */
 final class PayOrderAttemptService
 {

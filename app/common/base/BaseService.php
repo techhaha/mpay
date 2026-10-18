@@ -12,7 +12,10 @@ use think\facade\Db;
  */
 abstract class BaseService
 {
-    /** 组合用例的内部入口只检查既有事务，不创建嵌套事务或增加提交层数。 */
+    /**
+     * 只确认当前连接已有事务，不创建嵌套事务。
+     * 不证明管理员已授权、模型已加锁或版本已核对；这些前提由完整业务入口负责。
+     */
     protected function requireTransaction(): void
     {
         if (!Db::connect()->connect()->inTransaction()) {

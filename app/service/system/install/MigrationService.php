@@ -266,12 +266,17 @@ final class MigrationService
             as $record
         ) {
             $identity = $record['version'] . ':' . $record['step'];
+            // 不同迁移链不能仅修改摘要冒充本版新装；明确区分版本不符与记录损坏。
+            if (!isset($expected[$identity])) {
+                throw new RuntimeException(
+                    '数据库迁移记录不属于当前安装基线，请核对数据库与程序版本；禁止修改摘要或重新安装覆盖',
+                );
+            }
             if (
-                !isset($expected[$identity]) ||
                 !preg_match('/^[a-f0-9]{64}$/D', $record['checksum']) ||
                 !in_array($record['state'], ['pending', 'complete'], true)
             ) {
-                throw new RuntimeException('迁移版本、SQL 摘要或进度状态不符');
+                throw new RuntimeException('数据库迁移记录的摘要格式或进度状态无效，请核对原始记录');
             }
             $step = $expected[$identity];
             if (

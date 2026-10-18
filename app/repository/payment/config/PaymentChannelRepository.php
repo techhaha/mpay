@@ -123,7 +123,7 @@ final class PaymentChannelRepository extends BaseRepository
             'total' => (clone $query)->count(),
             'items' => $query
                 ->field(
-                    'id,name,api_config_id,plugin_code,receipt_scope_key,pay_types,enabled,current_revision_id,updated_at',
+                    'id,name,api_config_id,plugin_code,pay_types,enabled,current_revision_id,updated_at',
                 )
                 ->order('id', 'desc')
                 ->page($page, $limit)

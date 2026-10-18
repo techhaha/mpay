@@ -98,9 +98,9 @@ final class PaymentPluginRepository extends BaseRepository
         foreach ($this->all() as $row) {
             if (
                 in_array($row['code'], $installed, true) ||
-                $this->channels->where('plugin_code', $row['code'])->count() > 0 ||
-                $this->configurations->where('plugin_code', $row['code'])->count() > 0 ||
-                $this->orders->where('plugin_code', $row['code'])->count() > 0
+                $this->channels->where('plugin_code', $row['code'])->value('id') !== null ||
+                $this->configurations->where('plugin_code', $row['code'])->value('id') !== null ||
+                $this->orders->where('plugin_code', $row['code'])->value('id') !== null
             ) {
                 continue;
             }

@@ -514,7 +514,8 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         $last = $store->get('shouqianba.rotation');
         $next = $last;
         try {
-            foreach ($this->collectionGroups($channels) as $key => $group) {
+            $groups = $this->collectionGroups($channels, is_string($last) ? $last : null);
+            foreach ($groups as $key => $group) {
                 if ($this->clock->now() >= $deadline) {
                     break;
                 }
@@ -539,7 +540,8 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         $last = $store->get('shouqianba.rotation');
         $next = $last;
         try {
-            foreach ($this->collectionGroups($channels) as $key => $group) {
+            $groups = $this->collectionGroups($channels, is_string($last) ? $last : null);
+            foreach ($groups as $key => $group) {
                 if ($this->clock->now() >= $deadline) {
                     break;
                 }
@@ -565,9 +567,10 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
     /**
      * 只有本插件解释收钱吧登录、门店和终端字段；相同登录不同门店共用状态并按轮切换。
      * 原单收款范围不变时才使用当前认证参数，避免编辑配置把旧订单切到另一收款账号。
-     * @return array<string,array<string,array{channels:array,settings:array,digests:array}>> 登录账号 → 查询范围。
+     * 轮转位置复用入口本次读取；凭证候选仅保存摘要到密码的映射，不复制完整配置。
+     * @return array<string,array<string,array{channels:array,settings:array,digests:array<string,string>}>> 登录账号 → 查询范围。
      */
-    private function collectionGroups(array $channels): array
+    private function collectionGroups(array $channels, ?string $last): array
     {
         $groups = [];
         foreach ($channels as $id => $channel) {
@@ -599,12 +602,11 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             );
             $groups[$login][$scope]['channels'][(string) $id] = $channel;
             $groups[$login][$scope]['settings'] ??= $settings;
-            $groups[$login][$scope]['digests'][$digest] = $settings;
+            $groups[$login][$scope]['digests'][$digest] = $password;
         }
         ksort($groups);
         $keys = array_keys($groups);
-        $last = $this->cache->store('receipt')->get('shouqianba.rotation');
-        $offset = is_string($last) ? array_search($last, $keys, true) : false;
+        $offset = $last === null ? false : array_search($last, $keys, true);
         if ($offset !== false) {
             $keys = [...array_slice($keys, $offset + 1), ...array_slice($keys, 0, $offset + 1)];
             $groups = array_replace(array_fill_keys($keys, []), $groups);
@@ -698,7 +700,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                         '同一登录账号配置了不同密码，且没有可复用的已验证凭证，请核对相关通道',
                 ]);
             }
-            $settings['watcher_password'] = $digests[$credential]['watcher_password'];
+            $settings['watcher_password'] = $digests[$credential];
             if ($known !== $credential) {
                 unset($state['session'], $state['last_verified_at']);
             }

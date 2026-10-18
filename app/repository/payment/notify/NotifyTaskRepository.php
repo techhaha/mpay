@@ -151,6 +151,10 @@ final class NotifyTaskRepository extends BaseRepository
             ->order('lease_until,id')
             ->limit($limit)
             ->column('notify_no');
+        // 过期任务已占满候选上限，待发查询的结果不会进入本批；认领仍逐条锁内复核。
+        if (count($expired) === $limit) {
+            return $expired;
+        }
         $pending = $this->model
             ->where('status', NotifyConstant::STATUS_PENDING)
             ->where(function (\think\db\Query $query) use ($now): void {

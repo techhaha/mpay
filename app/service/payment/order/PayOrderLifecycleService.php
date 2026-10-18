@@ -162,8 +162,6 @@ final class PayOrderLifecycleService extends BaseService
                 $this->receiptAmountChanges(
                     $pay,
                     $evidence->receivedAmount,
-                    $proof['paid_at'],
-                    $evidence->platformTradeNo,
                     null,
                 );
             $this->payOrders->saveLifecycle($payNo, $before, $changes, $time);
@@ -734,8 +732,6 @@ final class PayOrderLifecycleService extends BaseService
                         $this->receiptAmountChanges(
                             $pay,
                             $event->amount,
-                            $event->paidAt,
-                            $event->platformTradeNo,
                             $event->eventKey,
                         ),
                     $time,
@@ -814,28 +810,23 @@ final class PayOrderLifecycleService extends BaseService
     }
 
     /**
-     * 服务在确认事务内，用实际绑定流水或人工证据一起定稿金额、时间及事件身份。
-     * 插件此前可能保存过另一条并发通知，不能将其预处理信息留在本次成功快照中。
+     * 服务在确认事务内，用实际绑定流水或人工证据定稿金额及事件身份。
+     * 自动确认记录实际绑定的流水身份，人工确认不保留插件流水事件身份。
      *
      * @param int $received 实际到账金额，整数分。
-     * @param string $paidAt 本次确认的付款时间，上海时区。
-     * @param string|null $tradeNo 本次确认的真实渠道引用；人工未提供时保持 null。
-     * @param string|null $eventKey 本次实际关联的流水身份；人工无流水时移除插件预处理身份。
+     * @param string|null $eventKey 本次实际关联的流水身份；人工确认时为 null。
      * @return array{pay_amount:int,ext_json:string}
      */
     private function receiptAmountChanges(
         PayOrder $pay,
         int $received,
-        string $paidAt,
-        ?string $tradeNo,
         ?string $eventKey,
     ): array {
         $extension = $pay['ext_json'] ?? [];
         $extension['personal_receipt']['original_amount'] = $pay->originalAmount();
         $extension['personal_receipt']['receipt_amount'] = $pay->receiptAmount();
         $extension['personal_receipt']['notified_amount'] = $received;
-        $extension['personal_receipt']['notified_at'] = $paidAt;
-        $extension['personal_receipt']['channel_trade_no'] = $tradeNo;
+        // 付款时间和交易号由调用方写入支付单列；这里仅保留金额语义及流水身份。
         if ($eventKey === null) {
             unset($extension['personal_receipt']['event_key']);
         } else {

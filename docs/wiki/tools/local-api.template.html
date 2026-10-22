@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="description" content="MPAY 本地易支付 V1 接口文档：页面下单、API 下单、通知验签、查单和退款。">
+    <meta name="mpay-doc-source-sha256" content="{{SOURCE_HASH}}">
+    <title>易支付 V1 接口文档 · MPAY</title>
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/assets/layui/css/layui.css">
+    <link rel="stylesheet" href="/assets/css/theme.css?v=20261015focus">
+    <link rel="stylesheet" href="/assets/css/api-docs.css?v=20261022">
+    <script defer src="/assets/layui/layui.js"></script>
+    <script defer src="/assets/js/clipboard.js"></script>
+    <script defer src="/assets/js/api-docs.js?v=20261022"></script>
+</head>
+<body>
+<a class="api-skip" href="#api-content">跳到文档正文</a>
+<header class="api-header">
+    <a class="api-brand" href="/" aria-label="MPAY 首页"><img src="/assets/brand/mpay-logo.svg" alt="MPAY 码支付" width="130" height="33"><span>开发文档</span></a>
+    <nav aria-label="站点导航"><a href="/">返回首页</a><a href="https://gitee.com/technical-laohu/mpay/wikis/Home" target="_blank" rel="noopener noreferrer">使用手册 ↗</a></nav>
+</header>
+<div class="api-layout">
+    <aside class="api-sidebar">
+        <details class="api-outline" open>
+            <summary>接口目录 <span aria-hidden="true">⌄</span></summary>
+            <nav aria-label="接口目录">{{TOC}}</nav>
+        </details>
+        <p class="api-sidebar-note">易支付 V1 协议<br>随当前程序版本提供</p>
+    </aside>
+    <main id="api-content" tabindex="-1">
+        <section class="api-intro" aria-labelledby="api-title">
+            <div class="api-eyebrow">MPAY · DEVELOPER GUIDE</div>
+            <h1 id="api-title">易支付 V1 接口文档</h1>
+            <p>从发起订单到确认收款，按步骤完成你的业务接入。</p>
+            <div class="api-gateway"><div><span>本站网关地址</span><code id="api-gateway">当前站点根地址</code></div><button type="button" class="layui-btn layui-btn-sm" data-copy="api-gateway">复制网关</button></div>
+            <p class="api-intro-note">已有易支付模块：填写网关、PID 和 KEY 即可。PID / KEY 请向本站管理员获取。</p>
+            <noscript><p>请使用浏览器地址栏中的本站根地址作为网关；下方 pay.example.com 需要替换。启用 JavaScript 后可自动显示本站地址并一键复制，正文及示例仍可直接阅读。</p></noscript>
+        </section>
+        <article class="api-content">{{BODY}}</article>
+        <footer class="api-footer">MPAY 码支付 · 易支付 V1 接入参考 <a href="#api-title">返回顶部 ↑</a></footer>
+    </main>
+</div>
+</body>
+</html>

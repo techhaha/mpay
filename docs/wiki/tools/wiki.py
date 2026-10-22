@@ -26,7 +26,7 @@ LINK = re.compile(r'(!?\[[^\]\n]*\]\()([^\s)]+)([^)\n]*\))')
 HTML_LINK = re.compile(r'((?:src|href)=["\'])([^"\']+)(["\'])')
 FENCE = re.compile(r'^```[^\n]*\n.*?^```\s*$', re.M | re.S)
 RASTER_SUFFIXES = {'.png', '.jpg', '.jpeg'}
-ALLOWED_SUFFIXES = {'.md', '.svg', '.php', '.example', '.py', '.html'} | RASTER_SUFFIXES
+ALLOWED_SUFFIXES = {'.md', '.svg', '.php', '.example', '.py', '.html', '.mjs'} | RASTER_SUFFIXES
 
 
 def files() -> list[Path]:
@@ -42,6 +42,8 @@ def files() -> list[Path]:
             continue
         if path.suffix not in ALLOWED_SUFFIXES:
             raise ValueError(f'Unexpected public file: {relative}')
+        if path.suffix == '.mjs' and relative.parts[0] != 'tools':
+            raise ValueError(f'Build scripts belong in tools: {relative}')
         if len(relative.parts) > 1 and relative.parts[0] not in {'assets', 'examples', 'tools'}:
             raise ValueError(f'Unexpected public directory: {relative}')
         result.append(path)

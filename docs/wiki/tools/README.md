@@ -40,6 +40,25 @@ Wiki 页面不保留 `.md` 扩展名，工具指南导出为独立的 `Wiki-发�
 
 推送后核对远端提交号，打开首页、教程、侧栏和图片链接。两端 manifest 的 source 摘要应相同；export 摘要允许因页面域名不同而不同。源码中的 README、docs/README 和 docs/wiki 应作为文档变更纳入项目的正常版本提交。
 
+## 生成本站接口文档
+
+客户站点的 `/docs/` 是静态接口文档，无需登录、网络 Markdown 服务或客户侧构建。正文唯一来源为 [易支付 V1 接口参考](../V1-16-易支付V1接口参考.md)，页面模板为 `local-api.template.html`，生成工具为 `build-local-api.mjs`。不要手改生成的 `public/docs/index.html` 或下载文件。
+
+维护者使用 Node.js 20+ 和 Marked 17.0.5。在源码根目录执行一次依赖安装，再生成；这些开发依赖不进入 PHP 客户安装包：
+
+```sh
+npm install --no-save --package-lock=false marked@17.0.5
+node docs/wiki/tools/build-local-api.mjs
+node docs/wiki/tools/build-local-api.mjs --check
+python docs/wiki/tools/wiki.py check
+```
+
+若使用已有开发运行时的 Marked，可通过 `--marked-module` 指向其 `lib/marked.esm.js`，不要把机器路径写入源码。`--check` 只比较生成结果，不改文件或运行支付请求。
+
+生成器用同一正文产生章节锚点、静态参数表和可复制代码块，补充资料链接转向 Wiki；两个 PHP 示例以 `.php.txt` 提供下载，不在客户站点执行。页面复用本地 Layui、主题及复制辅助代码，网关显示为浏览器当前站点根地址，不读取后台凭证。更新接口合同时，正文和生成结果须一起提交。
+
+交付清单应包含 `public/docs/index.html`、`public/docs/downloads/epay-sign.php.txt`、`public/docs/downloads/epay-create.php.txt` 以及 `public/assets` 下的页面样式和脚本；根目录 docs、tools、tests 继续不进客户包。发布前运行上述检查，再在实际站点打开 `/docs/`，核对首页三个入口、手机目录、表格横向滚动、复制、示例下载和章节链接。
+
 ## 配图与示例维护
 
 公开目录只保留使用文档、配图及必要的开发/部署示例。演示助手、临时交互页面等实施工具放入 Git 忽略的私有工作目录，不随源码、安装包或 Wiki 附件交付；正式教程不能依赖这些工具。

@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="description" content="MPAY 本地易支付 V1 接口文档：页面下单、API 下单、通知验签、查单和退款。">
+    <meta name="mpay-doc-source-sha256" content="1914838b3edcf2376b0a3e28a4013fccc10c74359d7e273c0d18fbb392e46db3">
+    <title>易支付 V1 接口文档 · MPAY</title>
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/assets/layui/css/layui.css">
+    <link rel="stylesheet" href="/assets/css/theme.css?v=20261015focus">
+    <link rel="stylesheet" href="/assets/css/api-docs.css?v=20261022">
+    <script defer src="/assets/layui/layui.js"></script>
+    <script defer src="/assets/js/clipboard.js"></script>
+    <script defer src="/assets/js/api-docs.js?v=20261022"></script>
+</head>
+<body>
+<a class="api-skip" href="#api-content">跳到文档正文</a>
+<header class="api-header">
+    <a class="api-brand" href="/" aria-label="MPAY 首页"><img src="/assets/brand/mpay-logo.svg" alt="MPAY 码支付" width="130" height="33"><span>开发文档</span></a>
+    <nav aria-label="站点导航"><a href="/">返回首页</a><a href="https://gitee.com/technical-laohu/mpay/wikis/Home" target="_blank" rel="noopener noreferrer">使用手册 ↗</a></nav>
+</header>
+<div class="api-layout">
+    <aside class="api-sidebar">
+        <details class="api-outline" open>
+            <summary>接口目录 <span aria-hidden="true">⌄</span></summary>
+            <nav aria-label="接口目录"><a href="#快速开始"><span>01</span>快速开始</a>
+<a href="#接口一览"><span>02</span>接口一览</a>
+<a href="#请求频率与失败重试"><span>03</span>请求频率与失败重试</a>
+<a href="#下单参数"><span>04</span>下单参数</a>
+<a href="#页面下单"><span>05</span>页面下单</a>
+<a href="#api-下单"><span>06</span>API 下单</a>
+<a href="#md5-签名"><span>07</span>MD5 签名</a>
+<a href="#支付方式与设备类型"><span>08</span>支付方式与设备类型</a>
+<a href="#下单响应"><span>09</span>下单响应</a>
+<a href="#订单查询"><span>10</span>订单查询</a>
+<a href="#订单列表"><span>11</span>订单列表</a>
+<a href="#应用查询"><span>12</span>应用查询</a>
+<a href="#结算记录"><span>13</span>结算记录</a>
+<a href="#退款申请"><span>14</span>退款申请</a>
+<a href="#异步通知与返回页面"><span>15</span>异步通知与返回页面</a>
+<a href="#凭证变更"><span>16</span>凭证变更</a>
+<a href="#可下载示例"><span>17</span>可下载示例</a>
+<a href="#常见接入问题"><span>18</span>常见接入问题</a></nav>
+        </details>
+        <p class="api-sidebar-note">易支付 V1 协议<br>随当前程序版本提供</p>
+    </aside>
+    <main id="api-content" tabindex="-1">
+        <section class="api-intro" aria-labelledby="api-title">
+            <div class="api-eyebrow">MPAY · DEVELOPER GUIDE</div>
+            <h1 id="api-title">易支付 V1 接口文档</h1>
+            <p>从发起订单到确认收款，按步骤完成你的业务接入。</p>
+            <div class="api-gateway"><div><span>本站网关地址</span><code id="api-gateway">当前站点根地址</code></div><button type="button" class="layui-btn layui-btn-sm" data-copy="api-gateway">复制网关</button></div>
+            <p class="api-intro-note">已有易支付模块：填写网关、PID 和 KEY 即可。PID / KEY 请向本站管理员获取。</p>
+            <noscript><p>请使用浏览器地址栏中的本站根地址作为网关；下方 pay.example.com 需要替换。启用 JavaScript 后可自动显示本站地址并一键复制，正文及示例仍可直接阅读。</p></noscript>
+        </section>
+        <article class="api-content"><p>本文面向编写接入代码的开发者。已有商城的使用者只需按<a href="https://gitee.com/technical-laohu/mpay/wikis/V1-15-%E4%B8%9A%E5%8A%A1%E7%BD%91%E7%AB%99%E6%8E%A5%E5%85%A5">业务网站接入</a>填写地址、PID、KEY，无需手算签名或编写下单代码。</p>
+<p>在 MPAY 后台为业务网站创建应用，取得 PID 和 KEY，按需限制通知及返回域名。新应用已自动使用默认路由；启用通道并核对可用路由后，即可发起收款请求。</p>
+<p>请求发送至 MPAY 站点域名。以下路径均相对于站点根目录。</p>
+<h2 id="快速开始" tabindex="-1">快速开始</h2>
+<ol>
+<li>向本站管理员取得应用的 <strong>PID</strong> 和 <strong>KEY</strong>，确认应用已经启用且有可用收款通道。</li>
+<li>已有商城、发卡或订单系统支持“易支付”时，选择 <strong>易支付 V1</strong>，网关填写本站根地址（例如 <code>https://pay.example.com/</code>），再填写 PID、KEY。若软件单独要求“提交地址”，才填写 <code>https://pay.example.com/submit.php</code>。</li>
+<li>自行开发时，优先使用<a href="#%E9%A1%B5%E9%9D%A2%E4%B8%8B%E5%8D%95">页面下单</a>；需要服务端创建订单并取得收银台链接时使用 <a href="#api-%E4%B8%8B%E5%8D%95">API 下单</a>。</li>
+<li>在业务网站实现<a href="#%E5%BC%82%E6%AD%A5%E9%80%9A%E7%9F%A5%E4%B8%8E%E8%BF%94%E5%9B%9E%E9%A1%B5%E9%9D%A2">异步通知</a>，验签并核对订单金额后，幂等完成业务，再返回纯文本 <code>success</code>。</li>
+<li>用自己的订单核对“下单 → 付款 → 通知 → 业务订单完成”全过程；请求超时先查原订单，不换订单号重复提交。</li>
+</ol>
+<p><strong>PID</strong> 是应用编号；<strong>KEY</strong> 是该应用的签名和查询密钥，只保存在业务服务器。<code>out_trade_no</code> 是你的业务订单号；<code>trade_no</code> 是 MPAY 支付单号，两者不能混用。示例中的 PID、订单号、KEY 和域名均为占位示例，需要替换为自己的配置。</p>
+<p>本页只介绍本站对外的易支付 V1 接口，不包含支付插件回调或后台管理 API。公开页面不会读取或展示任何应用的真实凭证。</p>
+<h2 id="接口一览" tabindex="-1">接口一览</h2>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>路径</th>
+<th>方法</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/submit.php</td>
+<td>GET / POST</td>
+<td>页面下单，跳转收银台</td>
+</tr>
+<tr>
+<td>/mapi.php</td>
+<td>POST</td>
+<td>API 下单，返回收银台地址</td>
+</tr>
+<tr>
+<td>/api.php</td>
+<td>GET / POST</td>
+<td>查询应用/订单</td>
+</tr>
+<tr>
+<td>/api.php?act=refund</td>
+<td>POST</td>
+<td>按原订单插件申请退款</td>
+</tr>
+</tbody></table>
+</div><p>参数使用 UTF-8。POST 使用 <code>application/x-www-form-urlencoded</code>，不接受 JSON、数组或重复参数名。推荐使用 POST，避免在 URL 中传递查询密钥。</p>
+<p>返回码遵循<a href="https://epay.qcjy.cc/doc_old.html">易支付 V1 文档</a>，按动作区分：</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>JSON 接口</th>
+<th>成功 code</th>
+<th>未成功或异常 code</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>/mapi.php</td>
+<td>1（订单受理）</td>
+<td>0</td>
+</tr>
+<tr>
+<td>/api.php 查询操作</td>
+<td>1</td>
+<td>-1</td>
+</tr>
+<tr>
+<td>/api.php?act=refund</td>
+<td>0（已确认退款成功）</td>
+<td>-1</td>
+</tr>
+</tbody></table>
+</div><p><code>/api.php</code> 的失败统一使用 <code>-1</code>，包括参数解析、认证、业务拒绝、限流及程序异常；即使尚未解析 act，也不会返回可能被退款调用方误认为成功的 <code>0</code>。错误提示仍为 <code>msg</code>，HTTP 状态按原错误类型返回。</p>
+<h2 id="请求频率与失败重试" tabindex="-1">请求频率与失败重试</h2>
+<p>入口先按连接 IP 限流，验签或 KEY 认证成功后再检查应用额度；<code>submit.php</code> 和 <code>mapi.php</code> 共用该应用的下单额度。默认频率及配置位置见<a href="https://gitee.com/technical-laohu/mpay/wikis/V1-31-%E7%99%BB%E5%BD%95%E9%AA%8C%E8%AF%81%E7%A0%81%E4%B8%8E%E8%AF%B7%E6%B1%82%E9%99%90%E6%B5%81#%E8%AF%B7%E6%B1%82%E9%A2%91%E7%8E%87">请求频率表</a>。</p>
+<p>超限返回 HTTP <code>429</code>，响应头 <code>Retry-After</code> 表示至少等待多少秒；<code>/mapi.php</code> 返回 <code>code=0</code>，<code>/api.php</code> 返回 <code>code=-1</code>，提示字段均为 <code>msg</code>。接入程序应读取 HTTP 状态及等待时间，避免立即循环重试。限流不代表原订单支付或退款失败，不应因此更换外部订单号或退款号重新申请。</p>
+<p>访问保护明确拒绝、业务尚未执行时，响应包含 <code>X-Request-Rejected: 1</code>。一般网络超时、连接中断或其他 5xx 不能据此推断未受理，应先查询原订单。限流不改变原有签名、外部单号幂等和通知验签规则。</p>
+<h2 id="下单参数" tabindex="-1">下单参数</h2>
+<p>submit 与 mapi 使用下表的共同字段；必填差异在同一行说明。金额和 PID 均按字符串提交。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必填</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>1～32 位正整数字符串</td>
+</tr>
+<tr>
+<td>商户订单号</td>
+<td>out_trade_no</td>
+<td>是</td>
+<td>string</td>
+<td>SHOP202610220001</td>
+<td>1～64 个字符，同一应用内唯一</td>
+</tr>
+<tr>
+<td>商品名称</td>
+<td>name</td>
+<td>是</td>
+<td>string</td>
+<td>示例商品</td>
+<td>保存时按 UTF-8 截取至最多 127 字节；签名仍使用提交原值</td>
+</tr>
+<tr>
+<td>订单金额</td>
+<td>money</td>
+<td>是</td>
+<td>string</td>
+<td>12.50</td>
+<td>大于零的元金额，最多两位小数</td>
+</tr>
+<tr>
+<td>支付方式</td>
+<td>type</td>
+<td>submit 否 / mapi 是</td>
+<td>string</td>
+<td>alipay</td>
+<td>必须已启用并有可用路由；submit 省略时由付款人选择</td>
+</tr>
+<tr>
+<td>异步通知地址</td>
+<td>notify_url</td>
+<td>是</td>
+<td>string</td>
+<td><code>https://shop.example.com/notify.php</code></td>
+<td>业务网站接收服务端付款通知的地址，最长 2048 字符</td>
+</tr>
+<tr>
+<td>返回地址</td>
+<td>return_url</td>
+<td>submit 是 / mapi 否</td>
+<td>string</td>
+<td><code>https://shop.example.com/return.php</code></td>
+<td>付款后返回业务网站的地址，最长 2048 字符</td>
+</tr>
+<tr>
+<td>付款人 IP</td>
+<td>clientip</td>
+<td>submit 否 / mapi 是</td>
+<td>string</td>
+<td>203.0.113.10</td>
+<td>付款端 IPv4 或 IPv6，不要固定填写你的业务服务器 IP</td>
+</tr>
+<tr>
+<td>设备类型</td>
+<td>device</td>
+<td>否</td>
+<td>string</td>
+<td>pc</td>
+<td>mapi 缺省 pc；submit 按付款浏览器 UA 识别</td>
+</tr>
+<tr>
+<td>附加参数</td>
+<td>param</td>
+<td>否</td>
+<td>string</td>
+<td>member_123</td>
+<td>最多 2048 字节；非空时在成功通知中返回</td>
+</tr>
+<tr>
+<td>签名</td>
+<td>sign</td>
+<td>是</td>
+<td>string</td>
+<td>计算得到的签名</td>
+<td>32 位小写 MD5，使用全部非空参数计算</td>
+</tr>
+<tr>
+<td>签名算法</td>
+<td>sign_type</td>
+<td>是</td>
+<td>string</td>
+<td>MD5</td>
+<td>固定为大写 MD5</td>
+</tr>
+</tbody></table>
+</div><p>submit/mapi 使用原始参数验签，商品名仅在保存时截断。mapi 的 <code>device</code> 缺省或空串使用 pc，非法枚举值拒绝；mapi 请求通常来自业务服务器，不通过该请求的 UA 推断付款设备。device 只控制呈现方式，不证明真实身份；支付插件的内部动作参数不是商户接入字段。</p>
+<p>通知及返回地址须为合法 HTTP(S) URL，最多 2048 个字符。应用允许域名留空或包含 <code>*</code> 时不限制域名；填写具体名单时按完整域名精确匹配，每行一个，不支持子域通配。通知由 MPAY 服务器发送，默认允许端口为 80 和 443，正式通知目标须通过公网地址检查。返回地址由浏览器打开，不限制其标准 URL 中的端口或 IP 网段，也不由 MPAY 服务器查询 DNS。成功回跳仍须满足订单访问凭证、付款成功及商户确认条件，并使用原订单冻结的目标和签名凭证。</p>
+<h2 id="页面下单" tabindex="-1">页面下单</h2>
+<p><strong>地址：</strong> <code>https://pay.example.com/submit.php</code> · <strong>方法：</strong> GET / POST · <strong>结果：</strong> 跳转收银台。</p>
+<p>使用<a href="#%E4%B8%8B%E5%8D%95%E5%8F%82%E6%95%B0">下单参数表</a>。推荐由业务服务器计算签名，输出表单交给付款浏览器提交。KEY 不能放进 HTML、前端 JavaScript 或表单隐藏字段。下面是完整的 PHP 页面示例，需与下载的 <code>epay-sign.php</code> 放在一起，且在输出任何内容之前读取服务器配置：</p>
+<div class="api-example"><div class="api-example-bar"><span>php</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-1" aria-label="复制代码示例 1">复制</button></div><pre tabindex="0"><code id="example-1">&lt;?php
+declare(strict_types=1);
+require __DIR__ . &#39;/epay-sign.php&#39;;
+
+use Mpay\Docs\Example\EpaySignature;
+
+$key = getenv(&#39;MPAY_KEY&#39;) ?: &#39;&#39;; // 在业务服务器配置，不传给浏览器
+$parameters = [
+    &#39;pid&#39; =&gt; getenv(&#39;MPAY_PID&#39;) ?: &#39;&#39;,
+    &#39;out_trade_no&#39; =&gt; &#39;SHOP202610220001&#39;, // 换成你的业务订单号，重试沿用原号
+    &#39;name&#39; =&gt; &#39;示例商品&#39;,
+    &#39;money&#39; =&gt; &#39;12.50&#39;,
+    &#39;type&#39; =&gt; &#39;alipay&#39;,
+    &#39;notify_url&#39; =&gt; &#39;https://shop.example.com/notify.php&#39;,
+    &#39;return_url&#39; =&gt; &#39;https://shop.example.com/return.php&#39;,
+];
+$parameters[&#39;sign&#39;] = EpaySignature::sign($parameters, $key);
+$parameters[&#39;sign_type&#39;] = &#39;MD5&#39;;
+header(&#39;Content-Type: text/html; charset=utf-8&#39;);
+echo &#39;&lt;form method=&quot;post&quot; action=&quot;https://pay.example.com/submit.php&quot;&gt;&#39;;
+foreach ($parameters as $name =&gt; $value) {
+    echo &#39;&lt;input type=&quot;hidden&quot; name=&quot;&#39; . htmlspecialchars($name, ENT_QUOTES, &#39;UTF-8&#39;)
+        . &#39;&quot; value=&quot;&#39; . htmlspecialchars($value, ENT_QUOTES, &#39;UTF-8&#39;) . &#39;&quot;&gt;&#39;;
+}
+echo &#39;&lt;button type=&quot;submit&quot;&gt;前往支付&lt;/button&gt;&lt;/form&gt;&#39;;</code></pre></div>
+<p>请求成功返回 HTTP <code>303</code>，浏览器跟随 <code>Location</code> 打开本站收银台；此入口不返回 JSON。请求有误时显示错误页面，应按提示修正参数或配置。</p>
+<h2 id="api-下单" tabindex="-1">API 下单</h2>
+<p><strong>地址：</strong> <code>https://pay.example.com/mapi.php</code> · <strong>方法：</strong> POST · <strong>结果：</strong> JSON。</p>
+<p>使用<a href="#%E4%B8%8B%E5%8D%95%E5%8F%82%E6%95%B0">下单参数表</a>，其中 <code>type</code>、<code>clientip</code> 必填，<code>return_url</code> 可省略。以下代码在业务服务器执行，需要 PHP cURL 扩展和 <code>epay-sign.php</code>，请求正文为表单字符串：</p>
+<div class="api-example"><div class="api-example-bar"><span>php</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-2" aria-label="复制代码示例 2">复制</button></div><pre tabindex="0"><code id="example-2">&lt;?php
+declare(strict_types=1);
+require __DIR__ . &#39;/epay-sign.php&#39;;
+
+use Mpay\Docs\Example\EpaySignature;
+
+$parameters = [
+    &#39;pid&#39; =&gt; getenv(&#39;MPAY_PID&#39;) ?: &#39;&#39;,
+    &#39;out_trade_no&#39; =&gt; &#39;SHOP202610220001&#39;,
+    &#39;name&#39; =&gt; &#39;示例商品&#39;,
+    &#39;money&#39; =&gt; &#39;12.50&#39;,
+    &#39;type&#39; =&gt; &#39;alipay&#39;,
+    &#39;clientip&#39; =&gt; &#39;203.0.113.10&#39;, // 换成你获取的真实付款人 IP
+    &#39;device&#39; =&gt; &#39;pc&#39;,
+    &#39;notify_url&#39; =&gt; &#39;https://shop.example.com/notify.php&#39;,
+    &#39;return_url&#39; =&gt; &#39;https://shop.example.com/return.php&#39;,
+];
+$parameters[&#39;sign&#39;] = EpaySignature::sign($parameters, getenv(&#39;MPAY_KEY&#39;) ?: &#39;&#39;);
+$parameters[&#39;sign_type&#39;] = &#39;MD5&#39;;
+$curl = curl_init(&#39;https://pay.example.com/mapi.php&#39;);
+curl_setopt_array($curl, [
+    CURLOPT_POST =&gt; true,
+    CURLOPT_POSTFIELDS =&gt; http_build_query($parameters, &#39;&#39;, &#39;&amp;&#39;, PHP_QUERY_RFC3986),
+    CURLOPT_HTTPHEADER =&gt; [&#39;Content-Type: application/x-www-form-urlencoded&#39;],
+    CURLOPT_RETURNTRANSFER =&gt; true,
+    CURLOPT_CONNECTTIMEOUT =&gt; 5,
+    CURLOPT_TIMEOUT =&gt; 15,
+]);
+$body = curl_exec($curl);
+$status = curl_getinfo($curl, CURLINFO_RESPONSE_CODE);
+$error = curl_error($curl);
+curl_close($curl);
+if ($body === false) {
+    throw new RuntimeException(&#39;请求结果待核对，请先查原订单：&#39; . $error);
+}
+$result = json_decode($body, true, 512, JSON_THROW_ON_ERROR);
+if ($status &lt; 200 || $status &gt;= 300 || ($result[&#39;code&#39;] ?? null) !== 1) {
+    throw new RuntimeException(&#39;HTTP &#39; . $status . &#39;：&#39; . ($result[&#39;msg&#39;] ?? &#39;响应异常&#39;));
+}
+// 将此地址交给付款浏览器打开；受理成功不代表已经付款。
+echo $result[&#39;payurl&#39;];</code></pre></div>
+<p>本接口仅返回本站收银台链接 <code>payurl</code>，不返回 <code>qrcode</code> 或 <code>urlscheme</code>。不要根据第三方易支付实现猜测本站响应字段。异常或超时的处理见<a href="#%E8%AF%B7%E6%B1%82%E9%A2%91%E7%8E%87%E4%B8%8E%E5%A4%B1%E8%B4%A5%E9%87%8D%E8%AF%95">失败重试</a>。</p>
+<h2 id="md5-签名" tabindex="-1">MD5 签名</h2>
+<ol>
+<li>移除 <code>sign</code>、<code>sign_type</code> 以及值为 null 或空字符串的参数；字符串 <code>&quot;0&quot;</code> 保留。</li>
+<li>按参数名的 ASCII 字符串顺序升序排列。</li>
+<li>使用原始值拼接为 <code>key1=value1&amp;key2=value2</code>，拼接时不做 URL 编码、不去除空格、不转换金额格式。</li>
+<li>在字符串末尾直接追加应用 KEY，计算小写 MD5。</li>
+<li>将结果作为 <code>sign</code>，并添加 <code>sign_type=MD5</code>，然后按表单规则编码发送。</li>
+</ol>
+<p>额外提交的非空参数也参与签名。回调验签使用收到的全部参数按相同规则计算。后台“应用管理”的签名计算工具可用于核对。</p>
+<p>PHP 示例：</p>
+<div class="api-example"><div class="api-example-bar"><span>php</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-3" aria-label="复制代码示例 3">复制</button></div><pre tabindex="0"><code id="example-3">function epaySign(array $parameters, string $key): string
+{
+    unset($parameters[&#39;sign&#39;], $parameters[&#39;sign_type&#39;]);
+    $parameters = array_filter($parameters, static fn ($value) =&gt; $value !== null &amp;&amp; $value !== &#39;&#39;);
+    ksort($parameters, SORT_STRING);
+    $parts = [];
+    foreach ($parameters as $name =&gt; $value) {
+        $parts[] = $name . &#39;=&#39; . $value;
+    }
+    return md5(implode(&#39;&amp;&#39;, $parts) . $key);
+}</code></pre></div>
+<p>参数值应为字符串。签名验证后仍需检查订单号、金额、PID 和交易状态。</p>
+<p>验签应使用 <code>hash_equals()</code> 比较结果，同时核对 <code>sign_type=MD5</code> 和签名格式；可直接使用<a href="downloads/epay-sign.php.txt" download>签名与验签辅助文件 <span aria-hidden="true">↓</span></a> <a class="api-source-link" href="downloads/epay-sign.php.txt" target="_blank" rel="noopener noreferrer" aria-label="查看 epay-sign.php 文本">查看文本 ↗</a>。不要对收到的值再次 URL 解码或格式化金额，否则 <code>12.50</code> 变成 <code>12.5</code> 会造成签名不一致。</p>
+<h2 id="支付方式与设备类型" tabindex="-1">支付方式与设备类型</h2>
+<p>支付方式是否能使用取决于本站启用的插件、通道和应用路由；仅知道编码不代表已开通。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>编码</th>
+<th>含义</th>
+<th>使用条件</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>alipay</td>
+<td>支付宝</td>
+<td>应用有可用支付宝通道</td>
+</tr>
+<tr>
+<td>wxpay</td>
+<td>微信支付</td>
+<td>应用有可用微信通道</td>
+</tr>
+</tbody></table>
+</div><p><code>mapi.php</code> 的 <code>device</code> 接受下表值，缺省或空串为 <code>pc</code>；<code>submit.php</code> 按付款浏览器识别环境，不使用传入值覆盖识别结果。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>编码</th>
+<th>付款端环境</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>pc</td>
+<td>电脑浏览器</td>
+</tr>
+<tr>
+<td>mobile</td>
+<td>手机浏览器</td>
+</tr>
+<tr>
+<td>qq</td>
+<td>QQ 内置浏览器</td>
+</tr>
+<tr>
+<td>wechat</td>
+<td>微信内置浏览器</td>
+</tr>
+<tr>
+<td>alipay</td>
+<td>支付宝内置浏览器</td>
+</tr>
+<tr>
+<td>jump</td>
+<td>跳转环境标识；实际呈现由插件决定</td>
+</tr>
+</tbody></table>
+</div><h2 id="下单响应" tabindex="-1">下单响应</h2>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>受理状态</td>
+<td>code</td>
+<td>integer</td>
+<td>1</td>
+<td>1 受理；0 未成功，不是付款状态</td>
+</tr>
+<tr>
+<td>提示</td>
+<td>msg</td>
+<td>string</td>
+<td>订单已受理</td>
+<td>重复下单成功时为“返回原订单”</td>
+</tr>
+<tr>
+<td>支付单号</td>
+<td>trade_no</td>
+<td>string</td>
+<td>P2026102212000012345</td>
+<td>MPAY 支付单号</td>
+</tr>
+<tr>
+<td>收银台地址</td>
+<td>payurl</td>
+<td>string</td>
+<td><code>https://pay.example.com/cashier/pay?biz_no=...&amp;token=</code>...</td>
+<td>交给付款浏览器打开，含订单访问凭证</td>
+</tr>
+</tbody></table>
+</div><p><code>/submit.php</code> 成功后返回 HTTP 303，跳转至收银台。<code>/mapi.php</code> 成功响应示例：</p>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-4" aria-label="复制代码示例 4">复制</button></div><pre tabindex="0"><code id="example-4">{
+  &quot;code&quot;: 1,
+  &quot;msg&quot;: &quot;订单已受理&quot;,
+  &quot;trade_no&quot;: &quot;P2026102212000012345&quot;,
+  &quot;payurl&quot;: &quot;https://pay.example.com/cashier/pay?biz_no=...&amp;token=...&quot;
+}</code></pre></div>
+<p><code>code=1</code> 表示订单已受理，尚不代表付款成功。拒绝请求时返回 <code>code=0</code> 及 <code>msg</code>；程序或基础设施故障也可能返回非 2xx HTTP 状态。</p>
+<p>同一应用重复提交相同订单号和相同业务参数时返回原订单；参数冲突时返回错误。不同应用的同名订单互不影响。请求超时后应先查询原订单，避免用新订单号重复下单。</p>
+<p>失败示例（具体 <code>msg</code> 随错误而不同）：</p>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-5" aria-label="复制代码示例 5">复制</button></div><pre tabindex="0"><code id="example-5">{&quot;code&quot;:0,&quot;msg&quot;:&quot;签名验证失败&quot;}</code></pre></div>
+<h2 id="订单查询" tabindex="-1">订单查询</h2>
+<p>向 <code>/api.php</code> 提交当前应用的 <code>pid</code>、<code>key</code> 和 <code>act</code>。查询接口使用 KEY 认证，无需提交 MD5 签名。</p>
+<p><strong>地址：</strong> <code>https://pay.example.com/api.php</code> · <strong>方法：</strong> GET / POST（推荐 POST）。下面的 cURL 示例为 Linux / macOS shell 语法，Windows PowerShell 可用 <code>curl.exe</code> 并将命令合成一行。<code>YOUR_PID</code>、<code>YOUR_KEY</code> 必须替换；KEY 只用于业务服务器，不在前端请求。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>act</th>
+<th>附加参数</th>
+<th>结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>order</td>
+<td>trade_no 或 out_trade_no；同时提供时优先 trade_no</td>
+<td>单笔订单</td>
+</tr>
+<tr>
+<td>orders</td>
+<td>page 默认 1，limit 默认 20，最大 50</td>
+<td>本应用订单列表，保存在 data 数组</td>
+</tr>
+<tr>
+<td>query</td>
+<td>无；省略 act 时使用此操作</td>
+<td>应用启用状态及订单统计</td>
+</tr>
+<tr>
+<td>settle</td>
+<td>无</td>
+<td>空结算记录；MPAY 不提供平台结算</td>
+</tr>
+<tr>
+<td>refund</td>
+<td>trade_no 或 out_trade_no、money，选填 refund_no</td>
+<td>调用原订单插件；具体约定见下节</td>
+</tr>
+</tbody></table>
+</div><h3 id="查询单笔订单" tabindex="-1">查询单笔订单</h3>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必填</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作</td>
+<td>act</td>
+<td>是</td>
+<td>string</td>
+<td>order</td>
+<td>固定 order</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>当前应用 PID</td>
+</tr>
+<tr>
+<td>应用密钥</td>
+<td>key</td>
+<td>是</td>
+<td>string</td>
+<td>YOUR_KEY</td>
+<td>当前应用 KEY，不传 sign</td>
+</tr>
+<tr>
+<td>支付单号</td>
+<td>trade_no</td>
+<td>二选一</td>
+<td>string</td>
+<td>P2026102212000012345</td>
+<td>与 out_trade_no 同时提供时优先使用</td>
+</tr>
+<tr>
+<td>商户订单号</td>
+<td>out_trade_no</td>
+<td>二选一</td>
+<td>string</td>
+<td>SHOP202610220001</td>
+<td>尚未选择方式、还没有支付单号时使用</td>
+</tr>
+</tbody></table>
+</div><div class="api-example"><div class="api-example-bar"><span>sh</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-6" aria-label="复制代码示例 6">复制</button></div><pre tabindex="0"><code id="example-6">curl &#39;https://pay.example.com/api.php&#39; \
+  --data-urlencode &#39;act=order&#39; \
+  --data-urlencode &#39;pid=YOUR_PID&#39; \
+  --data-urlencode &#39;key=YOUR_KEY&#39; \
+  --data-urlencode &#39;out_trade_no=SHOP202610220001&#39;</code></pre></div>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-7" aria-label="复制代码示例 7">复制</button></div><pre tabindex="0"><code id="example-7">{
+  &quot;code&quot;: 1,
+  &quot;msg&quot;: &quot;查询成功&quot;,
+  &quot;trade_no&quot;: &quot;P2026102212000012345&quot;,
+  &quot;out_trade_no&quot;: &quot;SHOP202610220001&quot;,
+  &quot;api_trade_no&quot;: &quot;&quot;,
+  &quot;type&quot;: &quot;alipay&quot;,
+  &quot;pid&quot;: &quot;1001&quot;,
+  &quot;addtime&quot;: &quot;2026-10-22 12:00:00&quot;,
+  &quot;endtime&quot;: &quot;2026-10-22 12:01:00&quot;,
+  &quot;name&quot;: &quot;示例商品&quot;,
+  &quot;money&quot;: &quot;12.50&quot;,
+  &quot;status&quot;: 1,
+  &quot;param&quot;: &quot;&quot;,
+  &quot;buyer&quot;: &quot;&quot;
+}</code></pre></div>
+<h3 id="订单响应字段" tabindex="-1">订单响应字段</h3>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>查询状态</td>
+<td>code</td>
+<td>integer</td>
+<td>1</td>
+<td>1 查询成功；失败 -1</td>
+</tr>
+<tr>
+<td>提示</td>
+<td>msg</td>
+<td>string</td>
+<td>查询成功</td>
+<td>状态说明</td>
+</tr>
+<tr>
+<td>支付单号</td>
+<td>trade_no</td>
+<td>string</td>
+<td>P2026102212000012345</td>
+<td>未选择方式时可为空</td>
+</tr>
+<tr>
+<td>商户订单号</td>
+<td>out_trade_no</td>
+<td>string</td>
+<td>SHOP202610220001</td>
+<td>你的业务订单号</td>
+</tr>
+<tr>
+<td>接口方交易号</td>
+<td>api_trade_no</td>
+<td>string</td>
+<td>空字符串</td>
+<td>有真实交易号时返回，否则为空</td>
+</tr>
+<tr>
+<td>支付方式</td>
+<td>type</td>
+<td>string</td>
+<td>alipay</td>
+<td>未选择方式时为空</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>string</td>
+<td>1001</td>
+<td>原订单保存的 PID，应用修改 PID 后也不改写旧单</td>
+</tr>
+<tr>
+<td>创建时间</td>
+<td>addtime</td>
+<td>string</td>
+<td>2026-10-22 12:00:00</td>
+<td>上海时区，YYYY-MM-DD HH:mm:ss</td>
+</tr>
+<tr>
+<td>付款时间</td>
+<td>endtime</td>
+<td>string</td>
+<td>2026-10-22 12:01:00</td>
+<td>未付款时为空</td>
+</tr>
+<tr>
+<td>商品名称</td>
+<td>name</td>
+<td>string</td>
+<td>示例商品</td>
+<td>已保存的商品名称</td>
+</tr>
+<tr>
+<td>原订单金额</td>
+<td>money</td>
+<td>string</td>
+<td>12.50</td>
+<td>元，固定两位小数</td>
+</tr>
+<tr>
+<td>付款状态</td>
+<td>status</td>
+<td>integer</td>
+<td>1</td>
+<td>1 已确认成功；0 尚未确认成功</td>
+</tr>
+<tr>
+<td>附加参数</td>
+<td>param</td>
+<td>string</td>
+<td>member_123</td>
+<td>未提供时为空</td>
+</tr>
+<tr>
+<td>买家信息</td>
+<td>buyer</td>
+<td>string</td>
+<td>空字符串</td>
+<td>本站不提供付款人账户</td>
+</tr>
+</tbody></table>
+</div><p>单笔订单在外层 <code>code/msg</code> 后返回 <code>trade_no</code>、<code>out_trade_no</code>、<code>api_trade_no</code>、<code>type</code>、<code>pid</code>、<code>addtime</code>、<code>endtime</code>、<code>name</code>、<code>money</code>、<code>status</code>、<code>param</code> 和 <code>buyer</code>。列表响应为 <code>code/msg/data</code>，data 中每项使用相同订单字段，不重复包含 code/msg。其中：</p>
+<ul>
+<li><code>status=1</code> 表示已确认支付成功，<code>status=0</code> 表示尚未确认成功。</li>
+<li><code>money</code> 为下单原金额；付款识别时的金额调整不改变此字段。</li>
+<li><code>trade_no</code> 在尚未选择支付方式时可为空；<code>api_trade_no</code> 只返回已记录的支付宝、微信等接口方真实交易号，没有时为空。手机/PC 监听合成的事件编号不作为平台交易号返回，也不以平台受理单号代替。</li>
+<li><code>buyer</code> 为空字符串，系统不提供付款人账户信息。</li>
+</ul>
+<p><code>code/msg</code> 只在响应最外层出现一次，分页中的每个订单对象没有单独的成功码。</p>
+<p>查询范围仅限当前应用。停用应用或重置 KEY 后，旧凭证无法发起新查询。<code>act=query</code> 只提供应用状态及订单统计，不返回 KEY 或平台结算账户字段 type/account/username；余额固定为 <code>0.00</code>，<code>act=settle</code> 返回空列表。这是单收款主体的接入范围，MPAY 不托管资金、不提供平台结算。</p>
+<h2 id="订单列表" tabindex="-1">订单列表</h2>
+<p><strong>地址：</strong> <code>https://pay.example.com/api.php</code> · <strong>方法：</strong> GET / POST。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必填</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作</td>
+<td>act</td>
+<td>是</td>
+<td>string</td>
+<td>orders</td>
+<td>固定 orders</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>当前应用 PID</td>
+</tr>
+<tr>
+<td>应用密钥</td>
+<td>key</td>
+<td>是</td>
+<td>string</td>
+<td>YOUR_KEY</td>
+<td>当前应用 KEY</td>
+</tr>
+<tr>
+<td>页码</td>
+<td>page</td>
+<td>否</td>
+<td>integer</td>
+<td>1</td>
+<td>默认 1，范围 1～1000000</td>
+</tr>
+<tr>
+<td>每页条数</td>
+<td>limit</td>
+<td>否</td>
+<td>integer</td>
+<td>20</td>
+<td>默认 20，最大 50</td>
+</tr>
+</tbody></table>
+</div><div class="api-example"><div class="api-example-bar"><span>sh</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-8" aria-label="复制代码示例 8">复制</button></div><pre tabindex="0"><code id="example-8">curl &#39;https://pay.example.com/api.php&#39; \
+  --data-urlencode &#39;act=orders&#39; \
+  --data-urlencode &#39;pid=YOUR_PID&#39; \
+  --data-urlencode &#39;key=YOUR_KEY&#39; \
+  --data-urlencode &#39;page=1&#39; \
+  --data-urlencode &#39;limit=20&#39;</code></pre></div>
+<p>返回 <code>code/msg/data</code>，<code>data</code> 中每项使用<a href="#%E8%AE%A2%E5%8D%95%E5%93%8D%E5%BA%94%E5%AD%97%E6%AE%B5">订单响应字段</a>，不重复包含 <code>code/msg</code>。没有订单或已到列表末尾时返回空数组；没有 <code>total</code> 字段。</p>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-9" aria-label="复制代码示例 9">复制</button></div><pre tabindex="0"><code id="example-9">{&quot;code&quot;:1,&quot;msg&quot;:&quot;查询成功&quot;,&quot;data&quot;:[]}</code></pre></div>
+<h2 id="应用查询" tabindex="-1">应用查询</h2>
+<p><strong>地址：</strong> <code>https://pay.example.com/api.php</code> · <strong>方法：</strong> GET / POST。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必填</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作</td>
+<td>act</td>
+<td>否</td>
+<td>string</td>
+<td>query</td>
+<td>省略时默认 query</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>当前应用 PID</td>
+</tr>
+<tr>
+<td>应用密钥</td>
+<td>key</td>
+<td>是</td>
+<td>string</td>
+<td>YOUR_KEY</td>
+<td>当前应用 KEY</td>
+</tr>
+</tbody></table>
+</div><div class="api-example"><div class="api-example-bar"><span>sh</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-10" aria-label="复制代码示例 10">复制</button></div><pre tabindex="0"><code id="example-10">curl &#39;https://pay.example.com/api.php&#39; \
+  --data-urlencode &#39;act=query&#39; \
+  --data-urlencode &#39;pid=YOUR_PID&#39; \
+  --data-urlencode &#39;key=YOUR_KEY&#39;</code></pre></div>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-11" aria-label="复制代码示例 11">复制</button></div><pre tabindex="0"><code id="example-11">{
+  &quot;code&quot;: 1,
+  &quot;msg&quot;: &quot;本系统不托管资金，余额固定为 0.00&quot;,
+  &quot;pid&quot;: &quot;1001&quot;,
+  &quot;active&quot;: 1,
+  &quot;money&quot;: &quot;0.00&quot;,
+  &quot;orders&quot;: 12,
+  &quot;order_today&quot;: 2,
+  &quot;order_lastday&quot;: 3
+}</code></pre></div>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>类型</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>查询状态</td>
+<td>code / msg</td>
+<td>integer / string</td>
+<td>成功 1，失败 -1；msg 为说明</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>string</td>
+<td>当前应用 PID</td>
+</tr>
+<tr>
+<td>启用状态</td>
+<td>active</td>
+<td>integer</td>
+<td>1 启用；停用应用无法通过当前认证</td>
+</tr>
+<tr>
+<td>余额</td>
+<td>money</td>
+<td>string</td>
+<td>固定 0.00，不表示钱包或可提现余额</td>
+</tr>
+<tr>
+<td>订单总数</td>
+<td>orders</td>
+<td>integer</td>
+<td>当前应用订单数</td>
+</tr>
+<tr>
+<td>今日订单数</td>
+<td>order_today</td>
+<td>integer</td>
+<td>按系统业务日期统计</td>
+</tr>
+<tr>
+<td>昨日订单数</td>
+<td>order_lastday</td>
+<td>integer</td>
+<td>按系统业务日期统计</td>
+</tr>
+</tbody></table>
+</div><h2 id="结算记录" tabindex="-1">结算记录</h2>
+<p><strong>地址：</strong> <code>https://pay.example.com/api.php</code> · <strong>方法：</strong> GET / POST。此接口仅保留易支付接入兼容应答，本站没有平台结算流程。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必填</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作</td>
+<td>act</td>
+<td>是</td>
+<td>string</td>
+<td>settle</td>
+<td>固定 settle</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>当前应用 PID</td>
+</tr>
+<tr>
+<td>应用密钥</td>
+<td>key</td>
+<td>是</td>
+<td>string</td>
+<td>YOUR_KEY</td>
+<td>当前应用 KEY</td>
+</tr>
+</tbody></table>
+</div><div class="api-example"><div class="api-example-bar"><span>sh</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-12" aria-label="复制代码示例 12">复制</button></div><pre tabindex="0"><code id="example-12">curl &#39;https://pay.example.com/api.php&#39; \
+  --data-urlencode &#39;act=settle&#39; \
+  --data-urlencode &#39;pid=YOUR_PID&#39; \
+  --data-urlencode &#39;key=YOUR_KEY&#39;</code></pre></div>
+<p><code>code</code> 为整数、<code>msg</code> 为说明字符串、<code>data</code> 始终为空数组：</p>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-13" aria-label="复制代码示例 13">复制</button></div><pre tabindex="0"><code id="example-13">{&quot;code&quot;:1,&quot;msg&quot;:&quot;本系统自收，无平台结算记录&quot;,&quot;data&quot;:[]}</code></pre></div>
+<h2 id="退款申请" tabindex="-1">退款申请</h2>
+<p><strong>地址：</strong> <code>https://pay.example.com/api.php?act=refund</code> · <strong>方法：</strong> 仅 POST。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必填</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>操作</td>
+<td>act</td>
+<td>是</td>
+<td>string</td>
+<td>refund</td>
+<td>只放 URL query，正文不要重复</td>
+</tr>
+<tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>POST 正文，当前应用 PID</td>
+</tr>
+<tr>
+<td>应用密钥</td>
+<td>key</td>
+<td>是</td>
+<td>string</td>
+<td>YOUR_KEY</td>
+<td>POST 正文，当前应用 KEY</td>
+</tr>
+<tr>
+<td>支付单号</td>
+<td>trade_no</td>
+<td>二选一</td>
+<td>string</td>
+<td>P2026102212000012345</td>
+<td>同时提供时优先使用</td>
+</tr>
+<tr>
+<td>商户订单号</td>
+<td>out_trade_no</td>
+<td>二选一</td>
+<td>string</td>
+<td>SHOP202610220001</td>
+<td>原商户订单号</td>
+</tr>
+<tr>
+<td>本次退款金额</td>
+<td>money</td>
+<td>是</td>
+<td>string</td>
+<td>1.00</td>
+<td>正数元金额，最多两位小数</td>
+</tr>
+<tr>
+<td>商户退款号</td>
+<td>refund_no</td>
+<td>否</td>
+<td>string</td>
+<td>REFUND202610220001</td>
+<td>建议提供；网络重试必须沿用原号</td>
+</tr>
+</tbody></table>
+</div><p>以下请求会申请真实退款，请只在确认原订单和退款金额后由业务服务器调用：</p>
+<div class="api-example"><div class="api-example-bar"><span>sh</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-14" aria-label="复制代码示例 14">复制</button></div><pre tabindex="0"><code id="example-14">curl &#39;https://pay.example.com/api.php?act=refund&#39; \
+  --data-urlencode &#39;pid=YOUR_PID&#39; \
+  --data-urlencode &#39;key=YOUR_KEY&#39; \
+  --data-urlencode &#39;out_trade_no=SHOP202610220001&#39; \
+  --data-urlencode &#39;money=1.00&#39; \
+  --data-urlencode &#39;refund_no=REFUND202610220001&#39;</code></pre></div>
+<p>明确成功的响应示例：</p>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-15" aria-label="复制代码示例 15">复制</button></div><pre tabindex="0"><code id="example-15">{
+  &quot;code&quot;: 0,
+  &quot;msg&quot;: &quot;退款成功&quot;,
+  &quot;refund_no&quot;: &quot;R2026102212100012345&quot;,
+  &quot;trade_no&quot;: &quot;P2026102212000012345&quot;,
+  &quot;money&quot;: &quot;1.00&quot;,
+  &quot;refund_status&quot;: 1
+}</code></pre></div>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>类型</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>协议结果</td>
+<td>code</td>
+<td>integer</td>
+<td>0 明确成功；-1 未成功或异常</td>
+</tr>
+<tr>
+<td>说明</td>
+<td>msg</td>
+<td>string</td>
+<td>状态或错误说明</td>
+</tr>
+<tr>
+<td>系统退款号</td>
+<td>refund_no</td>
+<td>string</td>
+<td>MPAY 内部退款号，不是提交的商户退款号</td>
+</tr>
+<tr>
+<td>支付单号</td>
+<td>trade_no</td>
+<td>string</td>
+<td>原 MPAY 支付单号</td>
+</tr>
+<tr>
+<td>退款金额</td>
+<td>money</td>
+<td>string</td>
+<td>本次退款的元金额</td>
+</tr>
+<tr>
+<td>内部状态</td>
+<td>refund_status</td>
+<td>integer</td>
+<td>0 处理中、1 成功、2 拒绝或未执行、3 未知</td>
+</tr>
+</tbody></table>
+</div><p>向 <code>/api.php?act=refund</code> 发送 POST 表单，正文提供当前应用 <code>pid/key</code>、<code>trade_no</code>（或 <code>out_trade_no</code>）和 <code>money</code>，不重复提交 URL 中的 act。<code>money</code> 为本次退款的正数元字符串，最多两位小数。只能退款本应用已支付成功的订单，累计成功/处理中/未知退款不得超过原业务金额。</p>
+<p>退款要求实际 HTTP 方法为 POST。GET 退款请求在进入认证和退款服务前返回 HTTP 405、<code>Allow: POST</code>，JSON 为 <code>code=-1</code> 和错误说明，不认领退款或调用插件；查询接口继续支持 GET/POST。</p>
+<p><code>refund_no</code> 为业务网站自定的幂等号，1～64 位字母、数字、下划线或连字符。同一支付单内，同号重试返回原退款结果，金额不同则拒绝。省略时使用原支付单唯一默认请求；需要多次部分退款时，每次业务退款必须有不同的 <code>refund_no</code>，网络重试继续使用原号。</p>
+<p>退款处理结果含 <code>code/msg/refund_no/trade_no/money/refund_status</code>。返回的 <code>refund_no</code> 是 MPAY 的 20 位内部退款号；只有已明确退款成功才返回 <code>code=0</code>，处理中、拒绝或未执行、结果未知均返回 <code>code=-1</code>。参数、认证或程序异常同样返回非零的 <code>code=-1</code> 和 <code>msg</code>，可能不含退款记录字段。</p>
+<p><code>refund_status</code> 独立表示内部状态，保持 0 处理中、1 成功、2 拒绝或未执行、3 结果未知；不能与协议 code 混用。<code>code=-1</code> 不证明平台一定未退款，处理中和结果未知仍保留金额占用，不能换号重复申请，也不会自动重发。</p>
+<p>明确拒绝与结果未知的异常说明分别记录在私有技术日志 <code>payment.refund_rejected</code> 和 <code>payment.refund_unknown</code>，可按 pay_no、refund_no、plugin_code 和 request_id 排查。说明由插件/SDK 脱敏，最多 2048 个 UTF-8 字节，超长带 message_truncated 标记；不将完整报文或凭证写入日志、数据库原因码或公开响应。</p>
+<p>读取订单快照、校验配置或初始化插件失败时，尚未进入 <code>refund()</code>，记录为状态 2，原因为“退款准备失败，尚未执行”，不占用可退额度。原退款号再次请求仍返回该失败记录；排除原因后发起新的退款申请应使用新的商户退款号。进入退款动作后发生超时、异常或无法验证返回结果，仍按结果未知保留额度，不能据此判断平台没有退款。</p>
+<p>当前微信/支付宝手机、支付宝账单、收钱吧码牌四个监听插件没有原路退款接口，由插件返回不支持，后台订单详情可查看请求记录。通用退款入口并不承诺任何未来平台的异步结果查询；引入该类插件前须补齐平台查询/回调及结果核对。原支付成功和已发送的付款通知不会因退款改成未支付。</p>
+<p>易支付 V1 插件会调用其配置平台的退款接口，是否成功以原订单插件及平台实际结果为准。不要将查询的成功码 <code>1</code> 用于判断退款成功。</p>
+<h2 id="异步通知与返回页面" tabindex="-1">异步通知与返回页面</h2>
+<p>确认到账后，MPAY 默认向订单的 <code>notify_url</code> 发送付款结果。管理员人工确认时可以选择暂不发送异步通知，之后在后台放行；期间查询接口仍返回支付成功，但收银台须等商户有效确认后才允许返回。通知使用 GET 参数，包含：</p>
+<p><code>pid</code>、<code>trade_no</code>、<code>out_trade_no</code>、<code>type</code>、<code>name</code>、<code>money</code>、<code>trade_status=TRADE_SUCCESS</code>、<code>sign</code>、<code>sign_type=MD5</code>，以及下单时非空的 <code>param</code>。</p>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table api-wide-table">
+<thead>
+<tr>
+<th>字段名</th>
+<th>变量名</th>
+<th>必有</th>
+<th>类型</th>
+<th>示例值</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>应用编号</td>
+<td>pid</td>
+<td>是</td>
+<td>string</td>
+<td>1001</td>
+<td>原订单 PID</td>
+</tr>
+<tr>
+<td>支付单号</td>
+<td>trade_no</td>
+<td>是</td>
+<td>string</td>
+<td>P2026102212000012345</td>
+<td>MPAY 支付单号</td>
+</tr>
+<tr>
+<td>商户订单号</td>
+<td>out_trade_no</td>
+<td>是</td>
+<td>string</td>
+<td>SHOP202610220001</td>
+<td>用于定位你的业务订单</td>
+</tr>
+<tr>
+<td>支付方式</td>
+<td>type</td>
+<td>是</td>
+<td>string</td>
+<td>alipay</td>
+<td>该订单的支付方式</td>
+</tr>
+<tr>
+<td>商品名称</td>
+<td>name</td>
+<td>是</td>
+<td>string</td>
+<td>示例商品</td>
+<td>已保存的名称</td>
+</tr>
+<tr>
+<td>订单金额</td>
+<td>money</td>
+<td>是</td>
+<td>string</td>
+<td>12.50</td>
+<td>原订单金额，需与业务订单核对</td>
+</tr>
+<tr>
+<td>交易状态</td>
+<td>trade_status</td>
+<td>是</td>
+<td>string</td>
+<td>TRADE_SUCCESS</td>
+<td>成功通知固定值</td>
+</tr>
+<tr>
+<td>附加参数</td>
+<td>param</td>
+<td>否</td>
+<td>string</td>
+<td>member_123</td>
+<td>仅原订单非空时提供</td>
+</tr>
+<tr>
+<td>签名</td>
+<td>sign</td>
+<td>是</td>
+<td>string</td>
+<td>32 位小写 MD5</td>
+<td>必须用完整参数验签</td>
+</tr>
+<tr>
+<td>签名算法</td>
+<td>sign_type</td>
+<td>是</td>
+<td>string</td>
+<td>MD5</td>
+<td>固定 MD5</td>
+</tr>
+</tbody></table>
+</div><p>通知形态示例（签名为占位说明，不能直接通过验签）：</p>
+<div class="api-example"><div class="api-example-bar"><span>text</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-16" aria-label="复制代码示例 16">复制</button></div><pre tabindex="0"><code id="example-16">GET https://shop.example.com/notify.php?pid=1001&amp;trade_no=P2026102212000012345&amp;out_trade_no=SHOP202610220001&amp;type=alipay&amp;name=%E7%A4%BA%E4%BE%8B%E5%95%86%E5%93%81&amp;money=12.50&amp;trade_status=TRADE_SUCCESS&amp;sign=YOUR_SIGNATURE&amp;sign_type=MD5</code></pre></div>
+<p>通知金额为订单原金额。通知地址原有的其他查询参数会一并参与签名；与支付协议字段重名的参数以系统生成值为准。</p>
+<p>业务网站收到通知后应验证签名、应用、订单号、金额和交易状态，幂等完成业务处理，再以 HTTP 2xx 返回小写纯文本 <code>success</code>。允许首尾空白，不应返回 HTML 或 JSON。未获得有效应答时系统会按通知策略重试，发送记录可在后台查询。</p>
+<p>处理顺序：使用完整 GET 参数验签 → 按 <code>out_trade_no</code> 读取业务订单 → 核对 PID、原金额和 <code>TRADE_SUCCESS</code> → 在业务事务中仅处理一次发货或入账 → 提交成功后返回应答。验证失败或事务失败不能返回 <code>success</code>；已经完成的重复通知应再次返回 <code>success</code>。不要只验签就直接发货，也不要在业务尚未落库时提前应答。</p>
+<p>完成以上业务处理后的应答正文只有：</p>
+<div class="api-example"><div class="api-example-bar"><span>text</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-17" aria-label="复制代码示例 17">复制</button></div><pre tabindex="0"><code id="example-17">success</code></pre></div>
+<p>支付成功且商户通知取得有效 success 应答并落库后，有 <code>return_url</code> 自动签名回跳；无返回地址则进入默认成功页。确认超时不改变付款结果，付款者可以重新检查。浏览器跳转用于展示结果，业务网站仍应通过服务端通知或订单查询确认支付，不能仅凭访问返回页面发货。</p>
+<h2 id="凭证变更" tabindex="-1">凭证变更</h2>
+<p>修改应用 PID 或 KEY 后，新请求使用新值。已创建订单的通知和返回签名仍使用下单时的 PID、KEY 和目标地址。</p>
+<p>业务网站切换凭证时，应保留核验未处理完旧订单所需的旧 KEY。重复通知应返回相同成功应答，不能重复发货或记账。</p>
+<h2 id="可下载示例" tabindex="-1">可下载示例</h2>
+<ul>
+<li><a href="downloads/epay-sign.php.txt" download>PHP 签名与验签函数 <span aria-hidden="true">↓</span></a> <a class="api-source-link" href="downloads/epay-sign.php.txt" target="_blank" rel="noopener noreferrer" aria-label="查看 epay-sign.php 文本">查看文本 ↗</a>：提供 <code>EpaySignature::sign()</code>、<code>verify()</code>，供上面的下单示例使用。</li>
+<li><a href="downloads/epay-create.php.txt" download>PHP 页面下单链接生成示例 <span aria-hidden="true">↓</span></a> <a class="api-source-link" href="downloads/epay-create.php.txt" target="_blank" rel="noopener noreferrer" aria-label="查看 epay-create.php 文本">查看文本 ↗</a>：在命令行生成签名链接，本身不发送请求。</li>
+</ul>
+<p>如果浏览器取消下载，本地文档还提供“查看文本”入口，可以直接打开源码、复制并保存为对应文件名。</p>
+<p>本地文档下载的是 <code>.php.txt</code> 文本文件，保存后移除末尾 <code>.txt</code>，将两个 <code>.php</code> 文件放在同一目录。下载文件中的 <code>pay.example.com</code> 是占位域名，不会自动写入本站配置。以下命令用于 Linux / macOS 的 <strong>Bash</strong> 终端，读取 KEY 时不显示输入；先将 PID、两个域名和业务订单号替换为自己的值，再整段复制到业务服务器终端：</p>
+<div class="api-example"><div class="api-example-bar"><span>sh</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-18" aria-label="复制代码示例 18">复制</button></div><pre tabindex="0"><code id="example-18">export MPAY_GATEWAY=&#39;https://pay.example.com&#39;
+export MPAY_PID=&#39;YOUR_PID&#39;
+export SHOP_URL=&#39;https://shop.example.com&#39;
+read -r -s -p &#39;请输入应用 KEY: &#39; MPAY_KEY; printf &#39;\n&#39;
+export MPAY_KEY
+php epay-create.php SHOP202610220001
+unset MPAY_KEY</code></pre></div>
+<p>打开输出的签名链接才会创建订单。<code>SHOP_URL</code> 的 <code>notify.php</code> 和 <code>return.php</code> 必须由你的业务网站实现；示例不会替你创建业务订单或发货。完整通知处理说明见<a href="https://gitee.com/technical-laohu/mpay/wikis/V1-17-%E9%80%9A%E7%9F%A5%E9%AA%8C%E7%AD%BE%E4%B8%8E%E8%81%94%E8%B0%83%E6%8E%92%E9%9A%9C">验签与联调排障</a>。</p>
+<h2 id="常见接入问题" tabindex="-1">常见接入问题</h2>
+<div class="api-table-scroll" tabindex="0" role="region" aria-label="参数与字段表，可横向滚动"><table class="layui-table">
+<thead>
+<tr>
+<th>现象</th>
+<th>先检查什么</th>
+<th>处理方式</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>签名验证失败</td>
+<td>PID/KEY、sign_type、空值规则、金额原文、URL 编码</td>
+<td>签名用原始字符串，编码放在签名之后；不要漏掉额外非空参数</td>
+</tr>
+<tr>
+<td>表单格式错误</td>
+<td>Content-Type、JSON、数组或重复字段</td>
+<td>用 UTF-8 application/x-www-form-urlencoded；URL 与正文不重复传同一字段</td>
+</tr>
+<tr>
+<td>无可用通道</td>
+<td>应用、支付方式、通道启用状态及路由策略</td>
+<td>请管理员核对金额、限额、时段和插件配置</td>
+</tr>
+<tr>
+<td>API 返回受理成功但业务未完成</td>
+<td>是否实际付款、通知是否成功</td>
+<td>受理码不是支付状态；查单并在后台看商户通知应答</td>
+</tr>
+<tr>
+<td>付款成功却一直不返回商户</td>
+<td>notify_url 是否公网可达，是否返回纯文本 success</td>
+<td>先修复通知处理并核对后台通知记录，不在返回页直接发货</td>
+</tr>
+<tr>
+<td>HTTP 429</td>
+<td>Retry-After 响应头</td>
+<td>等待后再查原单；不要立即循环重试</td>
+</tr>
+<tr>
+<td>超时或连接断开</td>
+<td>原商户订单号的查询结果</td>
+<td>结果不明时保持原号，不能当作失败另建订单</td>
+</tr>
+<tr>
+<td>退款 code=-1</td>
+<td>refund_status、原退款记录及平台状态</td>
+<td>处理中/未知时不能换号重发；请管理员核对</td>
+</tr>
+</tbody></table>
+</div><p>通用查询失败示例：</p>
+<div class="api-example"><div class="api-example-bar"><span>json</span><button type="button" class="layui-btn layui-btn-primary layui-btn-xs" data-copy="example-19" aria-label="复制代码示例 19">复制</button></div><pre tabindex="0"><code id="example-19">{&quot;code&quot;:-1,&quot;msg&quot;:&quot;请求未成功，请按具体错误说明处理&quot;}</code></pre></div>
+<p>页面中的错误文本仅作格式示例。程序应按接口的 code、HTTP 状态和交易状态处理，不要把示例 msg 当作固定错误码。需要管理员部署、通道配置或插件开发说明时，请阅读<a href="https://gitee.com/technical-laohu/mpay/wikis/Home">使用手册</a>。</p>
+</article>
+        <footer class="api-footer">MPAY 码支付 · 易支付 V1 接入参考 <a href="#api-title">返回顶部 ↑</a></footer>
+    </main>
+</div>
+</body>
+</html>

@@ -8,7 +8,7 @@ return [
     'description' => '将收款码、到账识别、业务订单与付款通知连接起来，为你的业务网站提供统一的收款入口。',
     'links' => [
         'docs' => 'https://gitee.com/technical-laohu/mpay/wikis/Home',
-        'integration' => 'https://gitee.com/technical-laohu/mpay/wikis/V1-15-业务网站接入',
+        'integration' => '/docs/',
         'installation' => 'https://gitee.com/technical-laohu/mpay/wikis/V1-03-安装与环境要求',
         'faq' => 'https://gitee.com/technical-laohu/mpay/wikis/V1-20-常见问题与运行排查',
         'github' => 'https://github.com/techhaha/mpay/tree/v1',

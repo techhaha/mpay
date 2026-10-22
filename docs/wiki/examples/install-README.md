@@ -47,6 +47,7 @@ app/                  程序代码及内置插件
 config/               程序配置
 database/migrations/  一份最终新装建表定义
 public/               网站公开入口、前端资源及空 storage 目录
+public/docs/          本地易支付 V1 接口文档及文本示例
 route/                路由
 runtime/              空运行目录，首次运行后生成缓存、日志和安装锁
 vendor/               已安装的生产依赖及其许可证
@@ -63,6 +64,8 @@ README.md
 此包用于全新安装，不能覆盖旧开发版本执行升级。恢复站点应使用与备份数据库匹配的程序版本，并恢复数据库、`.env`、`runtime/install.lock` 和 `public/storage/`。
 
 ## 使用文档
+
+首页的“接入文档”打开本站 `/docs/`，无需登录即可查看易支付 V1 下单、查询、通知验签及退款说明，复制本站网关和代码示例。页面已包含在安装包中，不需要额外安装 Node.js 或文档服务。
 
 [Gitee 使用手册](https://gitee.com/technical-laohu/mpay/wikis/Home) · [GitHub 使用手册](https://github.com/techhaha/mpay/wiki)
 

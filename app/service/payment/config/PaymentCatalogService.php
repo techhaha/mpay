@@ -170,7 +170,7 @@ final class PaymentCatalogService extends BaseService
         $row = $this->records->find($code);
         if (
             $row === null ||
-            !in_array($code, $this->plugins->codes(), true) ||
+            !$this->plugins->hasClass($row['class_name']) ||
             !$this->definitionMatches($row, $this->plugins->definition($code))
         ) {
             throw new BusinessException(
@@ -206,14 +206,19 @@ final class PaymentCatalogService extends BaseService
         ];
     }
 
-    /** 新单选路在自身事务内当前读；读取插件类仍以代码注册表为准。 */
+    /** 新单选路在自身事务内当前读；单项核对同步映射及固定插件文件，不扫描整个目录。 */
     public function allowsNew(string $code, bool $lock = false): bool
     {
-        if (!in_array($code, $this->plugins->codes(), true)) {
+        $plugin = $this->records->find($code, $lock);
+        if (
+            $plugin === null ||
+            (int) $plugin['enabled'] !== 1 ||
+            !$this->plugins->hasClass($plugin['class_name'])
+        ) {
             return false;
         }
-        $plugin = $this->records->find($code, $lock);
-        return $plugin !== null && (int) $plugin['enabled'] === 1;
+        $this->plugins->definition($code);
+        return true;
     }
 
     public function assertNew(string $code): void

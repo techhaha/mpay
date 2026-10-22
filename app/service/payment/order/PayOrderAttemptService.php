@@ -223,7 +223,6 @@ final class PayOrderAttemptService
                 'ext_json' => json_encode(
                     [
                         'payment_context' => [
-                            'version' => 1,
                             'pay_type' => $payType,
                             'device' => $context['device'] ?? null,
                         ],

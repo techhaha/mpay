@@ -171,9 +171,6 @@ final class EpayV1ProtocolService extends BaseService
                 $items = [];
                 foreach ($orders as $biz) {
                     $pay = $payments[$biz['biz_no']] ?? null;
-                    if ($biz['active_pay_no'] !== ($pay === null ? null : $pay['pay_no'])) {
-                        throw new RuntimeException('分页查询的支付关联不一致');
-                    }
                     $items[] = $this->messages->order($biz, $pay, $biz['pid']);
                 }
                 return ['code' => 1, 'msg' => '查询成功', 'data' => $items];

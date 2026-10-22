@@ -38,7 +38,7 @@ layui.use('layer', function () {
     }
     function disposePage() { page?.destroy(); page = null; find('payment').hidden = true; }
     function timeout() {
-        phase = 'attention'; clearTimeout(timer); deadline = null; generation++;
+        phase = 'attention'; clearTimeout(timer); deadline = null; pending = null; generation++;
         showResult('paid', {label:'已支付',icon:'ok-circle',title:'已支付，商户尚未确认',
             message:'付款已完成，请勿重复付款。',detail:'暂未收到商户确认，请重新检查通知或联系商户。'});
         find('refresh').textContent = '重新检查通知';
@@ -117,11 +117,15 @@ layui.use('layer', function () {
             find('refresh').textContent = '重新检查通知'; return;
         }
         if (data.action !== 'wait') throw new Error('商户确认状态异常');
+        // 恢复可见后的单次补查不重启等待；仍未确认时保留手动检查提示。
+        if (phase === 'attention') { timeout(); return; }
         showConfirmation();
     }
     function schedule() {
         clearTimeout(timer);
-        if (leaving || document.hidden || writing || fetching || phase === 'done' || phase === 'attention') return;
+        if (leaving || document.hidden || writing || fetching || phase === 'done') return;
+        // 停止自动等待后，只放行恢复页面时明确排入的单次完成查询。
+        if (phase === 'attention' && pending !== 'completion') return;
         const wait = readWaitUntil - performance.now();
         if (wait > 0) {
             timer = setTimeout(() => request(pending || (phase === 'notification' ? 'completion' : current ? 'status' : 'order')), wait);
@@ -191,8 +195,12 @@ layui.use('layer', function () {
     find('prepare').addEventListener('click', () => write('/api/cashier/prepare', {}));
     document.addEventListener('visibilitychange', () => {
         if (document.hidden) clearTimeout(timer);
-        else if (!leaving && !['done','attention'].includes(phase)) {
-            page?.tick?.(); request(phase === 'notification' ? (pending || 'completion') : 'status');
+        else if (!leaving && phase !== 'done') {
+            page?.tick?.();
+            if (phase === 'notification' && deadline !== null && performance.now() >= deadline) timeout();
+            // 隐藏期间耗尽等待时限也补查一次；复用队列和限流，不延长本轮 60 秒。
+            if (phase === 'attention') pending = 'completion';
+            request(phase === 'attention' ? 'completion' : phase === 'notification' ? (pending || 'completion') : 'status');
         }
     });
     window.addEventListener('pagehide', () => { leaving = true; generation++; clearTimeout(timer); disposePage(); });

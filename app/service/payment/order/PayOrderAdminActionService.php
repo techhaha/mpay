@@ -7,6 +7,7 @@ use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\NotifyConstant;
 use app\common\constant\TradeConstant;
+use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\PayOrder;
 use app\repository\payment\notify\NotifyTaskRepository;
@@ -32,6 +33,7 @@ final class PayOrderAdminActionService extends BaseService
         private readonly AdminOperationLogRepository $adminOperations,
         private readonly AdminAuthService $authentication,
         private readonly NotificationPolicy $notificationPolicy,
+        private readonly Clock $clock,
     ) {}
 
     /**
@@ -59,29 +61,28 @@ final class PayOrderAdminActionService extends BaseService
     public function close(
         string $payNo,
         AdminActionContext $actor,
-        DateTimeImmutable $now,
     ): PayOrder {
-        // 生命周期在关闭事务内锁定管理员并核验会话版本。
-        return $this->lifecycle->closeLocally($payNo, $actor, $now);
+        // 生命周期在关闭事务内核验管理员，取得必要锁后读取本次关闭时间。
+        return $this->lifecycle->closeLocally($payNo, $actor);
     }
 
     /**
      * 业务单尚无尝试也可停止等待；存在支付单时复用完整生命周期，不能为关闭创建一个虚构支付尝试。
      * 从读取到加锁期间若生成了尝试，返回冲突让页面刷新；不在已开启事务里嵌套调用生命周期事务。
+     * 无支付单时，在管理员和业务单锁内读取关闭时间；重复关闭保留原时间。
      */
     public function closeBusiness(
         string $bizNo,
         AdminActionContext $actor,
-        DateTimeImmutable $now,
     ): void {
         $observed =
             $this->bizOrders->find($bizNo) ??
             throw new BusinessException('业务订单不存在', ApiResponseConstant::NOT_FOUND);
         if ($observed['active_pay_no'] !== null) {
-            $this->close($observed['active_pay_no'], $actor, $now);
+            $this->close($observed['active_pay_no'], $actor);
             return;
         }
-        $this->transaction(function () use ($bizNo, $actor, $now): void {
+        $this->transaction(function () use ($bizNo, $actor): void {
             $admin = $this->admins->lock($actor->adminId);
             if (
                 $admin === null ||
@@ -109,7 +110,7 @@ final class PayOrderAdminActionService extends BaseService
                 );
             }
             if ($before !== TradeConstant::ORDER_STATUS_CLOSED) {
-                $time = $now->format('Y-m-d H:i:s');
+                $time = $this->clock->now()->format('Y-m-d H:i:s');
                 $this->bizOrders->saveLifecycle(
                     $bizNo,
                     $before,

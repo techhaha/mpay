@@ -20,6 +20,7 @@ use app\repository\payment\config\PaymentPluginConfRepository;
 use app\repository\payment\receipt\ReceiptFlowRepository;
 use app\repository\payment\trade\ChannelNotifyLogRepository;
 use app\repository\payment\trade\PayOrderRepository;
+use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
@@ -52,6 +53,7 @@ final class PayOrderCallbackService extends BaseService
         private readonly ReceiptRecordValidator $records,
         private readonly PaymentPluginNotifyResultValidator $results,
         private readonly SafeLogger $logger,
+        private readonly PaymentChannelRevisionService $revisions,
     ) {}
 
     /**
@@ -395,17 +397,10 @@ final class PayOrderCallbackService extends BaseService
     /** 按原支付单快照装配通知；账号换 KEY、停用或通道换插件不改变旧单验签身份。 */
     private function orderContext(PayOrder $pay): ChannelNotifyContext
     {
-        $revision = $pay->channelRevision;
-        $snapshot = $revision['snapshot_json'] ?? [];
-        $channel = $snapshot['channel'] ?? [];
-        $receipt = $pay['ext_json']['personal_receipt'] ?? [];
+        $snapshot = $this->revisions->forOrder($pay);
+        $channel = $snapshot['channel'];
         $payType = $pay['ext_json']['payment_context']['pay_type'] ?? null;
         if (
-            ($channel['id'] ?? null) !== $pay['channel_id'] ||
-            ($channel['plugin_code'] ?? null) !== $pay['plugin_code'] ||
-            ($channel['receipt_scope_key'] ?? null) !== $pay['receipt_scope_key'] ||
-            ($snapshot['config_version'] ?? null) !== ($receipt['config_version'] ?? null) ||
-            !is_string($snapshot['plugin_version'] ?? null) ||
             !is_string($payType) ||
             $payType !== $this->catalog->typeCode($pay['pay_type_id'])
         ) {

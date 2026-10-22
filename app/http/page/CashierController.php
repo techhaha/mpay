@@ -5,7 +5,6 @@ namespace app\http\page;
 
 use app\common\base\BaseController;
 use app\common\constant\ApiResponseConstant;
-use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\http\api\validation\CashierValidator;
@@ -21,25 +20,21 @@ final class CashierController extends BaseController
     public function completed(
         CashierValidator $validator,
         CashierService $cashier,
-        Clock $clock,
     ): Response {
         $identity = $validator->identity($this->request->get());
-        $completion = $cashier->completion($identity['biz_no'], $identity['token']);
+        $result = $cashier->successPage($identity['biz_no'], $identity['token']);
+        $completion = $result['completion'];
         if ($completion['action'] === 'return') {
             return redirect($completion['next_url'], 303);
         }
         if ($completion['action'] !== 'success') {
             return redirect('/cashier/pay?' . http_build_query($identity), 303);
         }
-        $data = $cashier->view($identity['biz_no'], $identity['token'], $clock->now());
-        if ($data['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) {
-            return redirect('/cashier/pay?' . http_build_query($identity), 303);
-        }
         // 成功页只有只读信息；公共布局仍需要明确的 CSRF 占位，避免模板读取未定义变量。
         return view('cashier/success', [
             'title' => '支付成功 · MPAY',
             'csrf_token' => '',
-            'payment' => $data,
+            'payment' => $result['payment'],
         ]);
     }
 

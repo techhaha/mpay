@@ -201,16 +201,18 @@ final class PayOrderLifecycleService extends BaseService
         });
     }
 
-    /** 本地关闭和原因审计一起提交；成功不能关闭，原二维码不因本地状态失去收款能力。 */
+    /**
+     * 本地关闭和原因审计一起提交；关闭时间在管理员、业务、支付及范围锁取得后读取。
+     * 成功不能关闭，重复关闭保留原时间，原二维码不因本地状态失去收款能力。
+     */
     public function closeLocally(
         string $payNo,
         AdminActionContext $actor,
-        DateTimeImmutable $now,
     ): PayOrder {
         $target =
             $this->payOrders->find($payNo) ??
             throw new BusinessException('支付单不存在', ApiResponseConstant::NOT_FOUND);
-        return $this->transaction(function () use ($target, $payNo, $actor, $now): PayOrder {
+        return $this->transaction(function () use ($target, $payNo, $actor): PayOrder {
             $this->assertAdmin($actor);
             $biz = $this->bizOrders->lock($target['biz_no']);
             $pay = $this->payOrders->lock($payNo);
@@ -242,7 +244,7 @@ final class PayOrderLifecycleService extends BaseService
                 );
             }
             $this->scopes->lock($pay['receipt_scope_key']);
-            $time = $now->format('Y-m-d H:i:s');
+            $time = $this->clock->now()->format('Y-m-d H:i:s');
             $this->payOrders->saveLifecycle(
                 $payNo,
                 $before,
@@ -310,7 +312,7 @@ final class PayOrderLifecycleService extends BaseService
             $this->assertOrderLink($biz, $pay);
             // 在认领事务内按取锁后的时间处理到期，不另开一次前置到期事务。
             $now = $this->clock->now();
-            if ($this->expireWaiting($biz, $now)) {
+            if ($this->expireWaiting($biz, $now, $pay)) {
                 return [
                     'execute' => false,
                     'token' => null,
@@ -438,7 +440,7 @@ final class PayOrderLifecycleService extends BaseService
             $pay = $this->payOrders->lock($payNo);
             $this->assertOrderLink($biz, $pay);
             $now = $this->clock->now();
-            if ($this->expireWaiting($biz, $now)) {
+            if ($this->expireWaiting($biz, $now, $pay)) {
                 $pay =
                     $this->payOrders->find($payNo) ??
                     throw new RuntimeException('到期支付单不可读取');
@@ -880,10 +882,16 @@ final class PayOrderLifecycleService extends BaseService
 
     /**
      * 调用方已在本事务锁定 BizOrder；认领/回写和定时扫描共用到期转换，不在事务中嵌套 expire。
-     * 已持有 PayOrder 时可重入当前读，后续仍按既有范围锁顺序推进状态。
+     * 传入的支付单须在本事务中刚加锁并通过 assertOrderLink，期间没有修改；复用该模型，不重复读锁。
+     * 独立到期入口未传支付单时，仍按业务→支付→范围锁顺序读取并核验。
+     *
+     * @param PayOrder|null $lockedPay 同一事务内已锁定并核验的支付单；不得传入扫描或上轮读取的模型。
      */
-    private function expireWaiting(BizOrder $biz, DateTimeImmutable $now): bool
-    {
+    private function expireWaiting(
+        BizOrder $biz,
+        DateTimeImmutable $now,
+        ?PayOrder $lockedPay = null,
+    ): bool {
         $time = $now->format('Y-m-d H:i:s');
         if (
             !in_array(
@@ -896,8 +904,11 @@ final class PayOrderLifecycleService extends BaseService
             return false;
         }
         if ($biz['active_pay_no'] !== null) {
-            $pay = $this->payOrders->lock($biz['active_pay_no']);
-            $this->assertOrderLink($biz, $pay);
+            $pay = $lockedPay;
+            if ($pay === null) {
+                $pay = $this->payOrders->lock($biz['active_pay_no']);
+                $this->assertOrderLink($biz, $pay);
+            }
             $this->scopes->lock($pay['receipt_scope_key']);
             $this->payOrders->saveLifecycle(
                 $pay['pay_no'],

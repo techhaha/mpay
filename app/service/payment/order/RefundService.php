@@ -112,10 +112,7 @@ final class RefundService extends BaseService
         $invoked = false;
         try {
             // 配置和平台单号取自原订单，当前通道换插件/停用不改变退款目标。
-            $snapshot = $this->revisions->snapshot($pay['channel_id'], $pay['channel_revision_id']);
-            if (($snapshot['channel']['plugin_code'] ?? null) !== $pay['plugin_code']) {
-                throw new RuntimeException('原退款插件快照不一致');
-            }
+            $snapshot = $this->revisions->forOrder($pay);
             $plugin = $this->plugins->initialize($pay['plugin_code'], $snapshot['configuration']);
             $input = [
                 'refund_no' => $refund['refund_no'],

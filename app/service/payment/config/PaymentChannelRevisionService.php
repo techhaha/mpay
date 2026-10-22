@@ -6,6 +6,7 @@ namespace app\service\payment\config;
 use app\common\base\BaseService;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPluginConf;
+use app\model\payment\PayOrder;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\config\PaymentPluginConfRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
@@ -54,7 +55,7 @@ final class PaymentChannelRevisionService extends BaseService
         if (!isset($authorized[$channel['receipt_scope_key']])) {
             throw new RuntimeException('通道范围不在当前配置授权中');
         }
-        // 快照只冻结已保存参数；保存、启用及插件执行负责校验，不在持久化时重复解释 schema。
+        // 快照只冻结已保存参数；配置值由保存和启用入口校验，不在此重复解释 schema。
         $config = $configuration['config_json'];
         if (!is_array($config)) {
             throw new RuntimeException('插件配置正文无效');
@@ -88,7 +89,7 @@ final class PaymentChannelRevisionService extends BaseService
      *
      * @param bool $currentRead 建单已锁通道时为 true，使版本指针与正文使用同一当前视图。
      * @return array{channel:array<string,mixed>,config_version:int,configuration:array<string,mixed>,
-     *     plugin_version?:string} 配置快照不可变，插件版本只用于追踪。
+     *     plugin_version:string} 配置快照不可变，插件版本只用于追踪。
      * @throws RuntimeException 历史版本缺失或配置正文无效；禁止回退到活动配置。
      */
     public function snapshot(
@@ -100,6 +101,42 @@ final class PaymentChannelRevisionService extends BaseService
             $this->channels->revision($channelId, $revisionId, $currentRead) ??
             throw new RuntimeException('通道版本不存在');
         return $revision['snapshot_json'];
+    }
+
+    /**
+     * 付款、按支付号回调和退款共用原单快照核验，复用订单关联，不回退到活动配置。
+     * 这里只核对冻结结构与归属，不校验 schema 值、不比较当前插件版本，也不增加事务或锁。
+     * 各动作的金额、状态、权限及锁内交易复核仍由原入口负责。
+     *
+     * @return array{channel:array<string,mixed>,config_version:int,configuration:array<string,mixed>,plugin_version:string}
+     */
+    public function forOrder(PayOrder $pay): array
+    {
+        $revision = $pay->channelRevision;
+        $snapshot = $revision['snapshot_json'] ?? [];
+        $channel = $snapshot['channel'] ?? [];
+        $receipt = $pay['ext_json']['personal_receipt'] ?? [];
+        if (
+            $revision === null ||
+            $revision['id'] !== $pay['channel_revision_id'] ||
+            $revision['channel_id'] !== $pay['channel_id'] ||
+            !is_array($snapshot) ||
+            !is_array($channel) ||
+            !is_array($snapshot['configuration'] ?? null) ||
+            ($channel['id'] ?? null) !== $pay['channel_id'] ||
+            ($channel['plugin_code'] ?? null) !== $pay['plugin_code'] ||
+            ($channel['api_config_id'] ?? null) !== $revision['api_config_id'] ||
+            ($channel['receipt_scope_key'] ?? null) !== $pay['receipt_scope_key'] ||
+            !is_int($snapshot['config_version'] ?? null) ||
+            $snapshot['config_version'] < 1 ||
+            $snapshot['config_version'] !== (int) $revision['config_version'] ||
+            $snapshot['config_version'] !== ($receipt['config_version'] ?? null) ||
+            !is_string($snapshot['plugin_version'] ?? null) ||
+            $snapshot['plugin_version'] !== ($receipt['plugin_version'] ?? null)
+        ) {
+            throw new RuntimeException('原支付单的通道配置快照不一致');
+        }
+        return $snapshot;
     }
 
     /**

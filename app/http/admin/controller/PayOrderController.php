@@ -68,10 +68,9 @@ final class PayOrderController extends BaseAdminController
     public function close(
         PayOrderValidator $validator,
         PayOrderAdminActionService $actions,
-        Clock $clock,
     ): Response {
         $input = $validator->action('close', $this->jsonBody());
-        $actions->closeBusiness($input['biz_no'], $this->actor($input['reason']), $clock->now());
+        $actions->closeBusiness($input['biz_no'], $this->actor($input['reason']));
         return $this->success(null, '已本地关闭；收款二维码未被平台撤销');
     }
 

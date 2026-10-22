@@ -110,7 +110,7 @@ final class EpayV1MessageService
     }
 
     /**
-     * @return array{code:int,msg:string,trade_no:string,out_trade_no:string,api_trade_no:string,type:string,pid:string,
+     * @return array{trade_no:string,out_trade_no:string,api_trade_no:string,type:string,pid:string,
      *     addtime:string,endtime:string,name:string,money:string,status:int,param:string,buyer:string}
      */
     public function order(BizOrder $biz, ?PayOrder $pay, string $pid): array
@@ -136,8 +136,6 @@ final class EpayV1MessageService
             throw new RuntimeException('查询的原始协议上下文无效');
         }
         return [
-            'code' => 1,
-            'msg' => '查询成功',
             'trade_no' => $pay === null ? '' : $pay['pay_no'],
             'out_trade_no' => $biz['merchant_order_no'],
             'api_trade_no' => $pay === null ? '' : $pay['channel_trade_no'] ?? '',

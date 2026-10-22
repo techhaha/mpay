@@ -75,10 +75,6 @@ final class PayOrderChannelDispatchService
             // 已展示或原执行仍在处理中时直接复用，避免刷新依赖重新读取配置或重读二维码文件。
             return $pay;
         }
-        $version = $pay['ext_json']['personal_receipt']['plugin_version'] ?? null;
-        if (!is_string($version)) {
-            throw new RuntimeException('订单插件版本快照缺失');
-        }
         $definition = $this->plugins->definition($pay['plugin_code']);
         // 材料和配置加载失败发生在认领之前，不制造“已调用外部平台”的错误事实。
         $context = $this->context($pay);
@@ -195,7 +191,7 @@ final class PayOrderChannelDispatchService
             $context->channel['api_config_id'],
             $context->configVersion,
             $pay['plugin_code'],
-            $version,
+            $pay['ext_json']['personal_receipt']['plugin_version'],
             $context->scopeKey,
             $context->payType,
             $context->configuration,
@@ -210,15 +206,9 @@ final class PayOrderChannelDispatchService
     /** 从原版本重建敏感执行上下文，不使用当前通道或当前账号凭证补缺字段。 */
     private function context(PayOrder $pay): PaymentContext
     {
-        $snapshot = $this->revisions->snapshot($pay['channel_id'], $pay['channel_revision_id']);
-        $receipt = $pay['ext_json']['personal_receipt'] ?? [];
+        $snapshot = $this->revisions->forOrder($pay);
         $payment = $pay['ext_json']['payment_context'] ?? [];
-        if (
-            ($snapshot['channel']['id'] ?? null) !== $pay['channel_id'] ||
-            ($snapshot['channel']['receipt_scope_key'] ?? null) !== $pay['receipt_scope_key'] ||
-            ($snapshot['config_version'] ?? null) !== ($receipt['config_version'] ?? null) ||
-            !is_string($payment['pay_type'] ?? null)
-        ) {
+        if (!is_string($payment['pay_type'] ?? null)) {
             throw new RuntimeException('原支付上下文与通道快照不一致');
         }
         $receiptAmount = (int) $pay->receiptAmount();
@@ -232,7 +222,7 @@ final class PayOrderChannelDispatchService
             payAmount: $pay->originalAmount(),
             expiresAt: new DateTimeImmutable($pay['expire_at']),
             scopeKey: $pay['receipt_scope_key'],
-            configVersion: $receipt['config_version'],
+            configVersion: $snapshot['config_version'],
             channel: $snapshot['channel'],
             configuration: $snapshot['configuration'],
         );

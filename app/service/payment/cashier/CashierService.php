@@ -39,6 +39,8 @@ use think\Config;
  *     expired:bool,can_select:bool,can_pay:bool,can_prepare:bool,processing:bool,needs_initial_prepare:bool,
  *     revision:string,server_time:int,subject:string,amount:?string,pay_type:?string,presentation:?array,
  *     payment_methods:list<array{code:string,name:string}>,payment_brands:array,test_mode:bool}
+ * @phpstan-type CashierCompletion array{biz_no:string,status:int,required:bool,confirmed:bool,
+ *     notification_status:?string,action:string,next_url:?string}
  */
 final class CashierService extends BaseService
 {
@@ -146,7 +148,7 @@ final class CashierService extends BaseService
     /**
      * 支付成功后单独读取通知摘要；访问校验每次保留，不以客户端状态或通知号作为权限依据。
      * 首次 ACK 是不可撤销的接收事实，后续补发失败不阻止回跳。缺失应有任务属于故障。
-     * @return array{biz_no:string,status:int,required:bool,confirmed:bool,notification_status:?string,action:string,next_url:?string}
+     * @return CashierCompletion
      */
     public function completion(string $bizNo, string $accessToken): array
     {
@@ -154,49 +156,105 @@ final class CashierService extends BaseService
             $biz = $this->bizOrders->cashierState($bizNo, true);
             $this->orders->assertAccess($biz, $accessToken);
             $this->limiter->check('cashier_read', $bizNo);
-            $result = [
-                'biz_no' => $bizNo,
-                'status' => (int) $biz['status'],
-                'required' => (int) $biz['cashier_notify_required'] === 1,
-                'confirmed' => false,
-                'notification_status' => null,
-                'action' => 'payment',
-                'next_url' => null,
-            ];
-            if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) {
+            return $this->completionResult(
+                $biz,
+                $accessToken,
+                (int) $biz['cashier_notify_required'] === 1,
+                (int) $biz['cashier_has_return'] === 1,
+            );
+        });
+    }
+
+    /**
+     * 成功页在同一事务内授权、核对双单与金额并判断商户确认，每张订单只读一次，读取限流计一次。
+     * 未满足本地成功条件时只返回导航判定；不组装付款材料，不查询品牌或可选路由。
+     *
+     * @return array{
+     *     completion:CashierCompletion,
+     *     payment:array{subject:string,amount:?string,pay_no:string,test_mode:bool}|null
+     * }
+     */
+    public function successPage(string $bizNo, string $accessToken): array
+    {
+        return $this->transaction(function () use ($bizNo, $accessToken): array {
+            [$biz, $pay] = $this->authorisedOrders($bizNo, $accessToken);
+            $this->limiter->check('cashier_read', $bizNo);
+            $completion = $this->completionResult(
+                $biz,
+                $accessToken,
+                $biz['notify_url'] !== null,
+                $biz['return_url'] !== null,
+            );
+            $payment = null;
+            if ($completion['action'] === 'success') {
+                $amount = $pay?->receivedAmount();
+                $payment = [
+                    'subject' => $biz['subject'],
+                    'amount' => $amount === null ? null : Money::format($amount),
+                    'pay_no' => $biz['active_pay_no'],
+                    'test_mode' =>
+                        ($pay['ext_json']['personal_receipt']['test_only'] ?? false) === true ||
+                        $this->config->get('mpay.environment') === 'testing',
+                ];
+            }
+            return ['completion' => $completion, 'payment' => $payment];
+        });
+    }
+
+    /**
+     * 已授权业务单的完成判定；调用方在同一事务读取订单并完成限流，此处不再授权或计数。
+     * 两个布尔值表示订单是否保存通知/返回地址，供轻量投影与完整读取共用，不改变确认条件。
+     *
+     * @return CashierCompletion
+     */
+    private function completionResult(
+        BizOrder $biz,
+        string $accessToken,
+        bool $requiresNotification,
+        bool $hasReturn,
+    ): array {
+        $result = [
+            'biz_no' => $biz['biz_no'],
+            'status' => (int) $biz['status'],
+            'required' => $requiresNotification,
+            'confirmed' => false,
+            'notification_status' => null,
+            'action' => 'payment',
+            'next_url' => null,
+        ];
+        if ((int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS) {
+            return $result;
+        }
+        if ($biz['active_pay_no'] === null) {
+            throw new RuntimeException('成功订单缺少支付单');
+        }
+        if ($requiresNotification) {
+            $result['notification_status'] = $this->notificationStatus(
+                $biz['biz_no'],
+                $biz['active_pay_no'],
+            );
+            $result['confirmed'] = $result['notification_status'] === 'success';
+            if (!$result['confirmed']) {
+                $result['action'] = in_array(
+                    $result['notification_status'],
+                    ['held', 'exhausted'],
+                    true,
+                )
+                    ? 'attention'
+                    : 'wait';
                 return $result;
             }
-            if ($biz['active_pay_no'] === null) {
-                throw new RuntimeException('成功订单缺少支付单');
-            }
-            if ($result['required']) {
-                $result['notification_status'] = $this->notificationStatus(
-                    $bizNo,
-                    $biz['active_pay_no'],
-                );
-                $result['confirmed'] = $result['notification_status'] === 'success';
-                if (!$result['confirmed']) {
-                    $result['action'] = in_array(
-                        $result['notification_status'],
-                        ['held', 'exhausted'],
-                        true,
-                    )
-                        ? 'attention'
-                        : 'wait';
-                    return $result;
-                }
-            } elseif ((int) $biz['cashier_has_return'] === 1) {
-                // 正式回跳必须具备商户确认；无通知地址的通道测试只允许本地成功页。
-                throw new RuntimeException('订单返回地址缺少通知责任');
-            }
-            $result['action'] = (int) $biz['cashier_has_return'] === 0 ? 'success' : 'return';
-            $result['next_url'] =
-                '/cashier/' .
-                $result['action'] .
-                '?' .
-                http_build_query(['biz_no' => $bizNo, 'token' => $accessToken]);
-            return $result;
-        });
+        } elseif ($hasReturn) {
+            // 有返回地址的订单必须具备通知责任；无通知地址的订单只允许本地成功页。
+            throw new RuntimeException('订单返回地址缺少通知责任');
+        }
+        $result['action'] = $hasReturn ? 'return' : 'success';
+        $result['next_url'] =
+            '/cashier/' .
+            $result['action'] .
+            '?' .
+            http_build_query(['biz_no' => $biz['biz_no'], 'token' => $accessToken]);
+        return $result;
     }
 
     /**
@@ -316,7 +374,8 @@ final class CashierService extends BaseService
     }
 
     /**
-     * POST 用例：恢复已有支付执行的材料，是否可重放仍由派发/生命周期按原能力与 token 决定。
+     * POST 用例：首次准备或在原执行期限到达后恢复材料；派发与生命周期核验原单、期限及执行 token。
+     * 复用原识别事实和付款窗口，不依赖已退役的重放能力标志；轮询和后台任务不代为发起。
      *
      * @return CashierView 与 view 相同的公开白名单结构。
      */

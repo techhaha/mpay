@@ -22,6 +22,12 @@
 .cashier-scan-guide {text-align:center;margin:16px 0 20px}
 .cashier-scan-title {margin:0;color:var(--mpay-heading);font-size:16px;font-weight:600;line-height:1.6}
 .cashier-hint {margin:6px 0 0;color:var(--mpay-muted);line-height:1.7;font-size:13px;overflow-wrap:anywhere}
+/* 跳转付款的提示、主操作和倒计时共用中轴，留白区分操作与底部辅助信息。 */
+.cashier-jump {display:flex;flex-direction:column;align-items:center;max-width:400px;margin:0 auto;padding:12px 0 24px;text-align:center}
+.cashier-jump-title {margin:0;color:var(--mpay-heading);font-size:15px;font-weight:500;line-height:1.7;overflow-wrap:anywhere}
+.cashier-jump>.cashier-hint {margin-top:8px}
+.cashier-jump .cashier-jump-action {box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:232px;max-width:100%;height:44px;margin:24px 0 0;border-radius:6px;font-size:15px}
+.cashier-jump>.cashier-jump-countdown {margin-top:16px;font-variant-numeric:tabular-nums}
 .cashier-receipt-guide {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;gap:16px;padding:16px;background:var(--mpay-surface-muted);border-radius:8px;text-align:center}
 .cashier-payment-tip,.cashier-remark,.cashier-countdown {min-width:0}
 .cashier-payment-tip {align-self:center}
@@ -45,7 +51,7 @@
 .cashier-actions {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:10px}
 .cashier-actions .layui-btn {margin:0}
 .cashier-page footer {text-align:center;font-size:12px;line-height:1.9;color:var(--mpay-muted);margin-top:20px;white-space:pre-line}
-.cashier-page :is(button,summary):focus-visible {outline:2px solid var(--mpay-primary);outline-offset:3px}
+.cashier-page :is(a,button,summary):focus-visible {outline:2px solid var(--mpay-primary);outline-offset:3px}
 .cashier-page [hidden] {display:none!important}
 .cashier-page[data-status="2"] .cashier-notice,.cashier-page[data-status="2"] .cashier-status {background:var(--mpay-success-soft);color:var(--mpay-success-text)}
 .cashier-page[data-status="3"] .cashier-status {background:var(--mpay-danger-soft);color:var(--mpay-danger-text)}

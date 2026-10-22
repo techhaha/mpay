@@ -131,7 +131,6 @@ final class CashierService extends BaseService
                     ? null
                     : [
                         'phase' => $phase,
-                        'replay_safe' => $pay['cashier_replay_safe'] === 'true',
                         'lease_until' => $pay['cashier_lease_until'],
                     ];
             return $this->state(
@@ -259,7 +258,6 @@ final class CashierService extends BaseService
         $canPrepare = $pay !== null && $waiting && $execution === null;
         if ($pay !== null && $waiting && !$canPay && $execution !== null) {
             $canPrepare =
-                ($execution['replay_safe'] ?? null) === true &&
                 in_array($execution['phase'] ?? null, ['claimed', 'uncertain'], true) &&
                 is_string($execution['lease_until'] ?? null) &&
                 $execution['lease_until'] <= $now->format('Y-m-d H:i:s');

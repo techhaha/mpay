@@ -5,7 +5,6 @@ namespace app\common\sdk\alipay;
 
 use app\common\util\Clock;
 use app\common\util\HttpClient;
-use app\common\util\PlatformTargetPolicy;
 use app\exception\HttpRequestException;
 use app\exception\ReceiptCollectionException;
 use DateTimeImmutable;
@@ -148,7 +147,6 @@ final class AlipayBillClient
                     ['Content-Type' => 'application/x-www-form-urlencoded;charset=UTF-8'],
                     http_build_query($parameters, '', '&', PHP_QUERY_RFC3986),
                 ),
-                PlatformTargetPolicy::production([self::ORIGIN]),
                 $deadline,
                 self::MAX_RESPONSE_BYTES,
             );

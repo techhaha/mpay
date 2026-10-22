@@ -10,6 +10,7 @@ use think\facade\Route;
 Route::group(function (): void {
     Route::rule('submit.php', [EpayV1Controller::class, 'submit'], 'GET|POST')->name('epay.submit');
     Route::post('mapi.php', [EpayV1Controller::class, 'mapi'])->name('epay.mapi');
+    // 查询保留 GET/POST；同路径的 act=refund 由控制器限定实际 POST。
     Route::rule('api.php', [EpayV1Controller::class, 'api'], 'GET|POST')->name('epay.api');
 })->middleware('rate', ['rule' => 'epay_ip']);
 
@@ -25,9 +26,9 @@ Route::group('api/cashier', function (): void {
         Route::post('prepare', [CashierController::class, 'prepare'])->name('cashier.prepare');
     })->middleware('cashier.write');
 })->middleware('rate', ['rule' => 'cashier_ip']);
-// 通道通知使用独立组；只允许 POST，原始正文由插件验签，来源与通道由服务核对。
+// 设备和平台共用 notify；数字定位通道，P 前缀支付号定位原单配置，验签/报文由插件处理。
 Route::group('api/pay', function (): void {
-    Route::post(':channelId/notify', [PaymentNotifyController::class, 'notify'])
-        ->pattern(['channelId' => '[1-9][0-9]{0,19}'])
+    Route::rule(':identifier/notify', [PaymentNotifyController::class, 'notify'], 'GET|POST')
+        ->pattern(['identifier' => '(?:[1-9][0-9]{0,19}|P[0-9]{19})'])
         ->name('payment.channel-notify');
 })->middleware('rate', ['rule' => 'channel_notify']);

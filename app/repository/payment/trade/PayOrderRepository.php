@@ -120,7 +120,6 @@ final class PayOrderRepository extends BaseRepository
             ->field('pay_no,biz_no,status,expire_at,request_at')
             ->fieldRaw(
                 "JSON_UNQUOTE(JSON_EXTRACT(ext_json, '$.payment_context.execution.phase')) AS cashier_phase,
-                JSON_UNQUOTE(JSON_EXTRACT(ext_json, '$.payment_context.execution.replay_safe')) AS cashier_replay_safe,
                 JSON_UNQUOTE(JSON_EXTRACT(ext_json, '$.payment_context.execution.lease_until')) AS cashier_lease_until,
                 JSON_CONTAINS_PATH(ext_json, 'one', '$.presentation') AS cashier_has_presentation",
             )
@@ -257,20 +256,6 @@ final class PayOrderRepository extends BaseRepository
             ->where('p.plugin_code', $plugin)
             ->where('p.status', TradeConstant::ORDER_STATUS_SUCCESS)
             ->field('p.*')
-            ->find();
-    }
-
-    /** 平台引用定位包含人工确认的原订单，后续真实流水可以补证据但不能换绑。 */
-    public function successfulForChannelTrade(
-        string $channelId,
-        string $plugin,
-        string $tradeNo,
-    ): ?PayOrder {
-        return $this->model
-            ->where('plugin_code', $plugin)
-            ->where('channel_trade_no', $tradeNo)
-            ->where('channel_id', $channelId)
-            ->where('status', TradeConstant::ORDER_STATUS_SUCCESS)
             ->find();
     }
 

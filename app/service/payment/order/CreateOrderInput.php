@@ -20,9 +20,10 @@ final readonly class CreateOrderInput
      * @param string|null $returnUrl null 表示成功后留在本地结果页。
      * @param string|null $notifyUrl 未提供通知目标时为 null，所有订单统一不生成异步通知任务。
      * @param string|null $clientIp 可空的原始客户端 IP，只作来源记录，不承担认证。
-     * @param string|null $device 请求明确声明的设备类型；自动识别结果不写入业务指纹。
+     * @param string|null $device API 请求设备或其协议缺省值，参与业务指纹；页面识别结果使用 detectedDevice。
      * @param string $param 成功通知须原样回传的扩展字符串，不解释其内部内容。
      * @param string|null $detectedDevice HTTP 边界识别的展示环境，仅在 device 省略时使用，不参与幂等指纹。
+     * @param string $submitType 服务入口确定的 page/api；不从外部同名参数读取。
      * @param string|null $channelId 仅受信任的后台入口可指定通道；易支付参数不映射此字段。
      * @throws InvalidArgumentException 调用边界遗漏基本领域校验。
      */
@@ -41,11 +42,13 @@ final readonly class CreateOrderInput
         public string $param,
         public ?string $detectedDevice = null,
         public ?string $channelId = null,
+        public string $submitType = 'page',
     ) {
         Money::assertRange($amount);
         if (
             !preg_match('/^[1-9][0-9]{0,31}$/D', $pid) ||
             $amount === 0 ||
+            !in_array($submitType, ['page', 'api'], true) ||
             !preg_match('/^[1-9][0-9]*$/D', $appId) ||
             !preg_match('/^[1-9][0-9]*$/D', $credentialVersionId) ||
             !mb_check_encoding(

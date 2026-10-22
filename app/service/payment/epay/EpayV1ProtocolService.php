@@ -50,13 +50,14 @@ final class EpayV1ProtocolService extends BaseService
 
     /**
      * @param array<string|int,string> $raw 未 trim/截断/转换的原始表单标量。
+     * @param string|null $detectedDevice submit 的浏览器识别结果；mapi 传 null，设备从原始请求读取。
      * @return array{trade_no:string,payurl:string,reused:bool} 内部跳转结果，Controller 再适配 submit/mapi。
      */
     public function create(
         array $raw,
         string $scene,
         ?string $clientIp,
-        string $device,
+        ?string $detectedDevice,
         string $requestId,
     ): array {
         $identity = $this->authenticate($raw, true);
@@ -68,7 +69,7 @@ final class EpayV1ProtocolService extends BaseService
             $identity['app']['id'],
             $identity['version'],
             $clientIp,
-            $device,
+            $detectedDevice,
         );
         // 链接由框架按当前 Request 生成，不冻结为安装时的域名。
         $created = $this->orders->create($input, $this->clock->now());
@@ -127,7 +128,8 @@ final class EpayV1ProtocolService extends BaseService
             );
             $status = (int) $refund['status'];
             return [
-                'code' => $status === RefundConstant::SUCCESS ? 1 : 0,
+                // V1 退款以 0 表示成功；协议码不改变内部退款状态，处理中/未知也不能报成功。
+                'code' => $status === RefundConstant::SUCCESS ? 0 : -1,
                 'msg' =>
                     $refund['result_code'] === PaymentResultCode::REFUND_UNSUPPORTED
                         ? '此订单的插件不支持接口退款，请联系收款方处理'
@@ -157,7 +159,8 @@ final class EpayV1ProtocolService extends BaseService
                 if ($selector['trade_no'] === null) {
                     $pay = $this->payFor($biz);
                 }
-                return $this->messages->order($biz, $pay, $biz['pid']);
+                return ['code' => 1, 'msg' => '查询成功'] +
+                    $this->messages->order($biz, $pay, $biz['pid']);
             }
             if ($action === 'orders') {
                 $page = $this->validator->pagination($raw);
@@ -243,12 +246,8 @@ final class EpayV1ProtocolService extends BaseService
     private function authenticate(array $raw, bool $signed): array
     {
         $pid = $this->validator->pid($raw);
-        if (
-            ($signed &&
-                (($raw['sign_type'] ?? null) !== 'MD5' ||
-                    !preg_match('/^[a-f0-9]{32}$/D', $raw['sign'] ?? ''))) ||
-            (!$signed && (($raw['key'] ?? '') === '' || strlen($raw['key']) > 512))
-        ) {
+        // 签名格式和匹配统一交给 signer；KEY 认证入口只检查自身的凭证边界。
+        if (!$signed && (($raw['key'] ?? '') === '' || strlen($raw['key']) > 512)) {
             throw new BusinessException(
                 'PID、KEY 或签名无效',
                 ApiResponseConstant::UNAUTHENTICATED,

@@ -6,6 +6,7 @@ namespace app\common\util;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 use GuzzleHttp\Psr7\Uri;
+use InvalidArgumentException;
 use Psr\Http\Message\UriInterface;
 use think\Config;
 
@@ -15,34 +16,28 @@ use think\Config;
  */
 class HttpTargetPolicy
 {
-    /** @param list<string> $allowedHosts 新订单的域名限制；空列表或 * 表示不限域名。 */
+    /** 原始业务目标与完整 HTTP 请求分别使用明确长度上限。 */
+    public const MAX_URL_LENGTH = 2048;
+    public const MAX_REQUEST_URL_LENGTH = 16384;
+
     public function __construct(
         private readonly Config $config,
         private readonly HttpAddressResolver $addresses,
-        private readonly array $allowedHosts = [],
     ) {}
 
-    /** 创建本次应用的目标策略；不修改容器共用实例，不从工具内读取业务库。
-     * @param list<string> $hosts 已规范化的域名，或用空列表/['*'] 表示不限域名。
-     */
-    public function forHosts(array $hosts): self
-    {
-        return new self($this->config, $this->addresses, $hosts);
-    }
-
     /**
-     * URI 解析交给 PSR-7；这里仅保留项目拒绝用户信息、模糊主机和商户签名歧义的政策。
-     * 平台请求传 merchantQuery=false，保留原始重复 query/点号字段，不套用易支付表单规则。
+     * URI 解析交给 PSR-7，主机名用原生规则校验，允许内网单标签主机名；不在格式层限制网段。
+     * 保留 HTTP(S)、长度及无用户信息要求，不解释协议 query。
+     * 商户签名 query 由 UrlEncodedForm::parseQuery 单次解析，平台 SDK 保留自身原始参数规则。
      *
      * @throws BusinessException 输入不符合项目的地址合同，错误不回显 URL。
      */
     public static function uri(
         string $url,
-        int $maximum = 2048,
-        bool $merchantQuery = true,
+        int $maximum = self::MAX_URL_LENGTH,
     ): UriInterface {
-        if ($maximum < 1 || $maximum > 16384) {
-            throw new \InvalidArgumentException('URL 长度上限无效');
+        if ($maximum < 1 || $maximum > self::MAX_REQUEST_URL_LENGTH) {
+            throw new InvalidArgumentException('URL 长度上限无效');
         }
         if (
             $url === '' ||
@@ -58,7 +53,7 @@ class HttpTargetPolicy
         }
         try {
             $uri = new Uri($url);
-        } catch (\InvalidArgumentException) {
+        } catch (InvalidArgumentException) {
             throw new BusinessException(
                 '目标 URL 格式无效',
                 ApiResponseConstant::VALIDATION_FAILED,
@@ -70,58 +65,80 @@ class HttpTargetPolicy
             $uri->getUserInfo() !== '' ||
             $host === '' ||
             (filter_var($host, FILTER_VALIDATE_IP) === false &&
-                $host !== 'localhost' &&
-                !preg_match(
-                    '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/D',
-                    $host,
-                ))
+                filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false)
         ) {
             throw new BusinessException(
                 '目标必须是无用户信息的标准 HTTP(S) 地址',
                 ApiResponseConstant::VALIDATION_FAILED,
             );
         }
-        if ($merchantQuery) {
-            foreach (
-                UrlEncodedForm::parse($uri->getQuery(), $maximum > 2048 ? 256 : 128)
-                as $name => $unused
-            ) {
-                if (preg_match('/[.\s]/', (string) $name)) {
-                    throw new BusinessException(
-                        '目标 query 字段名存在签名歧义',
-                        ApiResponseConstant::VALIDATION_FAILED,
-                    );
-                }
-            }
-        }
         return $uri;
     }
 
-    /** 通知和回跳的共同输入规则；仅检查格式与应用域名，浏览器回跳不套用服务器网络限制。 */
-    public function validate(string $url, bool $signedRequest = false): UriInterface
+    /**
+     * 新订单的浏览器回跳只核验格式及应用域名，不解析 DNS 或限制目标网段。
+     *
+     * @param list<string> $allowedHosts 当前应用的允许域名；空列表或 * 表示不限域名。
+     */
+    public function validate(string $url, array $allowedHosts = []): UriInterface
     {
-        // 目标本身最多 2048 字符；已附加协议参数的完整 GET 请求允许增长。
-        $target = self::uri($url, $signedRequest ? 16384 : 2048);
-        $allowed = $this->allowedHosts;
+        $target = self::uri($url);
+        $development = $this->developmentAllowed($target);
+        $this->assertAllowedHost($target, $allowedHosts, $development);
+        return $target;
+    }
+
+    /**
+     * 新通知目标额外核验端口和字面地址；事务内不查询 DNS。
+     *
+     * @param list<string> $allowedHosts 当前应用的允许域名，不保存在共享对象中。
+     */
+    public function validateNotification(string $url, array $allowedHosts = []): UriInterface
+    {
+        $target = self::uri($url);
+        $development = $this->developmentAllowed($target);
+        $this->assertAllowedHost($target, $allowedHosts, $development);
+        $this->assertNotificationPort($target, $development);
+        $this->addresses->literalAddress(trim($target->getHost(), '[]'), $development);
+        return $target;
+    }
+
+    /**
+     * 发送冻结通知前一次核验完整 URI、端口和 DNS/IP；不重新应用当前应用域名列表。
+     * 开发例外在本次流程只判定一次，字面 IP 也只由解析器核验一次。
+     *
+     * @return array{uri:UriInterface,addresses:list<string>} 客户端须绑定这些地址并禁止重定向。
+     */
+    public function resolveNotification(string $url): array
+    {
+        $target = self::uri($url, self::MAX_REQUEST_URL_LENGTH);
+        $development = $this->developmentAllowed($target);
+        $this->assertNotificationPort($target, $development);
+        return [
+            'uri' => $target,
+            'addresses' => $this->addresses->resolve(trim($target->getHost(), '[]'), $development),
+        ];
+    }
+
+    /** @param list<string> $allowedHosts 仅新订单调用，开发例外仍须匹配既有环境/主机/端口。 */
+    private function assertAllowedHost(UriInterface $target, array $allowedHosts, bool $development): void
+    {
         if (
-            $allowed !== [] &&
-            !in_array('*', $allowed, true) &&
-            !$this->developmentAllowed($target) &&
-            !in_array(trim($target->getHost(), '[]'), array_map('strtolower', $allowed), true)
+            $allowedHosts !== [] &&
+            !in_array('*', $allowedHosts, true) &&
+            !$development &&
+            !in_array(trim($target->getHost(), '[]'), array_map('strtolower', $allowedHosts), true)
         ) {
             throw new BusinessException(
                 '目标域名未在应用允许列表中',
                 ApiResponseConstant::VALIDATION_FAILED,
             );
         }
-        return $target;
     }
 
-    /** 通知建单及发送前额外核验出站端口、字面 IP；DNS 留到连接前，不在订单事务内查询。 */
-    public function validateNotification(string $url, bool $signedRequest = false): UriInterface
+    /** 只检查通知端口，不在内部重算开发例外或重复解析 URL。 */
+    private function assertNotificationPort(UriInterface $target, bool $development): void
     {
-        $target = $this->validate($url, $signedRequest);
-        $development = $this->developmentAllowed($target);
         $ports = $this->config->get('http.allowed_ports', [80, 443]);
         if (!$development) {
             if (
@@ -138,28 +155,6 @@ class HttpTargetPolicy
                 );
             }
         }
-        if (filter_var(trim($target->getHost(), '[]'), FILTER_VALIDATE_IP) !== false) {
-            $this->addresses->assertAddress(trim($target->getHost(), '[]'), $development);
-        } elseif (trim($target->getHost(), '[]') === 'localhost' && !$development) {
-            throw new BusinessException(
-                '不允许本机目标地址',
-                ApiResponseConstant::VALIDATION_FAILED,
-            );
-        }
-        return $target;
-    }
-
-    /**
-     * 接收 HttpClient 已通过 validateNotification 核验的同一个 URI，连接前解析并校验全部 A/AAAA。
-     * URL 格式、端口及字面地址已检查，不在此重复解析；DNS 结果每次重新核验。
-     *
-     * @return list<string> 客户端须用 CURLOPT_RESOLVE 等等价方式绑定这些地址，禁止跟随重定向。
-     * @throws BusinessException 域名无法解析、地址不允许或 CNAME 链超出明确边界。
-     */
-    public function resolve(UriInterface $target): array
-    {
-        $development = $this->developmentAllowed($target);
-        return $this->addresses->resolve(trim($target->getHost(), '[]'), $development);
     }
 
     /** 开发放行同时匹配环境、主机和端口，不能靠一个全局“关闭 SSRF”开关启用。 */

@@ -7,6 +7,7 @@ use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\BusinessNumber;
 use app\common\util\HttpTargetPolicy;
+use app\common\util\UrlEncodedForm;
 use app\exception\BusinessException;
 use app\model\payment\BizOrder;
 use app\model\payment\PayOrder;
@@ -72,12 +73,13 @@ final class PayOrderService extends BaseService
             // 默认有效期只决定新单；重投使用原单期限，不依赖当前默认设置。
             $validSeconds = $this->settings->values('payment_defaults')['order_valid_seconds'];
             // 域名授权只决定新订单；已验签的同单重投仍使用冻结目标，下面继续核对完整业务指纹。
-            $targets = $this->targets->forHosts($app['allowed_hosts']);
             if ($input->notifyUrl !== null) {
-                $targets->validateNotification($input->notifyUrl);
+                $target = $this->targets->validateNotification($input->notifyUrl, $app['allowed_hosts']);
+                UrlEncodedForm::parseQuery($target->getQuery());
             }
             if ($input->returnUrl !== null) {
-                $targets->validate($input->returnUrl);
+                $target = $this->targets->validate($input->returnUrl, $app['allowed_hosts']);
+                UrlEncodedForm::parseQuery($target->getQuery());
             }
             $accessToken = bin2hex(random_bytes(32));
             $bizNo = $this->numbers->insert(
@@ -106,6 +108,7 @@ final class PayOrderService extends BaseService
                             'requested_pay_type' => $input->requestedPayType,
                             // 自动识别只用于展示，不写入幂等指纹；客户端换环境重投仍复用原上下文。
                             'device' => $input->device ?? $input->detectedDevice,
+                            'submit_type' => $input->submitType,
                             'param' => $input->param,
                             // 摘要用于访问认证；保存的原凭证供已验签重投取回同一地址，不轮换使旧页面失效。
                             'cashier_token' => $accessToken,

@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace app\common\payment;
 
+use app\common\base\BasePayment;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
-use app\common\interface\ChannelNotifyInterface;
+use app\common\interface\PaymentInterface;
 use app\common\util\Clock;
 use app\common\util\Money;
 use app\common\validation\SmsForwarderValidator;
@@ -27,10 +28,10 @@ use think\Request;
 use think\Response;
 
 /** 支付宝手机监听：本类集中配置、通知模板及字段转换，标准订单处理复用服务调用链。 */
-final class AlipayReceiptPayment implements ChannelNotifyInterface
+final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
 {
     /** @var array<string,mixed> 随代码交付的元信息和配置字段列表，不含实际账号秘密。 */
-    private array $paymentInfo = [
+    protected array $paymentInfo = [
         'code' => 'alipay_receipt',
         'name' => '支付宝手机收款监听',
         'version' => '1.0.0',
@@ -115,54 +116,10 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
         private readonly SmsForwarderValidator $notificationValidator,
     ) {}
 
-    /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
-    private array $channelConfig = [];
-
-    public function init(array $channelConfig): void
-    {
-        $this->channelConfig = $channelConfig;
-    }
-
-    private function getConfig(string $key, mixed $default = null): mixed
-    {
-        return $this->channelConfig[$key] ?? $default;
-    }
-
-    public function getCode(): string
-    {
-        return $this->paymentInfo['code'];
-    }
-    public function getDescription(): string
-    {
-        return $this->paymentInfo['description'] ?? '';
-    }
-    public function getName(): string
-    {
-        return $this->paymentInfo['name'];
-    }
-    public function getVersion(): string
-    {
-        return $this->paymentInfo['version'];
-    }
-    public function getEnabledPayTypes(): array
-    {
-        return $this->paymentInfo['pay_types'];
-    }
-    public function getConfigSchema(): array
-    {
-        return $this->paymentInfo['config_schema'];
-    }
-
-    /** 本插件仅生成本地识别材料，原订单下重复准备会复用已持久化的金额和备注。 */
-    public function canRetryPay(): bool
-    {
-        return true;
-    }
-
     /** 按当前通道准备识别值并生成静态码材料；事务提交后返回 pending，不推进交易成功。 */
     public function pay(array $order): array
     {
-        $prepared = $this->prepareReceipt($order['pay_no']);
+        $prepared = $this->prepareReceipt($order['pay_no'], $order['channel_id']);
         $meta = $this->receiptMeta($prepared['ext_json']);
         return [
             'status' => 'pending',
@@ -178,7 +135,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
                 'pay_params' => [
                     '_page' => 'receiptQrcode',
                     'qrcode_content' => $this->getConfig('receipt_qrcode_content') ?: null,
-                    'qrcode_image_url' => $this->getConfig('receipt_qrcode_image_url'),
+                    'qrcode_image_url' => $order['assets']['receipt_qrcode_image'] ?? null,
                     'instruction' => $meta['match_mode'] === 'remark' ? 'manual_remark' : 'scan',
                     'remark' => $meta['remark'],
                 ],
@@ -190,16 +147,16 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
      * 先保存原金额，再把 pay_amount 改为识别金额；刷新/执行恢复复用同一份准备结果。
      * 插件由派发服务在事务外调用，本方法拥有自己的数据库事务，锁顺序与生命周期一致。
      */
-    private function prepareReceipt(string $payNo): PayOrder
+    private function prepareReceipt(string $payNo, string $channelId): PayOrder
     {
         $observed = $this->orders->find($payNo) ?? throw new RuntimeException('收款支付单不存在');
-        return Db::transaction(function () use ($observed, $payNo): PayOrder {
+        return Db::transaction(function () use ($observed, $payNo, $channelId): PayOrder {
             $biz = $this->businessOrders->lock($observed['biz_no']);
             $pay = $this->orders->lock($payNo);
             // 同一通道跨应用、跨配置版本使用同一行锁；不反向锁其他订单。
             $this->channels->lock($pay['channel_id']);
             if (
-                $pay['channel_id'] !== $this->getConfig('channel_id') ||
+                $pay['channel_id'] !== $channelId ||
                 $pay['biz_no'] !== $biz['biz_no']
             ) {
                 throw new LogicException('插件与支付单通道不一致');
@@ -361,21 +318,10 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
      *
      * @param array{amount:int,paid_at:?string,trade_no:?string,remark:?string,pay_type:string,event_key:string} $record
      */
-    private function locateReceipt(array $record): PayOrder
+    private function locateReceipt(array $record, string $channelId): PayOrder
     {
-        $channelId = (string) $this->getConfig('channel_id');
         if ($channelId === '') {
             throw new LogicException('服务未注入通道');
-        }
-        if ($record['trade_no'] !== null) {
-            $known = $this->orders->successfulForChannelTrade(
-                $channelId,
-                $this->getCode(),
-                $record['trade_no'],
-            );
-            if ($known !== null) {
-                return $known;
-            }
         }
         $known = $this->orders->successfulForEvent(
             $channelId,
@@ -456,10 +402,13 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
         return '400：' . mb_strcut($message, 0, 4000, 'UTF-8');
     }
 
-    public function notify(Request $request): array
+    public function notify(Request|array $payload, array $context): array
     {
-        $record = $this->receipt($request);
-        return $this->receiptResult($this->locateReceipt($record), $record);
+        if (!$payload instanceof Request) {
+            throw new UnsupportedPaymentOperationException();
+        }
+        $record = $this->receipt($payload, $context['channel_id']);
+        return [$this->receiptResult($this->locateReceipt($record, $context['channel_id']), $record)];
     }
 
     /**
@@ -468,7 +417,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
      *
      * @return array<string,mixed> 金额为整数分，paid_at 使用上海时区。
      */
-    private function receipt(Request $request): array
+    private function receipt(Request $request, string $channelId): array
     {
         $message = $this->notificationValidator->validateInput(
             $request->post(),
@@ -507,7 +456,7 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
             substr(
                 hash(
                     'sha256',
-                    $this->getConfig('channel_id') .
+                    $channelId .
                         '|' .
                         $message['from'] .
                         '|' .
@@ -524,7 +473,8 @@ final class AlipayReceiptPayment implements ChannelNotifyInterface
         return [
             'pay_type' => 'alipay',
             'event_key' => $reference,
-            'trade_no' => $reference,
+            // 手机消息没有支付宝交易号；合成编号仅用于事件去重。
+            'trade_no' => null,
             'amount' => Money::parse($amount[1]),
             'paid_at' => $time->format('Y-m-d H:i:s'),
             'remark' => $remark,

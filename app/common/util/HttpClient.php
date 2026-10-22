@@ -6,6 +6,7 @@ namespace app\common\util;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 use app\exception\HttpRequestException;
+use DateTimeImmutable;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use GuzzleHttp\Psr7\FnStream;
@@ -13,13 +14,16 @@ use GuzzleHttp\Psr7\Request;
 use GuzzleHttp\Psr7\Utils;
 use GuzzleHttp\TransferStats;
 use InvalidArgumentException;
+use LogicException;
 use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
+use RuntimeException;
+use Throwable;
 use think\Config;
 
 /**
- * Guzzle 的应用出站边界：商户通知与平台 SDK 共用传输，分别采用各自目标授权。
- * HTTP 消息、流和连接生命周期交给社区库；本类只约束地址、预算、大小及安全错误。
+ * Guzzle 的应用出站边界：平台目标由 SDK 决定，商户通知另按应用授权检查目标。
+ * HTTP 消息、流和连接生命周期交给社区库；SDK 正常连接配置地址，通知另做 DNS/IP 限制及绑定。
  * 调用方必须先提交数据库事务；业务 ACK、认证、验签及重试由对应服务决定。
  */
 class HttpClient
@@ -27,7 +31,6 @@ class HttpClient
     public function __construct(
         private readonly ClientInterface $client,
         private readonly HttpTargetPolicy $targets,
-        private readonly HttpAddressResolver $addresses,
         private readonly Config $config,
         private readonly Clock $clock,
     ) {}
@@ -35,17 +38,16 @@ class HttpClient
     /**
      * 发送已冻结签名的通知 URL，不重新签名或改写 query。响应不等于商户业务 ACK。
      *
-     * @param \DateTimeImmutable $deadline 早于持久租约到期的绝对截止，包含本次 DNS 时间。
+     * @param DateTimeImmutable $deadline 早于持久租约到期的绝对截止，包含本次 DNS 时间。
      * @throws HttpRequestException 目标拒绝、解析/网络失败、预算或响应大小超限。
      */
-    public function get(string $url, \DateTimeImmutable $deadline): ResponseInterface
+    public function get(string $url, DateTimeImmutable $deadline): ResponseInterface
     {
         $started = hrtime(true);
         $this->assertDeadline($deadline, $started);
         try {
-            // 使用已冻结的目标；完整格式/端口/IP 检查只执行一次，随后核验 DNS 并绑定连接地址。
-            $uri = $this->targets->validateNotification($url, true);
-            $addresses = $this->targets->resolve($uri);
+            // 旧责任沿冻结目标发送；格式、端口、开发例外和 DNS/IP 在同一入口处理。
+            ['uri' => $uri, 'addresses' => $addresses] = $this->targets->resolveNotification($url);
         } catch (BusinessException $exception) {
             throw $this->targetFailure($exception, $started);
         }
@@ -63,6 +65,8 @@ class HttpClient
 
     /**
      * SDK 使用原生 PSR-7 请求；正文应由平台协议显式编码，禁止传入任意 Guzzle/cURL 选项。
+     * 平台地址和接口规则由 SDK 负责；本入口只核验 URL 格式，不限制公网或内网。
+     * 主机解析和连接由 Guzzle/cURL 处理，TLS、重定向、预算和大小规则与通知传输共用。
      * 登录、刷新和本轮查单共用同一 deadline。超时只表示结果不确定，不证明远端未受理。
      *
      * @param int $maximumBytes 解码后正文上限，最大 4 MiB。
@@ -72,14 +76,13 @@ class HttpClient
      */
     public function send(
         RequestInterface $request,
-        PlatformTargetPolicy $policy,
-        \DateTimeImmutable $deadline,
+        DateTimeImmutable $deadline,
         int $maximumBytes = 65536,
         int $maximumHeaderBytes = 16384,
     ): ResponseInterface {
         $started = hrtime(true);
         $this->assertDeadline($deadline, $started);
-        // SDK 负责构造平台请求，PSR-7/Guzzle 处理 HTTP 语法；公共层只保留请求体积限制。
+        // PSR-7/Guzzle 处理 HTTP 语法；这里限制体积及 URL 格式，不对 SDK 目标套用通知网段规则。
         $size = $request->getBody()->getSize();
         $headerBytes = 0;
         foreach ($request->getHeaders() as $name => $values) {
@@ -96,17 +99,16 @@ class HttpClient
             throw new InvalidArgumentException('SDK 请求正文或请求头大小超限');
         }
         try {
-            $uri = HttpTargetPolicy::uri((string) $request->getUri(), 16384, false);
-            $addresses = $this->addresses->resolve(
-                trim($uri->getHost(), '[]'),
-                $policy->validate($uri),
-            );
+            $uri = HttpTargetPolicy::uri((string) $request->getUri(), HttpTargetPolicy::MAX_REQUEST_URL_LENGTH);
+            if ($uri->getFragment() !== '') {
+                throw new BusinessException('请求地址不能包含片段', ApiResponseConstant::VALIDATION_FAILED);
+            }
         } catch (BusinessException $exception) {
             throw $this->targetFailure($exception, $started);
         }
         return $this->transfer(
             $request,
-            $addresses,
+            null,
             $deadline,
             $started,
             3000,
@@ -117,16 +119,16 @@ class HttpClient
     }
 
     /**
-     * 地址已由对应政策核验；绑定解析结果以消除连接时二次 DNS，TLS 仍按原主机验证。
-     * 系统 DNS 不能强制中断；解析返回后扣除时间，剩余预算不足就不建立连接。
+     * 通知绑定已核验地址并核对实际连接 IP；SDK 传 null，使用客户端正常的主机解析与连接。
+     * 两种入口共用 TLS、截止及响应上限；通知前置 DNS 时间同样计入总预算。
      *
-     * @param list<string> $addresses 已核验的数值 IP；不接受客户端再次解析的域名。
+     * @param list<string>|null $addresses 通知的已核验 IP；null 表示 SDK 正常连接，不执行网段筛选。
      * @param int $started DNS 前的单调时钟起点，失败耗时包含全部前置检查。
      */
     private function transfer(
         RequestInterface $request,
-        array $addresses,
-        \DateTimeImmutable $deadline,
+        ?array $addresses,
+        DateTimeImmutable $deadline,
         int $started,
         int $connectMs,
         int $timeoutMs,
@@ -140,7 +142,7 @@ class HttpClient
             $maximumHeaderBytes < 1 ||
             $maximumHeaderBytes > 65536
         ) {
-            throw new \InvalidArgumentException('HTTP 预算或响应上限无效');
+            throw new InvalidArgumentException('HTTP 预算或响应上限无效');
         }
         $remaining = (int) floor(
             ((float) $deadline->format('U.u') - (float) $this->clock->now()->format('U.u')) * 1000,
@@ -151,7 +153,7 @@ class HttpClient
         $timeoutMs = min($timeoutMs, $remaining);
         $uri = $request->getUri();
         $host = trim($uri->getHost(), '[]');
-        $expected = array_map('inet_pton', $addresses);
+        $expected = $addresses === null ? null : array_map('inet_pton', $addresses);
         // 不复用其他账号的连接、环境代理或 .netrc；连接资源本身由 Guzzle CurlHandler 管理。
         $curl = [
             CURLOPT_FRESH_CONNECT => true,
@@ -161,7 +163,7 @@ class HttpClient
             CURLOPT_PROXY => '',
             CURLOPT_NOPROXY => '*',
         ];
-        if (filter_var($host, FILTER_VALIDATE_IP) === false) {
+        if ($addresses !== null && filter_var($host, FILTER_VALIDATE_IP) === false) {
             $pins = array_map(
                 static fn(string $ip): string => str_contains($ip, ':') ? '[' . $ip . ']' : $ip,
                 $addresses,
@@ -225,7 +227,7 @@ class HttpClient
                     }
                     if ($bytes > $maximumHeaderBytes) {
                         $failure = 'header_too_large';
-                        throw new \RuntimeException('响应头超限');
+                        throw new RuntimeException('响应头超限');
                     }
                 },
                 'on_stats' => static function (TransferStats $stats) use (
@@ -263,42 +265,35 @@ class HttpClient
                             $response?->getStatusCode(),
                         );
                     }
-                    $connected = @inet_pton((string) ($details['primary_ip'] ?? ''));
-                    if ($connected === false || !in_array($connected, $expected, true)) {
-                        throw new HttpRequestException(
-                            'address_mismatch',
-                            self::elapsed($started),
-                            $response->getStatusCode(),
-                        );
+                    if ($expected !== null) {
+                        $connected = @inet_pton((string) ($details['primary_ip'] ?? ''));
+                        if ($connected === false || !in_array($connected, $expected, true)) {
+                            throw new HttpRequestException(
+                                'address_mismatch',
+                                self::elapsed($started),
+                                $response->getStatusCode(),
+                            );
+                        }
                     }
                 },
             ]);
-        } catch (HttpRequestException $exception) {
+        } catch (HttpRequestException | GuzzleException $exception) {
             $prefix = $sink->getSize() > 0 ? substr((string) $sink, 0, 4096) : null;
             $sink->close();
+            // 统一收尾并保留已分类错误；库异常可能带秘密，不保存其原文或 previous。
             throw new HttpRequestException(
-                $exception->reasonCode,
-                $exception->durationMs,
-                $exception->httpStatus,
+                $exception instanceof HttpRequestException ? $exception->reasonCode : ($failure ?? 'transport_error'),
+                $exception instanceof HttpRequestException ? $exception->durationMs : self::elapsed($started),
+                $exception instanceof HttpRequestException ? $exception->httpStatus : null,
                 $prefix,
             );
-        } catch (GuzzleException) {
-            $prefix = $sink->getSize() > 0 ? substr((string) $sink, 0, 4096) : null;
-            $sink->close();
-            // 库异常可带完整 URL/正文，不保留为 previous，避免统一日志无意输出秘密。
-            throw new HttpRequestException(
-                $failure ?? 'transport_error',
-                self::elapsed($started),
-                null,
-                $prefix,
-            );
-        } catch (\Throwable $exception) {
+        } catch (Throwable $exception) {
             $sink->close();
             throw $exception;
         }
     }
 
-    private function assertDeadline(\DateTimeImmutable $deadline, int $started): void
+    private function assertDeadline(DateTimeImmutable $deadline, int $started): void
     {
         if ($deadline <= $this->clock->now()) {
             throw new HttpRequestException('deadline_elapsed', self::elapsed($started));
@@ -320,7 +315,7 @@ class HttpClient
     {
         $value = $this->config->get('http.' . $name, $default);
         if (!is_int($value) || $value < 1 || $value > $maximum) {
-            throw new \LogicException('HTTP 限制配置无效：' . $name);
+            throw new LogicException('HTTP 限制配置无效：' . $name);
         }
         return $value;
     }

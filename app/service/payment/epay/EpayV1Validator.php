@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\service\payment\epay;
 
 use app\common\constant\ApiResponseConstant;
-use app\common\util\HttpTargetPolicy;
 use app\common\util\Money;
 use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
@@ -23,8 +22,8 @@ final class EpayV1Validator extends Validate
         'name' => ['require', 'string'],
         'money' => ['require', 'string'],
         'type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
-        'notify_url' => ['require', 'string'],
-        'return_url' => ['string'],
+        'notify_url' => ['require', 'string', 'max:2048'],
+        'return_url' => ['string', 'max:2048'],
         // 原生 ip 规则默认只接受 IPv4；filter 规则不限定地址族，符合本接口同时接受 IPv4/IPv6 的合同。
         'clientip' => ['string', 'filter' => FILTER_VALIDATE_IP],
         'device' => ['string', 'in' => ['pc', 'mobile', 'qq', 'wechat', 'alipay', 'jump']],
@@ -109,6 +108,7 @@ final class EpayV1Validator extends Validate
      *
      * @param array<string|int,string> $input 已完成原始参数验签的表单。
      * @param string $scene submit 或 mapi。
+     * @param string|null $detectedDevice 页面识别环境；mapi 传 null，缺省 device=pc 在本入口处理。
      * @throws BusinessException 字段、金额或目标政策拒绝；尚未创建业务订单。
      */
     public function order(
@@ -117,7 +117,7 @@ final class EpayV1Validator extends Validate
         string $appId,
         string $versionId,
         ?string $requestIp,
-        string $detectedDevice,
+        ?string $detectedDevice,
     ): CreateOrderInput {
         if (!in_array($scene, ['submit', 'mapi'], true)) {
             throw new LogicException('未知易支付下单场景');
@@ -134,10 +134,7 @@ final class EpayV1Validator extends Validate
         $type = ($input['type'] ?? '') === '' ? null : $input['type'];
         $notify = $input['notify_url'];
         $return = ($input['return_url'] ?? '') === '' ? null : $input['return_url'];
-        HttpTargetPolicy::uri($notify);
-        if ($return !== null) {
-            HttpTargetPolicy::uri($return);
-        }
+        // 原生场景已校验 URL 字段类型/长度；完整建单入口统一检查地址、应用授权及签名 query。
         $clientIp = ($input['clientip'] ?? '') === '' ? null : $input['clientip'];
         if (
             $clientIp === null &&
@@ -146,7 +143,8 @@ final class EpayV1Validator extends Validate
         ) {
             $clientIp = $requestIp;
         }
-        $device = ($input['device'] ?? '') === '' ? null : $input['device'];
+        // mapi 的调用者通常是服务器，不能用其 UA 猜付款设备；submit 只采用浏览器识别结果。
+        $device = $scene === 'mapi' ? (($input['device'] ?? '') === '' ? 'pc' : $input['device']) : null;
         return new CreateOrderInput(
             appId: $appId,
             pid: $input['pid'],
@@ -160,7 +158,8 @@ final class EpayV1Validator extends Validate
             clientIp: $clientIp,
             device: $device,
             param: $input['param'] ?? '',
-            detectedDevice: $detectedDevice,
+            detectedDevice: $scene === 'submit' ? $detectedDevice : null,
+            submitType: $scene === 'submit' ? 'page' : 'api',
         );
     }
 

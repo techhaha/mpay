@@ -5,9 +5,10 @@ namespace app\repository\payment\trade;
 
 use app\common\base\BaseRepository;
 use app\model\payment\PayCallbackLog;
+use InvalidArgumentException;
 
 /**
- * 回调处理的持久审计；必须与对应流水处理结论一起提交，不用可降级技术日志替代。
+ * 回调处理的持久审计；与订单/流水处理结论一起提交，不用可降级技术日志替代。
  *
  * @extends BaseRepository<PayCallbackLog>
  */
@@ -44,8 +45,8 @@ final class PayCallbackLogRepository extends BaseRepository
 
     /**
      * @param string|null $payNo 关联支付单编号；到账确认由调用方提供流水最终绑定的 pay_no，审计层不选择订单。
-     * @param array{flow_id:string,
-     *     config_version?:int, before_status?:int,
+     * @param array{flow_id:?string,
+     *     config_version?:int,before_status?:int,
      *     source_reference?:array{plugin_code:string,plugin_version:string,api_config_id:string,config_revision_id:int}
      * } $summary 只接收脱敏核对标识，来源引用不包含配置正文或秘密。
      */
@@ -58,7 +59,7 @@ final class PayCallbackLogRepository extends BaseRepository
         array $summary,
     ): void {
         if (!preg_match('/^[a-f0-9]{32}$/D', $requestId)) {
-            throw new \InvalidArgumentException('回调关联号必须由服务端生成');
+            throw new InvalidArgumentException('回调关联号必须由服务端生成');
         }
         $this->insert(
             [
@@ -88,7 +89,7 @@ final class PayCallbackLogRepository extends BaseRepository
             !preg_match('/^[a-f0-9]{32}$/D', $requestId) ||
             !preg_match('/^[a-f0-9]{32}$/D', $token)
         ) {
-            throw new \InvalidArgumentException('执行关联号必须由服务端生成');
+            throw new InvalidArgumentException('执行关联号必须由服务端生成');
         }
         $this->insert(
             [

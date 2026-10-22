@@ -6,7 +6,6 @@ namespace app\service\payment\plugin;
 use app\common\constant\ApiResponseConstant;
 use app\common\interface\PaymentInterface;
 use app\common\interface\ReceiptCollectorInterface;
-use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use LogicException;
 use ReflectionClass;
@@ -25,7 +24,6 @@ final class PaymentPluginFactoryService
     public function __construct(
         private readonly App $app,
         private readonly Config $config,
-        private readonly PluginConfigValidator $validator,
     ) {}
 
     /** @return list<string> 只列随本程序交付的插件，不从数据库或请求加载类名。 */
@@ -73,20 +71,11 @@ final class PaymentPluginFactoryService
         );
     }
 
-    /**
-     * 执行入口在此校验一次配置并初始化独立实例。init 只装配参数，外部支付动作随后调用。
-     * @param array<string,mixed> $settings
-     * @param array<string,mixed> $runtime 服务生成的约定通道参数；与插件配置冲突属于程序错误。
-     */
-    public function initialize(string $code, array $settings, array $runtime): PaymentInterface
+    /** 配置值在保存入口校验；执行时只为当前动作创建独立实例并注入原配置。 */
+    public function initialize(string $code, array $settings): PaymentInterface
     {
         $plugin = $this->make($code);
-        $definition = $this->describe($plugin);
-        $settings = $this->validator->validate($definition->configSchema, $settings);
-        if (array_intersect_key($settings, $runtime) !== []) {
-            throw new LogicException('插件配置与系统运行参数冲突');
-        }
-        $plugin->init($settings + $runtime);
+        $plugin->init($settings);
         return $plugin;
     }
 

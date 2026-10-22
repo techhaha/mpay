@@ -9,13 +9,20 @@ use app\exception\HttpRequestException;
 use app\exception\PaymentUncertainException;
 use app\exception\ReceiptCollectionException;
 use app\exception\ReceiptMessageException;
+use Error;
+use InvalidArgumentException;
+use JsonException;
+use LogicException;
+use PDOException;
+use ReflectionClass;
+use RuntimeException;
+use Throwable;
 use think\db\exception\PDOException as DatabaseException;
 use think\facade\Cache;
 use think\Log;
-use Throwable;
 
 /**
- * 技术日志的结构化白名单与受限异常诊断；平台说明仅接受 SDK 脱敏后的采集诊断，不保存完整报文、SQL 或凭证。
+ * 技术日志的结构化白名单与受限异常诊断；平台说明由插件/SDK 先脱敏，不保存完整报文、SQL 或凭证。
  * 文件日志故障只作有限降级，不能代替或跳过交易流水、通知责任和管理员审计的持久化。
  */
 final class SafeLogger
@@ -24,6 +31,7 @@ final class SafeLogger
     private const FIELDS = [
         'biz_no',
         'pay_no',
+        'refund_no',
         'trace_no',
         'event_key',
         'notify_no',
@@ -118,7 +126,7 @@ final class SafeLogger
      * 不得把原始报文或秘密内容放进 pay_no、reason_code 等允许字段。
      *
      * @param array<string, scalar|null> $context 业务号、原因码或毫秒耗时等诊断数据。
-     * @throws \InvalidArgumentException 事件名或级别不是受控编码形式；属于调用方编程错误。
+     * @throws InvalidArgumentException 事件名或级别不是受控编码形式；属于调用方编程错误。
      */
     public function record(string $event, array $context = [], string $level = 'info'): void
     {
@@ -126,7 +134,7 @@ final class SafeLogger
             !preg_match('/^[a-z][a-z0-9_.]{0,63}$/D', $event) ||
             !in_array($level, ['error', 'warning', 'notice', 'info'], true)
         ) {
-            throw new \InvalidArgumentException('日志事件和级别必须使用固定合同');
+            throw new InvalidArgumentException('日志事件和级别必须使用固定合同');
         }
         $safe = array_filter(
             array_intersect_key($context, array_flip(self::FIELDS)),
@@ -152,7 +160,7 @@ final class SafeLogger
      * 主异常保留最多八个无参数调用位置、两个前因的类别/位置；不复制 message、完整 trace 或数据库 errorInfo。
      * 分类是诊断标签，不据此重试外部请求或修改交易状态；重试仍由服务和结构化驱动错误决定。
      */
-    public function exception(\Throwable $e): void
+    public function exception(Throwable $e): void
     {
         $details = $this->describe($e);
         $frames = [];
@@ -194,7 +202,7 @@ final class SafeLogger
     }
 
     /** @return array<string,string|int|null> 只从已识别类型提取受控值，未知异常码不当作可公开字段。 */
-    private function describe(\Throwable $error): array
+    private function describe(Throwable $error): array
     {
         $data = [
             'exception_class' => $this->symbol($error::class),
@@ -202,7 +210,7 @@ final class SafeLogger
             'file' => $this->sourcePath($error->getFile()),
             'line' => $error->getLine(),
         ];
-        if ($error instanceof DatabaseException || $error instanceof \PDOException) {
+        if ($error instanceof DatabaseException || $error instanceof PDOException) {
             $info =
                 $error instanceof DatabaseException
                     ? $error->getData()['PDO Error Info'] ?? []
@@ -263,15 +271,15 @@ final class SafeLogger
             if (
                 in_array(
                     $error->getCode(),
-                    (new \ReflectionClass(ApiResponseConstant::class))->getConstants(),
+                    (new ReflectionClass(ApiResponseConstant::class))->getConstants(),
                     true,
                 )
             ) {
                 $data['application_code'] = $error->getCode();
             }
-        } elseif ($error instanceof \JsonException) {
+        } elseif ($error instanceof JsonException) {
             $data['category'] = 'data_format';
-        } elseif ($error instanceof \Error || $error instanceof \LogicException) {
+        } elseif ($error instanceof Error || $error instanceof LogicException) {
             $data['category'] = 'program_error';
         }
         return $data;
@@ -321,7 +329,7 @@ final class SafeLogger
         $target = null;
         $driverTouched = false;
         set_error_handler(static function (): never {
-            throw new \RuntimeException('技术日志写入失败');
+            throw new RuntimeException('技术日志写入失败');
         }, E_WARNING | E_USER_WARNING);
         try {
             $json = json_encode(
@@ -332,7 +340,7 @@ final class SafeLogger
             $driverTouched = true;
             $channel = $this->log->channel($target);
             $channel->write($json, $level);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             $failed = true;
             if ($driverTouched) {
                 try {
@@ -341,7 +349,7 @@ final class SafeLogger
                     }
                     // 原生 File 在空缓冲 save 时仍可能创建目录，必须移除失败驱动，避免请求结束再次抛错。
                     $this->log->forgetDriver($target);
-                } catch (\Throwable) {
+                } catch (Throwable) {
                     /* 无效日志配置同样不能覆盖业务结果。 */
                 }
             }
@@ -364,7 +372,7 @@ final class SafeLogger
             if (!@error_log($fallback) && PHP_SAPI === 'cli') {
                 @file_put_contents('php://stderr', $fallback . "\n");
             }
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // 所有技术日志出口都失效时不能伪造持久化保证，也不能用它覆盖主业务的既定结果。
         }
     }

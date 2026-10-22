@@ -6,9 +6,38 @@ namespace app\common\util;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 
-/** 共享的 DNS 与网段边界，调用方先限定目标主机/端口；全部返回地址须由传输层绑定，不再二次解析。 */
+/** 商户通知的 DNS 与网段边界；全部返回地址须由传输层绑定，不用于插件 SDK 的平台连接。 */
 class HttpAddressResolver
 {
+    /**
+     * 通知目标的字面 IP、localhost 及完整域名检查；域名返回 null，不在此发起 DNS。
+     * 建单可提前拒绝字面内网地址，连接解析则复用同一入口，网段规则统一由 assertAddress 执行。
+     */
+    public function literalAddress(string $host, bool $development = false): ?string
+    {
+        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+            $this->assertAddress($host, $development);
+            return $host;
+        }
+        if ($host === 'localhost') {
+            if (!$development) {
+                throw new BusinessException('不允许本机目标地址', ApiResponseConstant::VALIDATION_FAILED);
+            }
+            return '127.0.0.1';
+        }
+        // 通知保留原完整域名规则；SDK 的内网短主机名不经过此入口。
+        if (!preg_match(
+            '/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,62}$/D',
+            $host,
+        )) {
+            throw new BusinessException(
+                '通知目标必须使用完整域名或标准 IP 地址',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
+        return null;
+    }
+
     /**
      * 每次连接重新检查所有 A/AAAA 和有界 CNAME 链，任一禁止地址都会拒绝整个目标。
      * 系统 DNS 可能阻塞，调用者须在解析后再次检查绝对预算；本类不声称能中止系统解析调用。
@@ -19,12 +48,9 @@ class HttpAddressResolver
      */
     public function resolve(string $host, bool $development = false): array
     {
-        if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
-            $this->assertAddress($host, $development);
-            return [$host];
-        }
-        if ($development && $host === 'localhost') {
-            return ['127.0.0.1'];
+        $literal = $this->literalAddress($host, $development);
+        if ($literal !== null) {
+            return [$literal];
         }
         $queue = [$host];
         $visited = [];

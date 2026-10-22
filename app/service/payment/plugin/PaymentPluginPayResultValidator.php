@@ -22,6 +22,10 @@ final class PaymentPluginPayResultValidator extends Validate
     /** @return array<string,mixed> 保留经过检查的标准字段，平台额外原文不会进入订单快照。 */
     public function validateResult(array $result): array
     {
+        // 只用真实交易号补缺失的渠道订单号；已有订单号不覆盖，也不反向补交易号。
+        if (($result['chan_order_no'] ?? '') === '') {
+            $result['chan_order_no'] = $result['chan_trade_no'] ?? null;
+        }
         if (!(clone $this)->failException(false)->check($result)) {
             throw new UnexpectedValueException('插件下单结果不符合标准字段');
         }
@@ -54,6 +58,7 @@ final class PaymentPluginPayResultValidator extends Validate
                 'pay_action',
                 'presentation',
                 'receipt',
+                'paid_at',
             ]),
         );
     }
@@ -121,7 +126,7 @@ final class PaymentPluginPayResultValidator extends Validate
             };
     }
 
-    /** require 前缀让框架检查 null 和缺失；渠道未返回引用时必须显式给 null。 */
+    /** require 前缀检查字段存在；订单号已按合同补缺，交易号须显式提供，无真实编号时为 null。 */
     protected function requireReference(mixed $value, mixed $rule, array $data, string $field): bool
     {
         return array_key_exists($field, $data) &&

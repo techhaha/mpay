@@ -13,6 +13,7 @@ use think\exception\Handle;
 use think\exception\HttpException;
 use think\exception\HttpResponseException;
 use think\exception\ValidateException;
+use think\Request;
 use think\Response;
 use Throwable;
 
@@ -49,7 +50,7 @@ final class ExceptionHandle extends Handle
     /**
      * 将异常转换为入口约定的响应；即使 APP_DEBUG 开启也不输出堆栈或原始异常页。
      *
-     * @param \think\Request $request 框架传入的当前请求，保留父类兼容签名。
+     * @param Request $request 框架传入的当前请求，保留父类兼容签名。
      */
     public function render($request, Throwable $e): Response
     {
@@ -99,7 +100,8 @@ final class ExceptionHandle extends Handle
                 $status,
             );
         } elseif (in_array($path, ['/mapi.php', '/api.php'], true)) {
-            $response = json(['code' => 0, 'msg' => $message], $status);
+            // api.php 可能尚未解析 act；统一失败码 -1，避免限流或故障被退款调用方当成成功。
+            $response = json(['code' => $path === '/api.php' ? -1 : 0, 'msg' => $message], $status);
         } elseif (str_starts_with($path, '/api/pay/')) {
             // 设备入口的拒绝和故障保留协议错误响应，不套后台 JSON，也不冒充成功接收。
             $response = response('error', $status, ['Content-Type' => 'text/plain; charset=utf-8']);

@@ -5,7 +5,6 @@ namespace app\service\payment\config;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\interface\ChannelNotifyInterface;
 use app\common\interface\ReceiptCollectorInterface;
 use app\exception\BusinessException;
 use app\repository\payment\config\PaymentChannelRepository;
@@ -136,7 +135,6 @@ final class PaymentConfigurationQueryService extends BaseService
             }
             // 详情只读取展示和编辑需要的数据；快照/范围一致性由保存及支付执行入口核对。
             $plugin = $this->plugins->make($configuration['plugin_code']);
-            $push = $plugin instanceof ChannelNotifyInterface;
             $polling = $plugin instanceof ReceiptCollectorInterface;
             return [
                 'id' => $id,
@@ -146,8 +144,8 @@ final class PaymentConfigurationQueryService extends BaseService
                 'enabled' => (int) $channel['enabled'] === 1,
                 // 只返回通知路径；后台按浏览器当前站点展示完整地址，不存入通道快照。
                 'notification' => [
-                    'mode' => $push ? 'push' : ($polling ? 'polling' : 'unavailable'),
-                    'path' => $push ? '/api/pay/' . $id . '/notify' : null,
+                    'mode' => $polling ? 'polling' : 'push',
+                    'path' => $polling ? null : '/api/pay/' . $id . '/notify',
                 ],
                 'revision_id' => $channel['current_revision_id'],
                 'participates_default_route' => $this->defaults->participates($id, $types[0]),

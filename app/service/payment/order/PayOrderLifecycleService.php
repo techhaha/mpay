@@ -22,6 +22,7 @@ use app\repository\payment\trade\PayOrderOperationLogRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\repository\system\AdminUserRepository;
 use app\service\payment\notify\NotifyService;
+use app\service\payment\receipt\ChannelNotifyContext;
 use app\service\payment\receipt\ReceiptEvent;
 use DateTimeImmutable;
 use InvalidArgumentException;
@@ -284,15 +285,13 @@ final class PayOrderLifecycleService extends BaseService
 
     /**
      * 在调用插件前保存执行身份和等待状态；重复请求在租约内复用，不能并发重调 pay。
-     * 仅明确无外部写副作用的实现允许到期后重建材料；其他执行即使崩溃也不自动重下单。
+     * 中断后由普通请求在租约到期后重新准备；沿用原支付单、配置和付款窗口。
      *
-     * @param bool $replaySafe 派发服务对静态码本地准备可重放性的判断；已有执行必须与首次记录一致。
      * @param int $leaseSeconds 执行认领期限，秒；不是付款有效期。
      * @return array{execute:bool,token:?string,pay:PayOrder} execute=false 时 token 为 null，不授予调用权。
      */
     public function beginExecution(
         string $payNo,
-        bool $replaySafe,
         int $leaseSeconds,
         string $requestId,
     ): array {
@@ -303,7 +302,6 @@ final class PayOrderLifecycleService extends BaseService
         return $this->transaction(function () use (
             $target,
             $payNo,
-            $replaySafe,
             $leaseSeconds,
             $requestId,
         ): array {
@@ -337,14 +335,12 @@ final class PayOrderLifecycleService extends BaseService
             if ($execution !== null) {
                 if (
                     !is_array($execution) ||
-                    !is_string($execution['lease_until'] ?? null) ||
-                    ($execution['replay_safe'] ?? null) !== $replaySafe
+                    !is_string($execution['lease_until'] ?? null)
                 ) {
-                    throw new RuntimeException('原支付执行恢复合同损坏或已改变');
+                    throw new RuntimeException('原支付执行记录无效');
                 }
                 if (
                     ($execution['phase'] ?? null) === 'presented' ||
-                    !$replaySafe ||
                     $execution['lease_until'] > $time
                 ) {
                     return ['execute' => false, 'token' => null, 'pay' => $pay];
@@ -362,12 +358,11 @@ final class PayOrderLifecycleService extends BaseService
             $extension['payment_context']['execution'] = [
                 'token' => $token,
                 'phase' => 'claimed',
-                'replay_safe' => $replaySafe,
                 'lease_until' => $now
                     ->modify('+' . $leaseSeconds . ' seconds')
                     ->format('Y-m-d H:i:s'),
             ];
-            // 原 request_at 永不因静态展示恢复而移动；可信到账仍按首次执行及原占用窗口核对。
+            // 首次 request_at 不因重新准备而移动；可信到账仍按首次执行及原付款窗口核对。
             $this->payOrders->saveLifecycle(
                 $payNo,
                 $before,
@@ -759,6 +754,117 @@ final class PayOrderLifecycleService extends BaseService
     }
 
     /**
+     * 已验签的平台订单确认；入口完成标准字段检查，锁内重新核对原单及配置归属。
+     * 不生成到账流水，不以平台受理/浏览器回跳代替成功；重复通知只核验原通知责任。
+     *
+     * @param array<string,mixed> $result 无 receipt 的标准成功结果，金额为分。
+     * @return array{flow_id:null,pay_no:string,matched:true,reason:string}
+     */
+    public function confirmPayment(
+        PayOrder $target,
+        array $result,
+        ChannelNotifyContext $context,
+        string $requestId,
+    ): array {
+        return $this->transactionRetry(function () use ($target, $result, $context, $requestId): array {
+            $biz = $this->bizOrders->lock($target['biz_no']);
+            $pay = $this->payOrders->lock($target['pay_no']);
+            $scope = $this->scopes->lock($pay['receipt_scope_key']);
+            $this->assertOrderLink($biz, $pay);
+            $revision = $pay->channelRevision;
+            $before = (int) $pay['status'];
+            if (
+                $pay['pay_no'] !== $result['pay_no'] ||
+                ($context->payNo !== null && $pay['pay_no'] !== $context->payNo) ||
+                $pay['channel_id'] !== $context->channelId ||
+                $pay['plugin_code'] !== $context->pluginCode ||
+                $pay['receipt_scope_key'] !== $context->scopeKey ||
+                $scope['pay_type_id'] !== $pay['pay_type_id'] ||
+                $scope['api_config_id'] !== $context->configurationId ||
+                $revision === null ||
+                $revision['api_config_id'] !== $context->configurationId ||
+                (int) $revision['config_version'] !== $context->configurationVersion ||
+                ($pay['ext_json']['payment_context']['pay_type'] ?? null) !== $result['pay_type'] ||
+                $context->payType !== $result['pay_type'] ||
+                $result['paid_amount'] !== $pay->originalAmount() ||
+                // 已准备监听识别值的订单仍必须提交真实流水，不能走此入口绕过原防重规则。
+                isset($pay['ext_json']['personal_receipt']['match_mode']) ||
+                $pay['receipt_flow_id'] !== null ||
+                ($pay['channel_trade_no'] !== null && $pay['channel_trade_no'] !== $result['chan_trade_no']) ||
+                ($pay['channel_order_no'] !== null && $pay['channel_order_no'] !== $result['chan_order_no'])
+            ) {
+                throw new BusinessException('平台通知与订单金额或归属不一致', ApiResponseConstant::FORBIDDEN);
+            }
+            // 可选真实交易号沿用现有唯一约束；epay 只给平台订单号时不参与这项防重。
+            if (
+                $result['chan_trade_no'] !== null &&
+                $this->payOrders->hasSuccessfulTrade($pay['plugin_code'], $result['chan_trade_no'], $pay['pay_no'])
+            ) {
+                throw new BusinessException('该真实交易号已用于其他成功订单', ApiResponseConstant::CONFLICT);
+            }
+            $time = $this->clock->now()->format('Y-m-d H:i:s');
+            if ($before === TradeConstant::ORDER_STATUS_SUCCESS) {
+                if (
+                    $pay['channel_order_no'] !== $result['chan_order_no'] ||
+                    $pay['channel_trade_no'] !== $result['chan_trade_no'] ||
+                    $pay->receivedAmount() !== $result['paid_amount'] ||
+                    ($result['paid_at'] !== null && $pay['paid_at'] !== $result['paid_at'])
+                ) {
+                    throw new BusinessException('重复通知与已确认交易不一致', ApiResponseConstant::CONFLICT);
+                }
+                $this->assertNotification($biz, $pay);
+                $reason = Result::CONFIRMATION_REPLAYED;
+            } else {
+                if (
+                    !in_array($before, [
+                        TradeConstant::ORDER_STATUS_CREATED,
+                        TradeConstant::ORDER_STATUS_PAYING,
+                        TradeConstant::ORDER_STATUS_CLOSED,
+                        TradeConstant::ORDER_STATUS_TIMEOUT,
+                    ], true) ||
+                    $pay['request_at'] === null ||
+                    (int) $pay['pay_amount'] !== $result['paid_amount']
+                ) {
+                    throw new BusinessException('当前订单不能接受平台成功确认', ApiResponseConstant::CONFLICT);
+                }
+                // epay notify 无付款时间；首次确认记录接收时间，重报不改写。
+                // 本地关闭/超时不证明上游未支付，验签成功的原单仍可确认。
+                $paidAt = $result['paid_at'] ?? $context->receivedAt->format('Y-m-d H:i:s');
+                if ($paidAt < $pay['created_at'] || $paidAt > $context->receivedAt->format('Y-m-d H:i:s')) {
+                    throw new BusinessException('平台付款时间不在合理范围', ApiResponseConstant::CONFLICT);
+                }
+                $this->payOrders->saveLifecycle($pay['pay_no'], $before, [
+                    'status' => TradeConstant::ORDER_STATUS_SUCCESS,
+                    'confirmation_source' => TradeConstant::CONFIRMATION_RECEIPT,
+                    'channel_order_no' => $result['chan_order_no'],
+                    'channel_trade_no' => $result['chan_trade_no'],
+                    'paid_at' => $paidAt,
+                ] + $this->receiptAmountChanges($pay, $result['paid_amount'], null), $time);
+                $this->bizOrders->saveLifecycle($biz['biz_no'], (int) $biz['status'], [
+                    'status' => TradeConstant::ORDER_STATUS_SUCCESS,
+                    'paid_amount' => $result['paid_amount'],
+                    'paid_at' => $paidAt,
+                ], $time);
+                $confirmedBiz = $this->bizOrders->find($biz['biz_no']) ??
+                    throw new RuntimeException('成功业务单不可读取');
+                $confirmedPay = $this->payOrders->find($pay['pay_no']) ??
+                    throw new RuntimeException('成功支付单不可读取');
+                $this->notifications->createPaySuccess($confirmedBiz, $confirmedPay, $time);
+                $reason = Result::RECEIPT_CONFIRMED;
+            }
+            $this->logs->record(
+                $pay['pay_no'],
+                $requestId,
+                $pay['pay_no'],
+                hash('sha256', json_encode($result, JSON_THROW_ON_ERROR)),
+                $reason,
+                ['flow_id' => null, 'before_status' => $before],
+            );
+            return ['flow_id' => null, 'pay_no' => $pay['pay_no'], 'matched' => true, 'reason' => $reason];
+        });
+    }
+
+    /**
      * 到期扫描只结束本地等待；成功及其他终态不降级，未建立支付单的业务需求也能到期。
      * 仍保留原付款窗口和准备快照，可信窗口内的迟到事件可随后补正确认。
      *
@@ -810,11 +916,11 @@ final class PayOrderLifecycleService extends BaseService
     }
 
     /**
-     * 服务在确认事务内，用实际绑定流水或人工证据定稿金额及事件身份。
-     * 自动确认记录实际绑定的流水身份，人工确认不保留插件流水事件身份。
+     * 服务在确认事务内，用平台成功结果、绑定流水或人工证据定稿金额及事件身份。
+     * 有真实流水才记录事件身份；普通平台订单确认和人工确认不造流水键。
      *
      * @param int $received 实际到账金额，整数分。
-     * @param string|null $eventKey 本次实际关联的流水身份；人工确认时为 null。
+     * @param string|null $eventKey 本次实际关联的流水身份；无流水时为 null。
      * @return array{pay_amount:int,ext_json:string}
      */
     private function receiptAmountChanges(

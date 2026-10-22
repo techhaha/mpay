@@ -10,9 +10,6 @@ use LogicException;
 /** 已安装代码的元信息；版本用于展示和记录，不承担运行准入或多版本代码选择。 */
 final readonly class PluginDefinition
 {
-    /** 服务运行参数不属于插件设置，防止声明相同字段后被运行值悄悄覆盖。 */
-    private const RESERVED = ['channel_id', 'receipt_scope_key', 'pay_type_code', 'api_config_id'];
-
     /**
      * @param list<string> $payTypes
      * @param list<array<string,mixed>> $configSchema 插件声明的后台字段列表。
@@ -55,7 +52,6 @@ final readonly class PluginDefinition
                 !is_string($field['field'] ?? null) ||
                 !preg_match('/^[a-z][a-z0-9_]{0,63}$/D', $field['field']) ||
                 isset($seen[$field['field']]) ||
-                in_array($field['field'], self::RESERVED, true) ||
                 !is_string($field['title'] ?? null) ||
                 trim($field['title']) === '' ||
                 !in_array(
@@ -143,14 +139,8 @@ final readonly class PluginDefinition
             }
         }
         $fields = array_column($schema, null, 'field');
-        // 上传地址由资产服务派生；在发现时拒绝显式同名字段，顺序不能影响冲突判定。
+        // 字段显示条件引用同一份 schema，不依赖声明顺序。
         foreach ($fields as $name => $field) {
-            if (
-                $field['type'] === 'upload' &&
-                (isset($fields[$name . '_url']) || in_array($name . '_url', self::RESERVED, true))
-            ) {
-                throw new LogicException('上传字段的派生地址与插件字段或系统运行参数冲突');
-            }
             if (!isset($field['visible_when'])) {
                 continue;
             }

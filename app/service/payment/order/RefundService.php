@@ -10,6 +10,7 @@ use app\common\constant\RefundConstant as State;
 use app\common\constant\TradeConstant;
 use app\common\util\BusinessNumber;
 use app\common\util\Clock;
+use app\common\util\SafeLogger;
 use app\exception\BusinessException;
 use app\exception\PaymentDefinitiveException;
 use app\exception\PaymentUncertainException;
@@ -39,6 +40,7 @@ final class RefundService extends BaseService
         private readonly PaymentPluginFactoryService $plugins,
         private readonly BusinessNumber $numbers,
         private readonly Clock $clock,
+        private readonly SafeLogger $logger,
     ) {}
 
     /**
@@ -114,15 +116,11 @@ final class RefundService extends BaseService
             if (($snapshot['channel']['plugin_code'] ?? null) !== $pay['plugin_code']) {
                 throw new RuntimeException('原退款插件快照不一致');
             }
-            $plugin = $this->plugins->initialize($pay['plugin_code'], $snapshot['configuration'], [
-                'channel_id' => $pay['channel_id'],
-                'api_config_id' => $snapshot['channel']['api_config_id'],
-                'receipt_scope_key' => $pay['receipt_scope_key'],
-                'pay_type_code' => $pay['ext_json']['payment_context']['pay_type'],
-            ]);
+            $plugin = $this->plugins->initialize($pay['plugin_code'], $snapshot['configuration']);
             $input = [
                 'refund_no' => $refund['refund_no'],
                 'pay_no' => $pay['pay_no'],
+                'channel_id' => $pay['channel_id'],
                 'refund_amount' => $amount,
                 'chan_order_no' => $pay['channel_order_no'],
                 'chan_trade_no' => $pay['channel_trade_no'],
@@ -148,34 +146,40 @@ final class RefundService extends BaseService
             ) {
                 throw new UnexpectedValueException('插件退款结果与原请求不一致');
             }
-            $status = match ($result['status']) {
-                'success' => State::SUCCESS,
-                'failed' => State::FAILED,
-                'pending' => State::PROCESSING,
-                default => State::UNKNOWN,
+            // 同一插件结果一次映射状态和诊断码，避免两处分支维护不同步。
+            [$status, $reason] = match ($result['status']) {
+                'success' => [State::SUCCESS, Result::REFUND_SUCCESS],
+                'failed' => [State::FAILED, Result::REFUND_FAILED],
+                'pending' => [State::PROCESSING, Result::REFUND_PENDING],
+                'unknown' => [State::UNKNOWN, Result::REFUND_UNKNOWN],
             };
             $channelNumber = $result['chan_refund_no'];
-            $reason = match ($result['status']) {
-                'success' => Result::REFUND_SUCCESS,
-                'pending' => Result::REFUND_PENDING,
-                'failed' => Result::REFUND_FAILED,
-                default => Result::REFUND_UNKNOWN,
-            };
         } catch (UnsupportedPaymentOperationException) {
             $status = State::FAILED;
             $reason = Result::REFUND_UNSUPPORTED;
-        } catch (PaymentDefinitiveException) {
-            $status = State::FAILED;
-            $reason = Result::REFUND_REJECTED;
-        } catch (PaymentUncertainException) {
-            $reason = Result::REFUND_UNKNOWN;
+        } catch (PaymentDefinitiveException | PaymentUncertainException $error) {
+            $rejected = $error instanceof PaymentDefinitiveException;
+            $status = $rejected ? State::FAILED : State::UNKNOWN;
+            $reason = $rejected ? Result::REFUND_REJECTED : Result::REFUND_UNKNOWN;
+            // 插件/SDK 先脱敏；拒绝和未知都留下有界诊断，日志不改变额度及不重发规则。
+            $this->logger->record(
+                $rejected ? 'payment.refund_rejected' : 'payment.refund_unknown',
+                [
+                    'pay_no' => $pay['pay_no'],
+                    'refund_no' => $refund['refund_no'],
+                    'plugin_code' => $pay['plugin_code'],
+                    'reason_code' => $reason,
+                    'error_message' => $error->getMessage(),
+                ],
+                'warning',
+            );
         } catch (Throwable $error) {
             // 不把 SDK/程序异常文本存进公开退款信息；持久化分类后仍抛原异常供统一日志处理。
             $reason = Result::REFUND_FAULT;
             $fault = $error;
         }
         if (!$invoked) {
-            // 快照读取、配置校验和初始化失败时尚未执行退款，不占用“结果未知”的待核实额度。
+            // 快照读取和初始化失败时尚未执行退款，不占用“结果未知”的待核实额度。
             $status = State::FAILED;
             $reason = Result::REFUND_NOT_EXECUTED;
         }

@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\service\payment\notify;
 
 use app\common\constant\NotifyConstant;
-use app\common\constant\TradeConstant;
 use app\common\util\BusinessNumber;
 use app\model\payment\BizOrder;
 use app\model\payment\PayOrder;
@@ -41,21 +40,15 @@ final class NotifyService
         string $now,
         bool $notifyMerchant = true,
     ): ?string {
-        if (
-            (int) $biz['status'] !== TradeConstant::ORDER_STATUS_SUCCESS ||
-            (int) $pay['status'] !== TradeConstant::ORDER_STATUS_SUCCESS ||
-            $pay['biz_no'] !== $biz['biz_no'] ||
-            $biz['active_pay_no'] !== $pay['pay_no']
-        ) {
-            throw new LogicException('只有一致的业务成功才能建立通知责任');
-        }
+        // 复用消息入口核对双单成功和关联；无通知地址时也不能绕过这项检查。
+        $parameters = $this->messages->successParameters($biz, $pay, $biz['pid']);
         // 所有订单统一按通知地址决定责任，不通过商品名称或入口类型区别对待。
         if ($biz['notify_url'] === null) {
             return null;
         }
         $parameters = $this->messages->signForTarget(
             $biz['notify_url'],
-            $this->messages->successParameters($biz, $pay, $biz['pid']),
+            $parameters,
             $this->credentials->secretForVersion($biz['app_id'], $biz['credential_version_id']),
         );
         $notifyNo = $this->numbers->insert(

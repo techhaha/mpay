@@ -17,7 +17,7 @@ final readonly class ReceiptEvent
      * @param string $eventKey 对应插件的事件引用；手机兼容编号包含通知 timestamp，重投需保留原字段才能同键去重。
      * @param int $amount 来源合同定义的真实收款交易金额，整数分且大于零。
      * @param string|null $paidAt 已验证的上海时区 Y-m-d H:i:s 字符串；缺失为 null，不补接收时间。
-     * @param string|null $platformTradeNo 平台交易号或 V2 监听生成的渠道引用；没有时为 null。
+     * @param string|null $platformTradeNo 真实平台交易号；没有时为 null，监听合成编号仅放在 eventKey。
      * @param string $sourcePayloadDigest 服务按标准流水字段计算的 SHA-256，不保存平台原文或秘密。
      * @param string $pluginCode 服务端授权的插件编码，不能由平台正文指定。
      * @param string $pluginVersion 实际解析本次事件的已安装代码版本，供来源审计回溯。

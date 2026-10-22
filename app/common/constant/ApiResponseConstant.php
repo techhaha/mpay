@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\common\constant;
 
-/** 后台与收银台 JSON 的稳定应用码；易支付 code=1/0 和设备 ACK 不使用本集合。 */
+/** 后台与收银台 JSON 的稳定应用码；易支付协议码和设备 ACK 不使用本集合。 */
 final class ApiResponseConstant
 {
     public const OK = 200;

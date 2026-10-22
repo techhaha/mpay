@@ -5,6 +5,10 @@ namespace app\common\util;
 
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
+use DateTimeImmutable;
+use DateTimeZone;
+use InvalidArgumentException;
+use Random\Randomizer;
 use think\db\exception\PDOException;
 
 /** 业务编号统一为前缀＋创建时间＋五位随机数；唯一性由对应数据库唯一索引保证。 */
@@ -20,21 +24,21 @@ final class BusinessNumber
 
     /** 默认使用 PHP 原生安全随机源；允许隔离测试注入确定性引擎验证边界和碰撞。 */
     public function __construct(
-        private readonly \Random\Randomizer $random = new \Random\Randomizer(),
+        private readonly Randomizer $random = new Randomizer(),
     ) {}
 
-    public function generate(string $prefix, \DateTimeImmutable $createdAt): string
+    public function generate(string $prefix, DateTimeImmutable $createdAt): string
     {
         if (!isset(self::INDEXES[$prefix])) {
-            throw new \InvalidArgumentException('不支持的业务编号类型');
+            throw new InvalidArgumentException('不支持的业务编号类型');
         }
-        $date = $createdAt->setTimezone(new \DateTimeZone('Asia/Shanghai'))->format('YmdHis');
+        $date = $createdAt->setTimezone(new DateTimeZone('Asia/Shanghai'))->format('YmdHis');
         $number =
             $prefix .
             $date .
             str_pad((string) $this->random->getInt(0, 99999), 5, '0', STR_PAD_LEFT);
         if (strlen($number) !== 20) {
-            throw new \InvalidArgumentException('创建时间超出编号支持范围');
+            throw new InvalidArgumentException('创建时间超出编号支持范围');
         }
         return $number;
     }
@@ -46,7 +50,7 @@ final class BusinessNumber
      * @param callable(string):mixed $insert 已完成参数校验的单条插入，成功后返回本次编号。
      * @throws BusinessException 五次编号碰撞，外层事务应回滚并公开返回可重试错误。
      */
-    public function insert(string $prefix, \DateTimeImmutable $createdAt, callable $insert): string
+    public function insert(string $prefix, DateTimeImmutable $createdAt, callable $insert): string
     {
         for ($attempt = 0; $attempt < self::MAX_ATTEMPTS; $attempt++) {
             $number = $this->generate($prefix, $createdAt);

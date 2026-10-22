@@ -23,14 +23,11 @@ final class EpayV1Controller
     /** GET/POST 页面下单返回本地收银台；HTML 错误交给统一异常处理器安全展示。 */
     public function submit(): Response
     {
-        if (!in_array($this->request->method(true), ['GET', 'POST'], true)) {
-            throw new \think\exception\HttpException(405, '', null, ['Allow' => 'GET, POST']);
-        }
         $result = $this->protocol->create(
             $this->parameters(),
             'submit',
             $this->request->ip(),
-            $this->device(),
+            $this->detectedDevice(),
             $this->context->id(),
         );
         return redirect($result['payurl'], 303);
@@ -44,7 +41,7 @@ final class EpayV1Controller
                 $this->parameters(),
                 'mapi',
                 $this->request->ip(),
-                $this->device(),
+                null,
                 $this->context->id(),
             );
             return json([
@@ -58,12 +55,22 @@ final class EpayV1Controller
         }
     }
 
+    /** 查询与退款共用入口；退款仅接受实际 POST，失败不能误用退款成功码 0。 */
     public function api(): Response
     {
         try {
-            return json($this->protocol->api($this->parameters()));
+            $parameters = $this->parameters();
+            // 查询仍支持 GET/POST；退款在进入认证及业务服务前核对原始 HTTP 方法。
+            if (($parameters['act'] ?? null) === 'refund' && $this->request->method(true) !== 'POST') {
+                return json(
+                    ['code' => -1, 'msg' => '退款接口仅支持 POST 请求'],
+                    405,
+                    ['Allow' => 'POST'],
+                );
+            }
+            return json($this->protocol->api($parameters));
         } catch (BusinessException $exception) {
-            return json(['code' => 0, 'msg' => $exception->getMessage()]);
+            return json(['code' => -1, 'msg' => $exception->getMessage()]);
         }
     }
 
@@ -98,13 +105,13 @@ final class EpayV1Controller
         return UrlEncodedForm::merge($query, UrlEncodedForm::parse($this->request->getInput()));
     }
 
-    /** 设备只作显示提示，不参与身份认证或收款确认，也不改变原始签名参数。 */
-    private function device(): string
+    /** 页面下单按付款浏览器识别展示环境；mapi 使用请求 device，不调用此方法。 */
+    private function detectedDevice(): string
     {
         $agent = (string) $this->request->header('User-Agent', '');
         return match (true) {
-            stripos($agent, 'MicroMessenger') !== false => 'wechat',
             stripos($agent, 'AlipayClient') !== false => 'alipay',
+            stripos($agent, 'MicroMessenger') !== false => 'wechat',
             stripos($agent, 'QQ/') !== false => 'qq',
             preg_match('/Mobile|Android|iPhone|iPad/i', $agent) === 1 => 'mobile',
             default => 'pc',

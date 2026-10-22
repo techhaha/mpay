@@ -8,7 +8,6 @@ use app\common\constant\NotifyConstant;
 use app\common\constant\PaymentResultCode as Result;
 use app\common\util\Clock;
 use app\common\util\HttpClient;
-use app\common\util\HttpTargetPolicy;
 use app\common\util\Money;
 use app\common\util\SafeLogger;
 use app\common\validation\PaymentTypeCode;
@@ -147,12 +146,11 @@ final class MerchantNotifyDispatcherService extends BaseService
                 $target = null;
                 if ($damage === null) {
                     try {
-                        // 本次认领只构造一次完整 URL；网络目标检查仍在事务外的 HTTP 层执行。
+                        // 组装入口已核验最终 query 和长度；网络目标检查仍在事务外的 HTTP 层执行。
                         $target = $this->messages->targetUrl(
                             $task['notify_url'],
                             $task['notify_data'],
                         );
-                        HttpTargetPolicy::uri($target, 16384);
                     } catch (InvalidArgumentException | BusinessException) {
                         $damage = 'frozen_payload_invalid';
                     }

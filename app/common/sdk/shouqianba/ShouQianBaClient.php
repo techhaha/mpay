@@ -5,7 +5,6 @@ namespace app\common\sdk\shouqianba;
 
 use app\common\util\Clock;
 use app\common\util\HttpClient;
-use app\common\util\PlatformTargetPolicy;
 use app\exception\HttpRequestException;
 use app\exception\ReceiptCollectionException;
 use DateTimeImmutable;
@@ -470,7 +469,6 @@ final class ShouQianBaClient
         try {
             $response = $this->http->send(
                 $request,
-                PlatformTargetPolicy::production([self::ORIGIN]),
                 $deadline,
                 4194304,
             );

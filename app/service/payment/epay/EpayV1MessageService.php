@@ -3,12 +3,17 @@ declare(strict_types=1);
 
 namespace app\service\payment\epay;
 
+use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\util\HttpTargetPolicy;
-use app\common\util\UrlEncodedForm;
 use app\common\util\Money;
+use app\common\util\UrlEncodedForm;
+use app\common\validation\PaymentTypeCode;
+use app\exception\BusinessException;
 use app\model\payment\BizOrder;
 use app\model\payment\PayOrder;
+use LogicException;
+use RuntimeException;
 
 /** 易支付公开消息白名单及目标 query 合并，通知和浏览器回跳共用规则，不依赖当前 HTTP 请求。 */
 final class EpayV1MessageService
@@ -41,12 +46,12 @@ final class EpayV1MessageService
             $pay['biz_no'] !== $biz['biz_no'] ||
             $biz['active_pay_no'] !== $pay['pay_no']
         ) {
-            throw new \LogicException('未确认业务成功，不能生成易支付成功消息');
+            throw new LogicException('未确认业务成功，不能生成易支付成功消息');
         }
         $type = $pay['ext_json']['payment_context']['pay_type'] ?? null;
         $param = $biz['ext_json']['param'] ?? '';
-        if (!\app\common\validation\PaymentTypeCode::valid($type) || !is_string($param)) {
-            throw new \RuntimeException('原始协议上下文缺失');
+        if (!PaymentTypeCode::valid($type) || !is_string($param)) {
+            throw new RuntimeException('原始协议上下文缺失');
         }
         $parameters = [
             'pid' => $pid,
@@ -72,7 +77,7 @@ final class EpayV1MessageService
      */
     public function signForTarget(string $target, array $parameters, string $key): array
     {
-        $query = UrlEncodedForm::parse(HttpTargetPolicy::uri($target)->getQuery(), 128);
+        $query = UrlEncodedForm::parseQuery(HttpTargetPolicy::uri($target)->getQuery());
         foreach (self::SUCCESS_FIELDS as $field) {
             unset($query[$field]);
         }
@@ -83,12 +88,25 @@ final class EpayV1MessageService
         return $query;
     }
 
-    /** @param array<string|int,string> $signedParameters 已合并目标 query 的完整冻结参数。 */
+    /**
+     * query 已合并进签名参数；保留原 URI 的其他部分，不再解析随后会被替换的旧 query。
+     * 本入口核验实际输出的 query 与完整长度，认领端不重复检查；HTTP 层仍独立核验网络目标。
+     * @param array<string|int,string> $signedParameters 已合并目标 query 的完整冻结参数。
+     */
     public function targetUrl(string $target, array $signedParameters): string
     {
-        return (string) HttpTargetPolicy::uri($target)->withQuery(
-            http_build_query($signedParameters, '', '&', PHP_QUERY_RFC3986),
-        );
+        $uri = HttpTargetPolicy::uri($target);
+        $query = http_build_query($signedParameters, '', '&', PHP_QUERY_RFC3986);
+        UrlEncodedForm::parseQuery($query, 256);
+        $url = (string) $uri->withQuery($query);
+        // 原 URI 已核验，原生编码和 withQuery 只替换参数；这里只补核验变化后的总长度。
+        if (mb_strlen($url, 'UTF-8') > HttpTargetPolicy::MAX_REQUEST_URL_LENGTH) {
+            throw new BusinessException(
+                '完整目标 URL 超过允许长度',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
+        }
+        return $url;
     }
 
     /**
@@ -107,15 +125,15 @@ final class EpayV1MessageService
                 ($biz['active_pay_no'] !== null ||
                     (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS))
         ) {
-            throw new \RuntimeException('查询的业务单与支付单不一致');
+            throw new RuntimeException('查询的业务单与支付单不一致');
         }
         $type = $pay === null ? '' : $pay['ext_json']['payment_context']['pay_type'] ?? null;
         $param = $biz['ext_json']['param'] ?? '';
         if (
             !is_string($param) ||
-            ($pay !== null && !\app\common\validation\PaymentTypeCode::valid($type))
+            ($pay !== null && !PaymentTypeCode::valid($type))
         ) {
-            throw new \RuntimeException('查询的原始协议上下文无效');
+            throw new RuntimeException('查询的原始协议上下文无效');
         }
         return [
             'code' => 1,

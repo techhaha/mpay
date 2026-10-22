@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\common\payment;
 
+use app\common\base\BasePayment;
 use app\common\constant\ApiResponseConstant;
 use app\common\constant\TradeConstant;
 use app\common\interface\ReceiptCollectorInterface;
@@ -21,15 +22,17 @@ use DateTimeImmutable;
 use DateTimeZone;
 use LogicException;
 use RuntimeException;
+use think\Request;
+use think\Response;
 use think\Cache;
 use think\Config;
 use think\facade\Db;
 
 /** 收钱吧码牌插件：SDK 处理登录及交易页，本类解释成功状态、原交易金额、方式、终端和备注。 */
-final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
+final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptCollectorInterface
 {
     /** @var array<string,mixed> 随代码交付的元信息和配置字段列表，不含实际账号秘密。 */
-    private array $paymentInfo = [
+    protected array $paymentInfo = [
         'code' => 'shouqianba_receipt',
         'name' => '收钱吧码牌收款',
         'version' => '1.0.0',
@@ -136,58 +139,15 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
         private readonly SafeLogger $logger,
     ) {}
 
-    /** @var array<string,mixed> 本次实例的原配置，不能序列化给页面或日志。 */
-    private array $channelConfig = [];
-
-    public function init(array $channelConfig): void
-    {
-        $this->channelConfig = $channelConfig;
-    }
-
-    private function getConfig(string $key, mixed $default = null): mixed
-    {
-        return $this->channelConfig[$key] ?? $default;
-    }
-
-    public function getCode(): string
-    {
-        return $this->paymentInfo['code'];
-    }
-    public function getDescription(): string
-    {
-        return $this->paymentInfo['description'] ?? '';
-    }
-    public function getName(): string
-    {
-        return $this->paymentInfo['name'];
-    }
-    public function getVersion(): string
-    {
-        return $this->paymentInfo['version'];
-    }
-    public function getEnabledPayTypes(): array
-    {
-        return $this->paymentInfo['pay_types'];
-    }
-    public function getConfigSchema(): array
-    {
-        return $this->paymentInfo['config_schema'];
-    }
     public function isPreloginEnabled(): bool
     {
         return $this->paymentInfo['prelogin'] ?? false;
     }
 
-    /** 本插件仅生成本地识别材料，原订单下重复准备会复用已持久化的金额和备注。 */
-    public function canRetryPay(): bool
-    {
-        return true;
-    }
-
     /** 按当前通道准备识别值并生成静态码材料；事务提交后返回 pending，不推进交易成功。 */
     public function pay(array $order): array
     {
-        $prepared = $this->prepareReceipt($order['pay_no']);
+        $prepared = $this->prepareReceipt($order['pay_no'], $order['channel_id']);
         $meta = $this->receiptMeta($prepared['ext_json']);
         return [
             'status' => 'pending',
@@ -203,7 +163,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
                 'pay_params' => [
                     '_page' => 'receiptQrcode',
                     'qrcode_content' => $this->getConfig('receipt_qrcode_content') ?: null,
-                    'qrcode_image_url' => $this->getConfig('receipt_qrcode_image_url'),
+                    'qrcode_image_url' => $order['assets']['receipt_qrcode_image'] ?? null,
                     'instruction' => $meta['match_mode'] === 'remark' ? 'manual_remark' : 'scan',
                     'remark' => $meta['remark'],
                 ],
@@ -215,16 +175,16 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
      * 先保存原金额，再把 pay_amount 改为识别金额；刷新/执行恢复复用同一份准备结果。
      * 插件由派发服务在事务外调用，本方法拥有自己的数据库事务，锁顺序与生命周期一致。
      */
-    private function prepareReceipt(string $payNo): PayOrder
+    private function prepareReceipt(string $payNo, string $channelId): PayOrder
     {
         $observed = $this->orders->find($payNo) ?? throw new RuntimeException('收款支付单不存在');
-        return Db::transaction(function () use ($observed, $payNo): PayOrder {
+        return Db::transaction(function () use ($observed, $payNo, $channelId): PayOrder {
             $biz = $this->businessOrders->lock($observed['biz_no']);
             $pay = $this->orders->lock($payNo);
             // 同一通道跨应用、跨配置版本使用同一行锁；不反向锁其他订单。
             $this->channels->lock($pay['channel_id']);
             if (
-                $pay['channel_id'] !== $this->getConfig('channel_id') ||
+                $pay['channel_id'] !== $channelId ||
                 $pay['biz_no'] !== $biz['biz_no']
             ) {
                 throw new LogicException('插件与支付单通道不一致');
@@ -369,11 +329,16 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
     }
 
     /**
-     * 一次匹配本响应全部记录，只使用服务提供的原单集合；已消费记录不重新分配。
+     * 当前通道整批匹配；复用本轮调度的候选快照，已消费记录不重新分配。
      * 付款在原窗口内但响应迟到仍可定位；最终状态和幂等由生命周期锁内复核。
      */
-    public function matchReceipts(array $receipts, array $orders, array $channels): array
+    public function notify(Request|array $payload, array $context): array
     {
+        if ($payload instanceof Request) {
+            throw new UnsupportedPaymentOperationException();
+        }
+        $receipts = $payload['records'];
+        $orders = $payload['orders'];
         usort(
             $receipts,
             static fn(array $a, array $b): int => strcmp(
@@ -399,12 +364,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             $seen[$record['event_key']] = true;
             $byChannel = [];
             foreach ($orders as $pay) {
-                $channel = $channels[$pay['channel_revision_id']] ?? null;
-                if (
-                    $channel === null ||
-                    $channel['channel_id'] !== $pay['channel_id'] ||
-                    $pay['pay_type'] !== $record['pay_type']
-                ) {
+                if (($pay['ext_json']['payment_context']['pay_type'] ?? null) !== $record['pay_type']) {
                     continue;
                 }
                 if (!array_key_exists($pay['pay_no'], $prepared)) {
@@ -437,7 +397,7 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             }
             $candidates = array_values(
                 array_filter(
-                    $byChannel === [] ? [] : reset($byChannel),
+                    $byChannel[$context['channel_id']] ?? [],
                     static fn(array $pay): bool => !isset($used[$pay['pay_no']]),
                 ),
             );
@@ -467,6 +427,16 @@ final class ShouQianBaReceiptPayment implements ReceiptCollectorInterface
             ];
         }
         return $results;
+    }
+
+    public function notifySuccess(): string|Response
+    {
+        throw new UnsupportedPaymentOperationException();
+    }
+
+    public function notifyFail(string $message): string|Response
+    {
+        throw new UnsupportedPaymentOperationException();
     }
 
     /** 监听来源不调用上游订单查询；到账仍经通知或采集确认，不以本地材料证明成功。 */

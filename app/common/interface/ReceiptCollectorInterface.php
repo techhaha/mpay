@@ -25,16 +25,6 @@ interface ReceiptCollectorInterface extends PaymentInterface
     public function collect(array $orders, array $channels, DateTimeImmutable $deadline): iterable;
 
     /**
-     * 整批逐笔匹配，不合单、不拆单、不写成功状态；消费标记由服务附加，旧流水不得换绑。
-     *
-     * @param list<array{record:array<string,mixed>,consumed_pay_no:?string}> $receipts 本次有效记录，最多 200 条。
-     * @param array<string,array<string,mixed>> $orders 本批允许匹配的原单快照，形状同 collect；按 channel_id 区分候选，不能用真实账号代替通道。
-     * @param array<string,array<string,mixed>> $channels 本批覆盖的通道版本。
-     * @return list<array<string,mixed>> 标准通知结果；未匹配不返回，每笔订单/流水最多出现一次。
-     */
-    public function matchReceipts(array $receipts, array $orders, array $channels): array;
-
-    /**
      * prelogin=true 时才调度；插件合并账号、判断间隔，正式查单已处理的账号不再探测。
      * 无登录态的平台返回空迭代结果；本方法不消费流水或确认订单。
      *

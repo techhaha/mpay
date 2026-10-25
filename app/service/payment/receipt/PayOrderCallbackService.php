@@ -97,9 +97,8 @@ final class PayOrderCallbackService extends BaseService
             }
             // 同一请求只解析一次；所有结果先核验结构，再逐笔提交，最后才发送 ACK。
             $results = $this->results->validateList($plugin->notify($request, $input), $context->payNo);
-            if ($results === []) {
-                throw new BusinessException('通知未匹配到符合收款条件的订单', ApiResponseConstant::CONFLICT);
-            }
+            // 插件可对已认证且明确无需入账的消息返回 []；正常应答且不创建流水或通知。
+            // 真正的入账匹配失败仍由插件抛错，不能用空结果掩盖拒绝或运行异常。
             $failure = null;
             foreach ($results as $result) {
                 try {

@@ -205,6 +205,8 @@ final class PayOrderRepository extends BaseRepository
     /**
      * 按明确通道、插件、金额及调用插件给出的时间条件提供候选；备注和模式只由插件解释。
      * 本地关闭/超时保留原付款窗口。分页取齐候选，不能截断后宣称唯一。
+     * paidUntil 仅用于来源时间具有精度区间的情况；缺省仍按原 paidAt 秒值查询。
+     * 区间与微信消息窗口的交集由银行插件计算，本仓储不解释银行格式。
      * @return iterable<PayOrder>
      */
     public function receiptCandidates(
@@ -213,7 +215,11 @@ final class PayOrderRepository extends BaseRepository
         int $amount,
         ?string $paidAt,
         string $now,
+        ?string $paidUntil = null,
     ): iterable {
+        if ($paidUntil !== null && ($paidAt === null || $paidUntil < $paidAt)) {
+            throw new InvalidArgumentException('收款候选时间区间无效');
+        }
         $after = '0';
         do {
             $query = $this->model
@@ -231,7 +237,7 @@ final class PayOrderRepository extends BaseRepository
             if ($paidAt === null) {
                 $query->where('expire_at', '>', $now);
             } else {
-                $query->where('request_at', '<=', $paidAt)->where('expire_at', '>', $paidAt);
+                $query->where('request_at', '<=', $paidUntil ?? $paidAt)->where('expire_at', '>', $paidAt);
             }
             $rows = $query->order('id')->limit(500)->select();
             foreach ($rows as $row) {

@@ -40,6 +40,17 @@
 .cashier-countdown {display:flex;flex-direction:column;justify-content:center;gap:6px;padding-left:16px;border-left:1px solid var(--mpay-border)}
 .cashier-countdown strong {font-size:28px;line-height:1.2;font-weight:600;font-variant-numeric:tabular-nums;color:var(--mpay-primary-dark)}
 
+/* 银行资料沿用公共色板与间距，金额只使用顶部公共金额区，窄屏自动换行。 */
+.cashier-bank-intro {text-align:center;margin:4px 0 24px}
+.cashier-bank-intro>.layui-btn {margin:12px 0 0}
+.cashier-bank-details {margin:0 0 24px}
+.cashier-bank-details>div {display:grid;grid-template-columns:76px minmax(0,1fr) auto;align-items:center;gap:12px;padding:16px 0;border-bottom:1px solid var(--mpay-border)}
+.cashier-bank-details>div:first-child {padding-top:0}
+.cashier-bank-details dt {color:var(--mpay-muted);font-size:13px}
+.cashier-bank-details dd {margin:0;line-height:1.7;overflow-wrap:anywhere;user-select:all}
+.cashier-bank-details .layui-btn {margin:0}
+.cashier-bank-number {font-variant-numeric:tabular-nums;font-weight:600;letter-spacing:.5px}
+
 /* 提示区仅显示准备、异常及商户确认；详情和刷新归入同一辅助区。 */
 .cashier-notice {margin-top:20px;padding:14px 16px;border-radius:8px;background:var(--mpay-info-soft);color:var(--mpay-link);line-height:1.8;overflow-wrap:anywhere}
 .cashier-error {margin-top:12px;color:var(--mpay-danger-text);background:var(--mpay-danger-soft);border-radius:8px;padding:12px;line-height:1.7;overflow-wrap:anywhere}
@@ -74,6 +85,8 @@
 .cashier-success-details summary {cursor:pointer}
 .cashier-success-details .cashier-order {margin-top:14px}
 @media(max-width:600px) {
+    .cashier-bank-details>div {grid-template-columns:64px minmax(0,1fr);gap:8px 12px;padding:14px 0}
+    .cashier-bank-details .layui-btn {grid-column:2;justify-self:start}
     .cashier-page {padding:20px 16px;border-radius:10px}
     .cashier-header {margin-bottom:20px;padding-bottom:16px}
     .cashier-amount>strong {font-size:36px}

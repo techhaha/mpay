@@ -132,7 +132,7 @@ final class MigrationService
                 // 初装字典先于该步 complete 写入；已安装后不重新添加管理员删除的支付方式。
                 if ($step->table === 'ma_payment_type') {
                     $this->pdo->exec(
-                        "INSERT INTO ma_payment_type (code,name,enabled) VALUES ('alipay','支付宝',1),('wxpay','微信支付',1),('unionpay','云闪付',0) ON DUPLICATE KEY UPDATE code=VALUES(code)",
+                        "INSERT INTO ma_payment_type (code,name,enabled) VALUES ('alipay','支付宝',1),('wxpay','微信支付',1),('unionpay','云闪付',0),('bank','银行卡转账',1) ON DUPLICATE KEY UPDATE code=VALUES(code)",
                     );
                 }
                 if ($step->table === 'ma_payment_plugin') {

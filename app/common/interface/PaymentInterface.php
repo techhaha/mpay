@@ -65,11 +65,12 @@ interface PaymentInterface extends PayPluginInterface
      *     ext_json:array<string,mixed>,request_at:?string,expire_at:string,created_at:string
      * }>} $payload
      * @param array{channel_id:string,pay_no?:string} $context 服务定位的入口，不能由外部正文覆盖。
-     * @return list<array<string,mixed>> 标准成功结果；合法采集无匹配返回 []，错误抛异常。
+     * @return list<array<string,mixed>> 标准成功结果；合法采集无匹配，或 HTTP 已认证且明确非入账时返回 []。
+     * HTTP 入账无法匹配、认证/格式错误及运行故障必须抛异常，不能当作正常忽略。
      */
     public function notify(Request|array $payload, array $context): array;
 
-    /** 所有相关结果确认后才返回协议成功应答；内部采集不调用此方法。 */
+    /** 相关结果均确认后，或明确非入账无需确认时返回成功应答；内部采集不调用。 */
     public function notifySuccess(): string|Response;
 
     /** $message 仅接收可公开业务提示，不能传入 SQL、堆栈或秘密。 */

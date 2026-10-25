@@ -14,7 +14,7 @@ layui.use('layer', function () {
     const error = message => { find('error').textContent = message || ''; find('error').hidden = !message; };
     const notice = message => { find('notice').textContent = message; find('notice').hidden = !message; };
     const stoppedViews = {
-        expired:{label:'付款已超时',icon:'time',title:'付款时间已结束',message:'请勿继续向此收款码付款。',
+        expired:{label:'付款已超时',icon:'time',title:'付款时间已结束',message:'此订单的付款时间已结束，请勿继续付款。',
             detail:'如果已经付款，请检查支付结果，或联系商户核对。'},
         closed:{label:'已关闭',icon:'close',title:'订单已关闭',message:'此订单已停止收款，请勿继续付款。',
             detail:'如果已经付款，请检查支付结果，或联系商户核对。'},

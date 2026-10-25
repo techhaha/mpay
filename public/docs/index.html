@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="description" content="MPAY 本地易支付 V1 接口文档：页面下单、API 下单、通知验签、查单和退款。">
-    <meta name="mpay-doc-source-sha256" content="1914838b3edcf2376b0a3e28a4013fccc10c74359d7e273c0d18fbb392e46db3">
+    <meta name="mpay-doc-source-sha256" content="af13a2dead01c8c4a64a5bd0ff5d7d181d675ea6df793879ce21934342670db9">
     <title>易支付 V1 接口文档 · MPAY</title>
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="/assets/layui/css/layui.css">
@@ -356,6 +356,11 @@ echo $result[&#39;payurl&#39;];</code></pre></div>
 <td>wxpay</td>
 <td>微信支付</td>
 <td>应用有可用微信通道</td>
+</tr>
+<tr>
+<td>bank</td>
+<td>银行卡转账</td>
+<td>应用有可用银行卡通道；按收银台金额转账，由银行公众号监听确认</td>
 </tr>
 </tbody></table>
 </div><p><code>mapi.php</code> 的 <code>device</code> 接受下表值，缺省或空串为 <code>pc</code>；<code>submit.php</code> 按付款浏览器识别环境，不使用传入值覆盖识别结果。</p>

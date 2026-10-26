@@ -33,3 +33,5 @@ __pycache__/
 /node_modules
 package.json
 package-lock.json
+# 本地代理协作约定保留在工作区，不发布到远程仓库。
+AGENTS.md

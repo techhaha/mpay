@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace app\service\system\runtime;
 
-use app\common\util\Clock;
 use app\exception\RateLimitStorageException;
 use app\service\system\access\RequestRateLimiter;
 use ErrorException;
@@ -14,7 +13,7 @@ use UnexpectedValueException;
 /** 清理旧技术日志、已退出进程心跳及短期访问缓存；交易、流水、通知、审计和密钥不在此范围。 */
 final class RuntimePruneService
 {
-    public function __construct(private readonly App $app, private readonly Clock $clock) {}
+    public function __construct(private readonly App $app) {}
 
     /**
      * 原生 File 在读取时处理 TTL；维护额外回收长期不再访问的文件，不解析缓存格式。
@@ -202,7 +201,8 @@ final class RuntimePruneService
         ) {
             return false;
         }
-        $now = $this->clock->now()->getTimestamp();
+        // 文件保留期按本机 Unix 时间判断；扫描/删除前的安全复核保持独立执行。
+        $now = time();
         if ($kind === 'log') {
             return pathinfo($path, PATHINFO_EXTENSION) === 'log' &&
                 filemtime($path) < $now - $logDays * 86400;

@@ -18,8 +18,7 @@ use app\model\payment\PayOrder;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
-use DateTimeImmutable;
-use DateTimeZone;
+use InvalidArgumentException;
 use JsonException;
 use LogicException;
 use RuntimeException;
@@ -415,7 +414,8 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
      * 保持 V2 的标题/正文选择、通知时间和 SF 监听编号语义；编号并非支付宝官方交易号。
      * SmsForwarder HMAC 不覆盖正文，平台验收仍需核对发送工具和所用通知模板。
      *
-     * @return array<string,mixed> 金额为整数分，paid_at 使用上海时区。
+     * @return array<string,mixed> 金额为整数分，paid_at 使用应用上海时区。
+     * @throws ReceiptMessageException 来源、格式或金额无效；原始参数错误只在金额解析处归类。
      */
     private function receipt(Request $request, string $channelId): array
     {
@@ -467,16 +467,19 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
                 0,
                 30,
             );
-        $time = (new DateTimeImmutable('@' . intdiv($message['timestamp'], 1000)))->setTimezone(
-            new DateTimeZone('Asia/Shanghai'),
-        );
+        try {
+            $cents = Money::parse($amount[1]);
+        } catch (InvalidArgumentException) {
+            // 外部消息金额不合法属于通知拒绝，保留金额上限校验。
+            throw new ReceiptMessageException('invalid_message');
+        }
         return [
             'pay_type' => 'alipay',
             'event_key' => $reference,
             // 手机消息没有支付宝交易号；合成编号仅用于事件去重。
             'trade_no' => null,
-            'amount' => Money::parse($amount[1]),
-            'paid_at' => $time->format('Y-m-d H:i:s'),
+            'amount' => $cents,
+            'paid_at' => date('Y-m-d H:i:s', intdiv($message['timestamp'], 1000)),
             'remark' => $remark,
         ];
     }

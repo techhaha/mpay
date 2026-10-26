@@ -5,16 +5,17 @@ namespace app\service\system\config;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\system\SystemConfig;
 use app\repository\system\SystemConfigRepository;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
+use LogicException;
+use RuntimeException;
 use think\Config;
 
 /**
- * 系统公开设置的版本读取与保存；未配置组使用部署默认，损坏或不可读时明确失败。
+ * 固定系统设置组的版本读取与保存；未配置组使用部署默认，损坏或不可读时明确失败。
  * 不把数据库配置复制进全局容器缓存：HTTP 和常驻 CLI 每次使用时读取，防止保存成功后工作进程仍永久使用旧值。
  */
 final class SystemConfigService extends BaseService
@@ -24,23 +25,22 @@ final class SystemConfigService extends BaseService
         private readonly SystemConfigValidator $validator,
         private readonly Config $config,
         private readonly ConfigurationAuditService $audit,
-        private readonly Clock $clock,
     ) {}
 
-    /** @return array{group:string,version:int,source:string,values:array<string,int|list<string>>} version=0 表示该组尚未保存。 */
+    /** @return array{group:string,version:int,source:string,values:array<string,int|string|list<string>>} version=0 表示该组尚未保存。 */
     public function read(string $group): array
     {
         $key = $this->key($group);
         return $this->describe($group, $this->settings->find($key));
     }
 
-    /** @return array<string,int|list<string>> 业务使用方只读取自己消费的组，不批量载入无关配置。 */
+    /** @return array<string,int|string|list<string>> 业务使用方只读取自己消费的组，不批量载入无关配置。 */
     public function values(string $group): array
     {
         return $this->read($group)['values'];
     }
 
-    /** @return list<array{group:string,version:int,source:string,values:array<string,int|list<string>>}> 管理页的一致视图，不含部署密钥、环境文件或平台配置。 */
+    /** @return list<array{group:string,version:int,source:string,values:array<string,int|string|list<string>>}> 管理页的一致视图，仅管理员设置页面使用；图鉴凭证不得流入公开页面或日志。 */
     public function all(): array
     {
         return $this->transaction(
@@ -53,7 +53,7 @@ final class SystemConfigService extends BaseService
 
     /**
      * @param array<string,mixed> $values 完整替换当前组；不修改旧订单有效期、冻结通道或通知签名。
-     * @return array{group:string,version:int,source:string,values:array<string,int|list<string>>}
+     * @return array{group:string,version:int,source:string,values:array<string,int|string|list<string>>}
      * @throws BusinessException 身份撤销、版本冲突或输入无效。
      */
     public function save(
@@ -85,7 +85,14 @@ final class SystemConfigService extends BaseService
                     ApiResponseConstant::STALE_VERSION,
                 );
             }
-            $changed = $previous['values'] != $values;
+            // 字段顺序不影响配置；数字字符串中的前导零仍是凭证的一部分。
+            $changed = false;
+            foreach ($values as $field => $value) {
+                if ($previous['values'][$field] !== $value) {
+                    $changed = true;
+                    break;
+                }
+            }
             // 首次保存即使等于默认值也显式固定到数据库；之后才可把同值请求记为 unchanged。
             $version =
                 $row !== null && !$changed
@@ -94,7 +101,7 @@ final class SystemConfigService extends BaseService
                         $key,
                         $row,
                         $values,
-                        $this->clock->now()->format('Y-m-d H:i:s'),
+                        date('Y-m-d H:i:s'),
                     );
             $this->audit->record(
                 $actor,
@@ -128,17 +135,17 @@ final class SystemConfigService extends BaseService
         return 'mpay.' . $group;
     }
 
-    /** @return array{group:string,version:int,source:string,values:array<string,int|list<string>>} */
+    /** @return array{group:string,version:int,source:string,values:array<string,int|string|list<string>>} */
     private function describe(string $group, ?SystemConfig $row): array
     {
         if ($row !== null && (!is_array($row['value_json']) || (int) $row['version'] < 1)) {
-            throw new \RuntimeException('系统公开配置存储合同不一致');
+            throw new RuntimeException('系统公开配置存储合同不一致');
         }
         $values = $row === null ? $this->defaults($group) : $row['value_json'];
         try {
             $values = $this->validator->values($group, $values);
         } catch (BusinessException $error) {
-            throw new \RuntimeException('已保存的系统配置或部署默认无效', previous: $error);
+            throw new RuntimeException('已保存的系统配置或部署默认无效', previous: $error);
         }
         return [
             'group' => $group,
@@ -148,7 +155,7 @@ final class SystemConfigService extends BaseService
         ];
     }
 
-    /** @return array<string,mixed> 只列出实际消费的公开默认值，不遍历或导出整个框架 Config。 */
+    /** @return array<string,mixed> 只列出固定设置默认值，不遍历或导出整个框架 Config。 */
     private function defaults(string $group): array
     {
         return match ($group) {
@@ -160,7 +167,8 @@ final class SystemConfigService extends BaseService
             ],
             // 未保存的新装站点直接采用开启默认值，读取页面不补写配置记录。
             'page_display' => ['home_enabled' => 1, 'about_enabled' => 1],
-            default => throw new \LogicException('未知系统默认组'),
+            'captcha' => ['ttshitu_username' => '', 'ttshitu_password' => ''],
+            default => throw new LogicException('未知系统默认组'),
         };
     }
 }

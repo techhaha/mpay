@@ -74,9 +74,11 @@ const mount = function (host, order, params, context, autoTransfer = false) {
     };
     remark.querySelector('button').addEventListener('click', copy);
     const started = performance.now();
+    const remaining = () => Math.max(0, order.expires_at - order.server_time - Math.floor((performance.now() - started) / 1000));
     return {
+        active() { return !disposed && remaining() > 0; },
         tick() {
-            const seconds = Math.max(0, order.expires_at - order.server_time - Math.floor((performance.now() - started) / 1000));
+            const seconds = remaining();
             host.querySelector('.cashier-countdown strong').textContent = String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0');
             if (seconds === 0 && !expired) { expired = true; host.hidden = true; context.expired(); }
         },
@@ -85,4 +87,70 @@ const mount = function (host, order, params, context, autoTransfer = false) {
 };
 MpayCashierPages.register('page', 'receiptQrcode', (host, order, params, context) => mount(host, order, params, context));
 MpayCashierPages.register('page', 'alipayTransfer', (host, order, params, context) => mount(host, order, params, context, true));
+
+/** 动态码只消费一个公开付款链接；环境识别控制展示，不改变订单方式或确认付款。 */
+MpayCashierPages.register('page', 'dynamicReceipt', (host, order, params, context) => {
+    if (typeof params.payment_url !== 'string' || !params.payment_url) throw new Error('付款链接无效，请联系商户。');
+    const url = new URL(params.payment_url);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('付款链接无效，请联系商户。');
+    const page = mount(host, order, {qrcode_content:params.payment_url, instruction:'scan'}, context);
+    const guide = host.querySelector('.cashier-scan-guide');
+    guide.classList.add('cashier-dynamic-guide');
+    const title = guide.querySelector('.cashier-scan-title'), hint = guide.querySelector('.cashier-hint');
+    const name = MpayBrand.paymentAsset(order.pay_type)?.name || '对应付款应用';
+    host.querySelector('.cashier-payment-tip p').textContent = '金额已自动填写，请核对后付款';
+    const agent = navigator.userAgent;
+    const environment = /AlipayClient/i.test(agent) ? 'alipay' : /MicroMessenger/i.test(agent) ? 'wechat'
+        : /Mobile|Android|iPhone|iPad/i.test(agent) ? 'mobile' : 'pc';
+    const inside = environment === 'wechat' || environment === 'alipay';
+    const matching = environment === 'wechat' && order.pay_type === 'wxpay' || environment === 'alipay' && order.pay_type === 'alipay';
+    hint.textContent = environment === 'pc' ? '金额已填写，无需输入金额或备注。'
+        : '可长按识别二维码，或复制付款链接到' + name + '打开。';
+    if (inside && !matching) title.textContent = '请使用' + name + '完成付款';
+    if (matching) {
+        title.textContent = '请在' + name + '中完成付款';
+        hint.textContent = '如未自动打开，请点击下方按钮；付款后可返回查看结果。';
+    }
+    const actions = document.createElement('div'); actions.className = 'cashier-dynamic-actions';
+    const open = document.createElement('a');
+    open.className = 'layui-btn'; open.href = params.payment_url;
+    open.textContent = matching ? '前往' + name + '付款' : '打开付款页面';
+    open.hidden = !matching && environment !== 'mobile';
+    const copy = document.createElement('button');
+    copy.type = 'button'; copy.className = 'layui-btn layui-btn-primary'; copy.textContent = '复制付款链接';
+    const field = document.createElement('input');
+    field.type = 'text'; field.className = 'layui-input cashier-payment-link';
+    field.readOnly = true; field.hidden = true; field.value = params.payment_url;
+    field.setAttribute('aria-label', '付款链接，可选中手动复制');
+    actions.append(open, copy); guide.append(actions, field);
+    let disposed = false;
+    const opening = event => { if (!page.active()) { event.preventDefault(); page.tick(); } };
+    const copying = async () => {
+        if (!page.active()) { page.tick(); return; }
+        const copied = await MpayClipboard.writeText(params.payment_url);
+        if (disposed || !page.active()) return;
+        if (!copied) { field.hidden = false; field.focus(); field.select(); }
+        layui.layer.msg(copied ? '付款链接已复制，请在对应支付应用中打开' : '请长按或选中链接手动复制');
+    };
+    open.addEventListener('click', opening); copy.addEventListener('click', copying);
+    // 与网页跳转组件共用同页签原单标记；返回、刷新或重新挂载不再自动跳走。
+    const redirect = matching ? setTimeout(() => {
+        if (!page.active()) return;
+        try {
+            const key = 'mpay.cashier.jump.' + order.pay_no;
+            if (sessionStorage.getItem(key)) return;
+            sessionStorage.setItem(key, '1');
+        } catch { return; }
+        title.textContent = '正在前往' + name + '付款页面';
+        location.assign(params.payment_url);
+    }, 0) : null;
+    return {
+        tick() { page.tick(); },
+        destroy() {
+            disposed = true; clearTimeout(redirect);
+            open.removeEventListener('click', opening); copy.removeEventListener('click', copying);
+            page.destroy();
+        }
+    };
+});
 })();

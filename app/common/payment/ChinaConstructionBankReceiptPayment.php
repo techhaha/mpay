@@ -17,7 +17,6 @@ use app\model\payment\PayOrder;
 use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
-use DateTimeZone;
 use LogicException;
 use RuntimeException;
 use think\facade\Db;
@@ -211,13 +210,10 @@ final class ChinaConstructionBankReceiptPayment extends BasePayment implements P
         return $meta;
     }
 
+    /** 卡号格式由保存/启用入口按 schema 校验；这里只去除分组符，供展示及入账卡尾核对。 */
     private function configuredCardNumber(): string
     {
-        $number = str_replace([' ', '-'], '', $this->getConfig('card_number'));
-        if (!preg_match('/^[0-9]{12,19}$/D', $number)) {
-            throw new BusinessException('收款银行卡号配置无效', ApiResponseConstant::VALIDATION_FAILED);
-        }
-        return $number;
+        return str_replace([' ', '-'], '', $this->getConfig('card_number'));
     }
 
     /**
@@ -251,22 +247,20 @@ final class ChinaConstructionBankReceiptPayment extends BasePayment implements P
         if ($message['message_time'] < $receipt['event_at'] || $message['message_time'] - $receipt['event_at'] > 300) {
             throw new BusinessException('银行交易时间与公众号消息时间不一致', ApiResponseConstant::VALIDATION_FAILED);
         }
-        $zone = new DateTimeZone('Asia/Shanghai');
-        $date = $receivedAt->setTimezone($zone);
         $record = [
             'pay_type' => 'bank',
             'event_key' => $message['event_key'],
             'trade_no' => null,
             'amount' => $receipt['amount'],
-            'paid_at' => $date->setTimestamp($receipt['event_at'])->format('Y-m-d H:i:s'),
+            'paid_at' => $receivedAt->setTimestamp($receipt['event_at'])->format('Y-m-d H:i:s'),
             'remark' => null,
         ];
         // 分钟时间表示该分钟的区间；同时限制微信原消息必须在识别开始后、结束至多 300 秒内。
-        $windowStart = $date->setTimestamp(max(
+        $windowStart = $receivedAt->setTimestamp(max(
             $receipt['event_at'],
             $message['message_time'] - 300,
         ))->format('Y-m-d H:i:s');
-        $windowEnd = $date->setTimestamp(min(
+        $windowEnd = $receivedAt->setTimestamp(min(
             $receipt['event_at'] + $receipt['precision_seconds'] - 1,
             $message['message_time'],
         ))->format('Y-m-d H:i:s');
@@ -282,7 +276,7 @@ final class ChinaConstructionBankReceiptPayment extends BasePayment implements P
                 $this->getCode(),
                 $record['amount'],
                 $windowStart,
-                $date->format('Y-m-d H:i:s'),
+                $receivedAt->format('Y-m-d H:i:s'),
                 $windowEnd,
             ) as $candidate) {
                 if ($this->matchesReceipt($candidate, $record['amount'], $windowStart, $windowEnd)) {

@@ -5,7 +5,6 @@ namespace app\service\payment\config;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPluginConf;
@@ -35,7 +34,6 @@ final class PaymentChannelService extends BaseService
         private readonly PaymentCatalogRepository $catalog,
         private readonly PaymentPluginFactoryService $plugins,
         private readonly ReceiptScopeService $scopeAccess,
-        private readonly Clock $clock,
         private readonly DefaultRoutingService $defaults,
     ) {}
 
@@ -103,7 +101,7 @@ final class PaymentChannelService extends BaseService
         $this->channels->saveRules(
             $id,
             $input->record(),
-            $this->clock->now()->format('Y-m-d H:i:s'),
+            date('Y-m-d H:i:s'),
         );
         $revision = $this->revisions->freezeLocked($configuration, $this->channels->lock($id));
         $this->defaults->syncChannel($id, $input->payType, $input->participatesDefaultRoute);
@@ -158,7 +156,7 @@ final class PaymentChannelService extends BaseService
             }
             $this->assertPaymentTypeEnabled($types[0]);
         }
-        $this->channels->setEnabled($id, $enabled, $this->clock->now()->format('Y-m-d H:i:s'));
+        $this->channels->setEnabled($id, $enabled, date('Y-m-d H:i:s'));
         $this->audit->record(
             $actor,
             'channel.enabled',

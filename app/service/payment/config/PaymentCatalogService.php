@@ -5,7 +5,6 @@ namespace app\service\payment\config;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant as Code;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\PaymentPlugin;
 use app\repository\payment\config\PaymentCatalogRepository;
@@ -33,7 +32,6 @@ final class PaymentCatalogService extends BaseService
         private readonly PaymentPluginFactoryService $plugins,
         private readonly FileAssetService $files,
         private readonly ConfigurationAuditService $audit,
-        private readonly Clock $clock,
         private readonly DefaultRoutingService $defaults,
         private readonly PaymentPollGroupRepository $groups,
     ) {}
@@ -246,7 +244,7 @@ final class PaymentCatalogService extends BaseService
             $this->records->setEnabled(
                 $plugin,
                 $input['enabled'],
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s'),
             );
             $this->audit->record(
                 $actor,

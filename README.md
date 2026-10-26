@@ -211,6 +211,10 @@ MPAY 对外使用 **易支付 V1**。已有兼容模块的业务网站，通常�
 
 页面由 ThinkPHP 渲染，Layui 及品牌素材随程序本地交付。部署无需 Node 前端构建服务，也不需要 Redis、消息队列或 Workerman。Web PHP 与命令行 PHP 都需要满足依赖。
 
+GMP 按插件需要启用，不阻止基础版安装。V1 基础版附带固定版本的本地国密 SDK，不要求客户安装国密 Composer 包或修改 vendor；使用 SM2 的插件会在自身配置说明中提示 GMP 及安装失败处理，详见[按需启用 GMP](docs/wiki/V1-03-安装与环境要求.md#按需启用-gmp)。
+
+天阙、拉卡拉、星驿付、付呗和易宝的动态码插件按需另行安装，配置与使用见[动态码收款插件](docs/wiki/V1-34-动态码收款插件.md)。基础版提供公共支持，五款平台插件不包含在公共源码中。
+
 ### 两个常驻入口
 
 ```sh
@@ -307,6 +311,7 @@ docs/wiki/                 使用手册、接口及开发文档
 | [ThinkPHP](https://www.thinkphp.cn/) | Web 框架、路由、容器、ORM 与输入验证 |
 | [Layui](https://layui.dev/) | 后台表格、表单、弹层、日期及基础 UI 组件 |
 | [Guzzle](https://docs.guzzlephp.org/) | 平台请求与商户通知的 HTTP 客户端基础 |
+| [lpilp/splsm2](https://github.com/lpilp/simplesm2) | SM2/SM4 国密算法，固定版本随 V1 基础版提供并保留许可与来源 |
 
 感谢上游项目作者、维护者和贡献者。框架原有许可说明见 [LICENSE.txt](LICENSE.txt)，第三方组件的原有版权及许可证随源码保留。
 

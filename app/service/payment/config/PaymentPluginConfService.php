@@ -5,7 +5,6 @@ namespace app\service\payment\config;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\common\validation\PluginConfigValidator;
 use app\exception\BusinessException;
 use app\model\payment\PaymentPluginConf;
@@ -37,7 +36,6 @@ final class PaymentPluginConfService extends BaseService
         private readonly PaymentPluginFactoryService $plugins,
         private readonly PluginConfigValidator $validator,
         private readonly ConfigurationAuditService $audit,
-        private readonly Clock $clock,
         private readonly FileAssetService $files,
         private readonly ReceiptScopeService $scopeService,
     ) {}
@@ -140,7 +138,7 @@ final class PaymentPluginConfService extends BaseService
                 'enabled' => (int) $configuration['enabled'] === 1,
             ];
         }
-        $now = $this->clock->now()->format('Y-m-d H:i:s');
+        $now = date('Y-m-d H:i:s');
         $version = $this->configurations->replace(
             $configuration,
             $name,
@@ -168,7 +166,7 @@ final class PaymentPluginConfService extends BaseService
     ): void {
         $this->requireTransaction();
         $definition = $this->plugins->definition($configuration['plugin_code']);
-        $now = $this->clock->now()->format('Y-m-d H:i:s');
+        $now = date('Y-m-d H:i:s');
         $this->validator->validate($definition->configSchema, $configuration['config_json']);
         $this->validateAssets($definition, $configuration['config_json']);
         $this->configurations->setEnabled($configuration['id'], true, $now);

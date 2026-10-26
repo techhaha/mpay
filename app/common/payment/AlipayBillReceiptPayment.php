@@ -20,7 +20,6 @@ use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use DateTimeImmutable;
-use DateTimeZone;
 use LogicException;
 use RuntimeException;
 use think\Request;
@@ -691,7 +690,6 @@ final class AlipayBillReceiptPayment extends BasePayment implements ReceiptColle
             $paid = DateTimeImmutable::createFromFormat(
                 '!Y-m-d H:i:s',
                 $entry['booked_at'],
-                new DateTimeZone('Asia/Shanghai'),
             );
             if (!$paid || $paid->format('Y-m-d H:i:s') !== $entry['booked_at']) {
                 throw new ReceiptCollectionException('protocol_error', null, [

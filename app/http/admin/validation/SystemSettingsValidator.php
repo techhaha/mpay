@@ -15,7 +15,7 @@ final class SystemSettingsValidator extends Validate
         'group' => [
             'require',
             'string',
-            'in' => ['payment_defaults', 'maintenance', 'page_display'],
+            'in' => ['payment_defaults', 'maintenance', 'page_display', 'captcha'],
         ],
         'expected_version' => ['jsonInteger', 'between' => [0, 4294967294]],
         'values' => ['jsonObject'],

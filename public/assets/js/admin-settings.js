@@ -3,7 +3,8 @@ MpayAdmin.ready(function () {
     'use strict';
     const UI=MpayAdmin,forms=Array.from(document.querySelectorAll('[data-settings-group]'));if(!forms.length)return;
     const feedback=document.getElementById('admin-feedback'),refresh=document.getElementById('settings-refresh');
-    const fields={payment_defaults:['order_valid_seconds'],maintenance:['technical_log_days'],page_display:['home_enabled','about_enabled']};
+    const fields={payment_defaults:['order_valid_seconds'],maintenance:['technical_log_days'],page_display:['home_enabled','about_enabled'],captcha:['ttshitu_username','ttshitu_password']};
+    function value(input){return input.type==='checkbox'?(input.checked?1:0):input.type==='number'?Number(input.value):input.value;}
     const current=new Map(),stale=new Set(),dirty=new Set(),saving=new Set();let loading=false;
     function controls(){
         forms.forEach(form=>{
@@ -27,7 +28,7 @@ MpayAdmin.ready(function () {
     }
     function changed(form){
         const group=form.dataset.settingsGroup,previous=current.get(group);if(!previous)return;
-        const modified=fields[group].some(name=>{const input=form.elements[name];return (input.type==='checkbox'?(input.checked?1:0):Number(input.value))!==previous.values[name];});
+        const modified=fields[group].some(name=>value(form.elements[name])!==previous.values[name]);
         if(modified)dirty.add(group);else dirty.delete(group);
         form.querySelector('button[type=submit]').disabled=!modified;
         form.querySelector('[data-form-status]').textContent=modified?'有未保存的修改':'';
@@ -47,6 +48,7 @@ MpayAdmin.ready(function () {
                 fields[group].forEach(name=>{
                     const input=form.elements[name];
                     if(input.type==='checkbox'){values[name]=input.checked?1:0;return;}
+                    if(input.type!=='number'){values[name]=input.value;return;}
                     const text=input.value;if(!/^(0|[1-9][0-9]*)$/.test(text)||!Number.isSafeInteger(Number(text)))throw new Error('请输入范围内的整数');values[name]=Number(text);
                 });
                 saving.add(group);controls();UI.feedback(feedback,'');

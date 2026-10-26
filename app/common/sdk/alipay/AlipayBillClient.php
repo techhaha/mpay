@@ -8,7 +8,6 @@ use app\common\util\HttpClient;
 use app\exception\HttpRequestException;
 use app\exception\ReceiptCollectionException;
 use DateTimeImmutable;
-use DateTimeZone;
 use GuzzleHttp\Psr7\Request;
 use InvalidArgumentException;
 use JsonException;
@@ -100,14 +99,11 @@ final class AlipayBillClient
                 ]);
             }
         }
-        $zone = new DateTimeZone('Asia/Shanghai');
-        $format = static fn(int $time): string => (new DateTimeImmutable('@' . $time))
-            ->setTimezone($zone)
-            ->format('Y-m-d H:i:s');
+        // Unix 秒按应用上海时区输出；签名时间复用本次查询的业务时钟。
         $biz = [
             'bill_user_id' => $account['bill_user_id'],
-            'start_time' => $format($fromTimestamp),
-            'end_time' => $format($toTimestamp + 1),
+            'start_time' => date('Y-m-d H:i:s', $fromTimestamp),
+            'end_time' => date('Y-m-d H:i:s', $toTimestamp + 1),
             'page_no' => '1',
             'page_size' => (string) self::PAGE_SIZE,
         ];
@@ -117,7 +113,7 @@ final class AlipayBillClient
             'format' => 'JSON',
             'charset' => 'UTF-8',
             'sign_type' => 'RSA2',
-            'timestamp' => $now->setTimezone($zone)->format('Y-m-d H:i:s'),
+            'timestamp' => $now->format('Y-m-d H:i:s'),
             'version' => '1.0',
             'biz_content' => json_encode(
                 $biz,

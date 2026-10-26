@@ -22,6 +22,10 @@
 .cashier-scan-guide {text-align:center;margin:16px 0 20px}
 .cashier-scan-title {margin:0;color:var(--mpay-heading);font-size:16px;font-weight:600;line-height:1.6}
 .cashier-hint {margin:6px 0 0;color:var(--mpay-muted);line-height:1.7;font-size:13px;overflow-wrap:anywhere}
+.cashier-dynamic-guide {margin-bottom:24px}
+.cashier-dynamic-actions {display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:12px;margin-top:20px}
+.cashier-dynamic-actions>.layui-btn {box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;min-width:150px;min-height:44px;margin:0}
+.cashier-payment-link {margin-top:12px;font-size:13px;text-align:left}
 /* 跳转付款的提示、主操作和倒计时共用中轴，留白区分操作与底部辅助信息。 */
 .cashier-jump {display:flex;flex-direction:column;align-items:center;max-width:400px;margin:0 auto;padding:12px 0 24px;text-align:center}
 .cashier-jump-title {margin:0;color:var(--mpay-heading);font-size:15px;font-weight:500;line-height:1.7;overflow-wrap:anywhere}

@@ -858,10 +858,12 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
         return $records;
     }
 
-    /** 秒/毫秒时间戳及明确日期文本为 V2 已登记的接口表示；不以本地接收时间填补缺失值。 */
+    /**
+     * 保留 V2 的秒/毫秒时间戳及完整日期，不以接收时间填补缺失值。
+     * 时间戳对象须转上海时区；日期文本沿用应用时区并严格核对。
+     */
     private function paymentTime(mixed $value): DateTimeImmutable
     {
-        $zone = new DateTimeZone('Asia/Shanghai');
         if (
             (is_int($value) || is_string($value)) &&
             preg_match('/^[1-9][0-9]{8,12}$/D', (string) $value)
@@ -870,10 +872,10 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             if ($timestamp > 9999999999) {
                 $timestamp = intdiv($timestamp, 1000);
             }
-            return (new DateTimeImmutable('@' . $timestamp))->setTimezone($zone);
+            return (new DateTimeImmutable('@' . $timestamp))->setTimezone(new DateTimeZone('Asia/Shanghai'));
         }
         $date = is_string($value)
-            ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $zone)
+            ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value)
             : false;
         if (!$date || $date->format('Y-m-d H:i:s') !== $value) {
             throw new ReceiptCollectionException('protocol_error', null, [

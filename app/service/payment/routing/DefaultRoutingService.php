@@ -5,7 +5,6 @@ namespace app\service\payment\routing;
 
 use app\common\base\BaseService;
 use app\common\constant\RouteConstant;
-use app\common\util\Clock;
 use app\model\payment\PaymentType;
 use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\config\PaymentCatalogRepository;
@@ -21,7 +20,6 @@ final class DefaultRoutingService extends BaseService
         private readonly PaymentCatalogRepository $types,
         private readonly PaymentPollGroupRepository $groups,
         private readonly PaymentAppRepository $apps,
-        private readonly Clock $clock,
     ) {}
 
     /** 支付方式行须已锁定；重复执行保留组名称、策略和所有运营配置。 */
@@ -62,7 +60,7 @@ final class DefaultRoutingService extends BaseService
                 $binding['poll_group_id'] !== $groupId ||
                 (int) $binding['status'] !== 1
             ) {
-                $this->groups->bind($appId, $type['id'], $groupId, true, $this->now());
+                $this->groups->bind($appId, $type['id'], $groupId, true, date('Y-m-d H:i:s'));
             }
         }
     }
@@ -74,7 +72,7 @@ final class DefaultRoutingService extends BaseService
         foreach ($this->apps->all() as $row) {
             $app = $this->apps->lock($row['id']);
             if ((int) $app['use_default_route'] === 1) {
-                $this->groups->bind($app['id'], $type['id'], $groupId, true, $this->now());
+                $this->groups->bind($app['id'], $type['id'], $groupId, true, date('Y-m-d H:i:s'));
             }
         }
     }
@@ -112,10 +110,10 @@ final class DefaultRoutingService extends BaseService
                 in_array((string) $group['id'], $defaults, true) &&
                 (string) $group['id'] !== $target
             ) {
-                $this->groups->removeChannel((string) $group['id'], $channelId, $this->now());
+                $this->groups->removeChannel((string) $group['id'], $channelId, date('Y-m-d H:i:s'));
             }
         }
-        $this->groups->includeChannel($target, $channelId, $participates, $this->now());
+        $this->groups->includeChannel($target, $channelId, $participates, date('Y-m-d H:i:s'));
     }
 
     /** @return list<array{id:int|string,name:string}> 默认引用自动维护；自定义引用必须由管理员先解除。 */
@@ -137,7 +135,7 @@ final class DefaultRoutingService extends BaseService
         $defaults = $this->types->defaultGroupIds();
         foreach ($this->groups->groupsUsingChannel($id) as $group) {
             if (in_array((string) $group['id'], $defaults, true)) {
-                $this->groups->removeChannel((string) $group['id'], $id, $this->now());
+                $this->groups->removeChannel((string) $group['id'], $id, date('Y-m-d H:i:s'));
             }
         }
     }
@@ -168,10 +166,5 @@ final class DefaultRoutingService extends BaseService
             strcmp($a['id'], $b['id']),
         );
         return $types;
-    }
-
-    private function now(): string
-    {
-        return $this->clock->now()->format('Y-m-d H:i:s');
     }
 }

@@ -1,0 +1,121 @@
+{
+  "format": 1,
+  "public_support": [
+    "docs/wiki/V1-03-安装与环境要求.md",
+    "docs/wiki/V1-18-部署与后台任务.md",
+    "docs/wiki/examples/install-README.md",
+    "app/common/sdk/captcha/TtshituClient.php",
+    "app/http/admin/validation/SystemSettingsValidator.php",
+    "app/repository/system/SystemConfigRepository.php",
+    "app/service/system/config/SystemConfigService.php",
+    "app/service/system/config/SystemConfigValidator.php",
+    "public/assets/js/admin-settings.js",
+    "view/admin/settings.html",
+    "docs/wiki/V1-29-后台设置与日常检查.md",
+    "public/assets/js/cashier-receipt.js",
+    "public/assets/css/cashier.css",
+    "view/cashier/index.html",
+    "view/cashier/success.html",
+    "docs/wiki/V1-21-开发环境与目录结构.md",
+    "docs/wiki/V1-25-主动采集与会话协作.md",
+    "docs/wiki/V1-30-收银台页面与扩展.md",
+    "docs/wiki/V1-34-动态码收款插件.md"
+  ],
+  "crypto": [
+    "app/common/sdk/crypto/GuomiCrypto.php",
+    "app/common/sdk/crypto/third_party/splsm2/.gitattributes",
+    "app/common/sdk/crypto/third_party/splsm2/SimpleSm2.php",
+    "app/common/sdk/crypto/third_party/splsm2/SimpleSm4.php",
+    "app/common/sdk/crypto/third_party/splsm2/Sm2Asn1.php",
+    "app/common/sdk/crypto/third_party/splsm2/Sm2Ecc.php",
+    "app/common/sdk/crypto/third_party/splsm2/Sm2Point.php",
+    "app/common/sdk/crypto/third_party/splsm2/Sm3.php",
+    "app/common/sdk/crypto/third_party/splsm2/Sm4.php",
+    "app/common/sdk/crypto/third_party/splsm2/LICENSE.txt",
+    "app/common/sdk/crypto/third_party/splsm2/SOURCE.json",
+    "app/common/sdk/crypto/third_party/splsm2/LICENSE-APACHE-2.0.txt",
+    "app/common/sdk/crypto/third_party/splsm2/NOTICE.txt"
+  ],
+  "plugins": [
+    {
+      "code": "tianque_pretran_receipt",
+      "files": [
+        "app/common/payment/TianquePretranReceiptPayment.php",
+        "app/common/sdk/tianquepretran/TianquePretranClient.php"
+      ],
+      "requires": [
+        "public_support"
+      ],
+      "extensions": [
+        "openssl"
+      ]
+    },
+    {
+      "code": "lakala_jfy_receipt",
+      "files": [
+        "app/common/payment/LakalaJfyReceiptPayment.php",
+        "app/common/sdk/lakalajfy/LakalaJfyClient.php"
+      ],
+      "requires": [
+        "public_support",
+        "crypto"
+      ],
+      "extensions": [
+        "openssl"
+      ]
+    },
+    {
+      "code": "xingyifu_yhk_receipt",
+      "files": [
+        "app/common/payment/XingyifuYhkReceiptPayment.php",
+        "app/common/sdk/xingyifuyhk/XingyifuYhkClient.php"
+      ],
+      "requires": [
+        "public_support",
+        "crypto"
+      ],
+      "extensions": [
+        "openssl",
+        "gmp"
+      ]
+    },
+    {
+      "code": "fubei_cashier_receipt",
+      "files": [
+        "app/common/payment/FubeiCashierReceiptPayment.php",
+        "app/common/sdk/fubeicashier/FubeiCashierClient.php"
+      ],
+      "requires": [
+        "public_support"
+      ],
+      "extensions": [
+        "openssl"
+      ]
+    },
+    {
+      "code": "yeepay_boss_cashier_receipt",
+      "files": [
+        "app/common/payment/YeepayBossCashierReceiptPayment.php",
+        "app/common/sdk/yeepaycashier/YeepayCashierClient.php"
+      ],
+      "requires": [
+        "public_support",
+        "crypto"
+      ],
+      "extensions": [
+        "openssl",
+        "gmp"
+      ]
+    }
+  ],
+  "presentation": {
+    "page": "page",
+    "name": "dynamicReceipt",
+    "parameters": [
+      "payment_url"
+    ],
+    "base_support_required": true
+  },
+  "base_branch": "v1",
+  "installation": "Install only plugins[].files; public_support and crypto are provided by the V1 base."
+}

@@ -14,6 +14,10 @@ Thumbs.db
 /docs/*
 !/docs/README.md
 !/docs/wiki/
+!/docs/paid-plugins/
+/docs/paid-plugins/*
+!/docs/paid-plugins/README.md
+!/docs/paid-plugins/delivery.json
 /runtime
 # 根目录部署、测试、诊断及验收工具仅在本地保留，不进入远程源码仓库。
 /tools

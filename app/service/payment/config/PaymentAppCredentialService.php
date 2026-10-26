@@ -4,7 +4,6 @@ declare(strict_types=1);
 namespace app\service\payment\config;
 
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\PaymentApp;
 use app\model\payment\PaymentAppKey;
@@ -17,7 +16,6 @@ final class PaymentAppCredentialService
     public function __construct(
         private readonly PaymentAppRepository $apps,
         private readonly PaymentAppKeyRepository $keys,
-        private readonly Clock $clock,
     ) {}
 
     /** 调用方已读取/锁定应用；不单独查询活动指针，避免拼接两次读取的不同版本。 */
@@ -65,7 +63,7 @@ final class PaymentAppCredentialService
             );
         }
         $id = $this->keys->append($appId, $secret, hash('sha256', $secret));
-        $this->apps->activateKey($app, $id, $this->clock->now()->format('Y-m-d H:i:s'));
+        $this->apps->activateKey($app, $id, date('Y-m-d H:i:s'));
         $key = $this->keys->version($appId, $id) ?? throw new \RuntimeException('新增凭证缺失');
         return ['id' => $id, 'version' => (int) $key['version'], 'key' => $secret];
     }

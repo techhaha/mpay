@@ -32,8 +32,8 @@ final class SystemConfigRepository extends BaseRepository
     }
 
     /**
-     * @param array<string,int|list<string>> $values 服务已按固定组校验的完整公开值。
-     * @return int 保存后的逻辑版本；不触碰其他配置键或任何敏感配置正文。
+     * @param array<string,int|string|list<string>> $values 服务已按固定组校验的完整设置值。
+     * @return int 保存后的逻辑版本；不触碰其他配置键，值正文不进入审计日志。
      */
     public function savePublic(string $key, ?SystemConfig $current, array $values, string $now): int
     {

@@ -4,16 +4,16 @@ declare(strict_types=1);
 namespace app\http\page;
 
 use app\common\base\BaseAdminController;
-use app\common\util\Clock;
 use app\service\system\access\AdminAuthService;
 use app\service\system\access\AdminSessionService;
 use app\service\system\config\SystemConfigService;
 use app\service\system\install\WebInstallService;
+use DateTimeImmutable;
 use think\Config;
 use think\exception\HttpException;
 use think\Response;
 
-/** 后台模板入口，只渲染公开身份、表单 token 和日期默认值；统计、列表和管理动作由受保护同源 API 完成。 */
+/** 后台模板只渲染身份、表单 token 和本机当天的日期默认值；交易事实由受保护同源 API 提供。 */
 final class AdminController extends BaseAdminController
 {
     /** 后台独立入口不受公开首页开关影响；认证由目标页面负责，首次无配置时进入安装。 */
@@ -56,9 +56,9 @@ final class AdminController extends BaseAdminController
     }
 
     /** 仅提供页面和服务端日期默认值，订单事实由受保护同源 API 读取。 */
-    public function orders(AdminSessionService $sessions, Clock $clock): Response
+    public function orders(AdminSessionService $sessions): Response
     {
-        $today = $clock->now();
+        $today = new DateTimeImmutable('today');
         return $this->pageView('admin/orders', [
             'title' => '交易订单 · MPAY',
             'csrf_token' => $sessions->csrfToken(),
@@ -68,34 +68,34 @@ final class AdminController extends BaseAdminController
         ]);
     }
 
-    public function dashboard(AdminSessionService $sessions, Clock $clock): Response
+    public function dashboard(AdminSessionService $sessions): Response
     {
         return $this->pageView('admin/dashboard', [
             'title' => '工作台 · MPAY',
             'csrf_token' => $sessions->csrfToken(),
             'username' => $this->identity()['username'],
-            'date' => $clock->now()->format('Y-m-d'),
+            'date' => date('Y-m-d'),
         ]);
     }
 
-    public function receipts(AdminSessionService $sessions, Clock $clock): Response
+    public function receipts(AdminSessionService $sessions): Response
     {
-        return $this->records('receipts', '到账流水', $sessions, $clock);
+        return $this->records('receipts', '到账流水', $sessions);
     }
 
-    public function notifications(AdminSessionService $sessions, Clock $clock): Response
+    public function notifications(AdminSessionService $sessions): Response
     {
-        return $this->records('notifications', '商户通知', $sessions, $clock);
+        return $this->records('notifications', '商户通知', $sessions);
     }
 
-    public function ingress(AdminSessionService $sessions, Clock $clock): Response
+    public function ingress(AdminSessionService $sessions): Response
     {
-        return $this->records('ingress', '通道回调日志', $sessions, $clock);
+        return $this->records('ingress', '通道回调日志', $sessions);
     }
 
-    public function audit(AdminSessionService $sessions, Clock $clock): Response
+    public function audit(AdminSessionService $sessions): Response
     {
-        return $this->records('audit', '操作日志', $sessions, $clock);
+        return $this->records('audit', '操作日志', $sessions);
     }
 
     /** 配置正文由认证 API 按版本提供；模板仅输出身份和 CSRF，不把平台秘密嵌入 HTML。 */
@@ -174,9 +174,8 @@ final class AdminController extends BaseAdminController
         string $kind,
         string $title,
         AdminSessionService $sessions,
-        Clock $clock,
     ): Response {
-        $today = $clock->now();
+        $today = new DateTimeImmutable('today');
         return $this->pageView('admin/records', [
             'title' => $title . ' · MPAY',
             'heading' => $title,

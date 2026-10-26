@@ -4,6 +4,17 @@
 <section class="admin-intro"><h1>系统设置</h1><div class="admin-actions"><button id="settings-refresh" type="button" class="layui-btn layui-btn-primary">重新读取</button></div></section>
 <div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
 <div class="settings-cards">
+    <section class="layui-card" aria-labelledby="settings-captcha-title">
+        <div class="layui-card-header" id="settings-captcha-title">验证码识别</div>
+        <div class="layui-card-body">
+            <form data-settings-group="captcha" class="layui-form settings-form" novalidate><fieldset disabled>
+                <div class="admin-field"><label for="ttshitu-username">图鉴账号</label><input id="ttshitu-username" name="ttshitu_username" type="text" maxlength="128" class="layui-input" autocomplete="off"></div>
+                <div class="admin-field"><label for="ttshitu-password">图鉴密码</label><input id="ttshitu-password" name="ttshitu_password" type="password" maxlength="256" class="layui-input" lay-affix="eye" autocomplete="new-password"></div>
+                <p class="settings-hint">供需要验证码登录的收款插件使用。</p>
+                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存图鉴设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
+            </fieldset></form>
+        </div>
+    </section>
     <section class="layui-card" aria-labelledby="settings-pages-title">
         <div class="layui-card-header" id="settings-pages-title">页面显示</div>
         <div class="layui-card-body">
@@ -37,4 +48,4 @@
 </div>
 <details class="layui-card admin-details"><summary class="layui-card-header">站点信息</summary><div class="layui-card-body"><span id="settings-origin"></span><p class="admin-hint">支持多个访问域名，无需保存固定站点网址。</p></div></details>
 {/block}
-{block name="scripts"}<script src="/assets/js/admin-settings.js?v=20261015boundaries"></script>{/block}
+{block name="scripts"}<script src="/assets/js/admin-settings.js?v=20261025captcha"></script>{/block}

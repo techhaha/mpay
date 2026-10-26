@@ -5,7 +5,6 @@ namespace app\service\payment\config;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant as Code;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\PaymentChannel;
 use app\model\payment\PaymentPluginConf;
@@ -35,7 +34,6 @@ final class PaymentChannelEditorService extends BaseService
         private readonly PaymentCatalogRepository $catalog,
         private readonly DefaultRoutingService $defaults,
         private readonly PaymentChannelRevisionService $revisions,
-        private readonly Clock $clock,
         private readonly PaymentCatalogService $management,
     ) {}
 
@@ -307,7 +305,7 @@ final class PaymentChannelEditorService extends BaseService
             $this->defaults->removeChannel($channel['id']);
             $this->channels->markDeleted(
                 $channel['id'],
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s'),
             );
             $this->audit->record(
                 $actor,

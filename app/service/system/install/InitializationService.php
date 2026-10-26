@@ -5,7 +5,6 @@ namespace app\service\system\install;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\repository\payment\config\PaymentAppKeyRepository;
 use app\repository\payment\config\PaymentAppRepository;
@@ -28,7 +27,6 @@ final class InitializationService extends BaseService
         private readonly PaymentAppRepository $apps,
         private readonly PaymentAppKeyRepository $versions,
         private readonly AdminOperationLogRepository $logs,
-        private readonly Clock $clock,
     ) {}
 
     /** @return array<string,mixed> 只读初始化状态；schema_pending / empty / initialized / nonempty / inconsistent 均不包含秘密正文。 */
@@ -134,7 +132,7 @@ final class InitializationService extends BaseService
                 $this->app
                     ->make(\app\service\payment\routing\DefaultRoutingService::class)
                     ->applyToApp($appId);
-                $now = $this->clock->now()->format('Y-m-d H:i:s');
+                $now = date('Y-m-d H:i:s');
                 $references = [
                     'admin_id' => $adminId,
                     'app_id' => $appId,

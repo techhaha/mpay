@@ -3,13 +3,12 @@ declare(strict_types=1);
 
 namespace app\service\system\runtime;
 
-use app\common\util\Clock;
 use think\App;
 
 /** 读取本机工作者心跳的有限快照；共享锁配合现有 CLI 写锁，不探测 PID、不把心跳当设备或平台在线。 */
 final class RuntimeStatusService
 {
-    public function __construct(private readonly App $app, private readonly Clock $clock) {}
+    public function __construct(private readonly App $app) {}
 
     /**
      * 无目录、不可读、格式异常或扫描超限均不能宣称正常；不读取文件名白名单以外的内容。
@@ -19,7 +18,8 @@ final class RuntimeStatusService
     {
         $latest = ['work' => 0, 'watch' => 0];
         $running = ['work' => false, 'watch' => false];
-        $now = $this->clock->now()->getTimestamp();
+        // 与 CLI 心跳写入使用同一本机 Unix 时间，不参与交易调度。
+        $now = time();
         $directory = rtrim($this->app->getRuntimePath(), '/\\') . '/workers';
         $complete = true;
         $ignored = 0;

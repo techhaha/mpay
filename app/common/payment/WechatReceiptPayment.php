@@ -19,9 +19,9 @@ use app\repository\payment\config\PaymentChannelRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use DateTimeImmutable;
-use DateTimeZone;
 use DOMNode;
 use DOMXPath;
+use InvalidArgumentException;
 use JsonException;
 use LogicException;
 use RuntimeException;
@@ -417,7 +417,12 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         return [$this->receiptResult($this->locateReceipt($record, $context['channel_id']), $record)];
     }
 
-    /** @return array<string,mixed> 已按明确消息来源解析的标准流水，不携带平台原文。 */
+    /**
+     * 按明确来源解析手机或 PC 消息，不携带平台原文。
+     *
+     * @return array<string,mixed> 已解析的标准流水。
+     * @throws ReceiptMessageException 来源、格式或金额无效，不将技术故障转换为通知拒绝。
+     */
     private function receipt(Request $request, string $channelId): array
     {
         $message = $this->notificationValidator->validateInput(
@@ -478,9 +483,14 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
                 0,
                 30,
             );
+        try {
+            $cents = Money::parse($amount[1]);
+        } catch (InvalidArgumentException) {
+            throw new ReceiptMessageException('invalid_message');
+        }
         return $this->record(
             $reference,
-            Money::parse($amount[1]),
+            $cents,
             intdiv($message['timestamp'], 1000),
             $remark,
         );
@@ -545,7 +555,6 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             $date = DateTimeImmutable::createFromFormat(
                 '!Y-m-d H:i:s',
                 $fields['到账时间'] ?? '',
-                new DateTimeZone('Asia/Shanghai'),
             );
             if (!$date || $date->format('Y-m-d H:i:s') !== $fields['到账时间']) {
                 throw new ReceiptMessageException('invalid_message');
@@ -577,9 +586,18 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
                 '/^[¥￥]\s*(\d+(?:\.\d{1,2})?)\s*(?:元)?$/u',
                 $fields['收款金额'] ?? '',
                 $fieldMoney,
-            ) ||
-            Money::parse($titleMoney[1]) !== Money::parse($fieldMoney[1])
+            )
         ) {
+            throw new ReceiptMessageException('unsupported_message');
+        }
+        try {
+            $cents = Money::parse($titleMoney[1]);
+            $fieldCents = Money::parse($fieldMoney[1]);
+        } catch (InvalidArgumentException) {
+            // 只归类外部金额错误；缓存、快照等技术故障不在这里转换。
+            throw new ReceiptMessageException('invalid_message');
+        }
+        if ($cents !== $fieldCents) {
             throw new ReceiptMessageException('unsupported_message');
         }
         $key = $payload['delivery']['messageKey'] ?? '';
@@ -602,7 +620,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         $remark = $fields['付款方备注'] ?? null;
         return $this->record(
             $reference,
-            Money::parse($titleMoney[1]),
+            $cents,
             $timestamp,
             $remark === '' ? null : $remark,
         );
@@ -611,15 +629,12 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
     /** @return array<string,mixed> 手机/PC 消息编号只作事件键；未取得微信交易号时明确留空。 */
     private function record(string $reference, int $amount, int $timestamp, ?string $remark): array
     {
-        $date = (new DateTimeImmutable('@' . $timestamp))->setTimezone(
-            new DateTimeZone('Asia/Shanghai'),
-        );
         return [
             'pay_type' => 'wxpay',
             'event_key' => $reference,
             'trade_no' => null,
             'amount' => $amount,
-            'paid_at' => $date->format('Y-m-d H:i:s'),
+            'paid_at' => date('Y-m-d H:i:s', $timestamp),
             'remark' => $remark,
         ];
     }

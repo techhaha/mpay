@@ -1,0 +1,18 @@
+Bundled third-party source attribution
+
+Primary package: lpilp/splsm2 2.0.1
+Source: https://github.com/lpilp/simplesm2
+Revision: d51b5b7eb5816b29561e9f4761dfe47221da5f96
+Package license declaration: MIT (see LICENSE.txt).
+
+Sm3.php, Sm4.php and SimpleSm4.php retain source headers crediting
+lizhichao/sm (https://github.com/lizhichao/sm), distributed on Packagist
+as lizhichao/one-sm. That project's composer.json declares Apache-2.0.
+The Apache license text is included as LICENSE-APACHE-2.0.txt in addition
+to the primary package's MIT notice. Original author and source headers
+are retained in the delivered PHP files.
+
+MPAY preserves the seven algorithm files byte-for-byte from the fixed
+primary package. Their SHA-256 values are recorded in SOURCE.json.
+MPAY's random-source and platform encoding adapter is outside this
+third_party directory, in GuomiCrypto.php.

@@ -5,7 +5,6 @@ namespace app\service\payment\routing;
 
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\repository\payment\config\PaymentAppRepository;
 use app\repository\payment\config\PaymentCatalogRepository;
@@ -24,7 +23,6 @@ final class PaymentPollGroupService extends BaseService
         private readonly PaymentCatalogRepository $catalog,
         private readonly PaymentRouteService $routes,
         private readonly ConfigurationAuditService $audit,
-        private readonly Clock $clock,
     ) {}
 
     /** @return array{items:list<array>,bindings:list<array>,types:array} 管理投影，不含平台配置秘密。 */
@@ -180,7 +178,7 @@ final class PaymentPollGroupService extends BaseService
                 $mode,
                 $enabled,
                 $remark,
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s'),
             );
             $this->audit->record($actor, 'poll_group.save', 'payment_poll_group', $id, 'updated', [
                 'enabled' => $enabled,
@@ -227,19 +225,21 @@ final class PaymentPollGroupService extends BaseService
                     ApiResponseConstant::VALIDATION_FAILED,
                 );
             }
+            // 相关锁和校验完成后取记录时间，绑定与默认模式变更共用同一读数。
+            $now = date('Y-m-d H:i:s');
             $this->groups->bind(
                 $appId,
                 $type['id'],
                 $groupId,
                 $enabled,
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                $now,
             );
             // 显式保存某一方式绑定即为自定义意图；CLI 与后台执行同一规则。
             if ((int) $app['use_default_route'] === 1) {
                 $this->apps->setDefaultRoute(
                     $app,
                     false,
-                    $this->clock->now()->format('Y-m-d H:i:s'),
+                    $now,
                 );
             }
             $this->audit->record($actor, 'application.bind', 'payment_app', $appId, 'updated', [

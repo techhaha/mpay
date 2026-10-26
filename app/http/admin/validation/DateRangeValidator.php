@@ -4,13 +4,12 @@ declare(strict_types=1);
 namespace app\http\admin\validation;
 
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\exception\BusinessException;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use think\Validate;
 
-/** 后台列表共用上海时区的自然日范围；默认值只用于未提供日期，不把非法输入纠正为另一日。 */
+/** 后台列表使用应用默认时区的自然日范围；缺省日期取本机当天，不把非法输入纠正为另一日。 */
 final class DateRangeValidator extends Validate
 {
     protected $rule = [
@@ -27,11 +26,6 @@ final class DateRangeValidator extends Validate
             'dateFormat' => 'Y-m-d',
         ],
     ];
-
-    public function __construct(private readonly Clock $clock)
-    {
-        parent::__construct();
-    }
 
     /**
      * 调用入口另行拒绝未知字段，本验证器仅提取两个日期。
@@ -54,7 +48,7 @@ final class DateRangeValidator extends Validate
                 unset($values[$key]);
             }
         }
-        $today = $this->clock->now()->setTime(0, 0);
+        $today = new DateTimeImmutable('today');
         $values += [
             'start_date' => $today->modify('-' . ($defaultDays - 1) . ' days')->format('Y-m-d'),
             'end_date' => $today->format('Y-m-d'),

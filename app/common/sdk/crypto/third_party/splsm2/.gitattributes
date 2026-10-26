@@ -1,0 +1,5 @@
+# Preserve the vendored upstream bytes recorded in SOURCE.json.
+*.php -text
+LICENSE.txt -text
+LICENSE-APACHE-2.0.txt -text
+NOTICE.txt -text

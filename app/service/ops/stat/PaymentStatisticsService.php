@@ -6,7 +6,6 @@ namespace app\service\ops\stat;
 use app\common\base\BaseService;
 use app\common\constant\TradeConstant;
 use app\common\constant\NotifyConstant;
-use app\common\util\Clock;
 use app\common\util\Money;
 use app\repository\ops\PaymentStatisticsRepository;
 use app\service\system\runtime\RuntimeStatusService;
@@ -23,7 +22,6 @@ final class PaymentStatisticsService extends BaseService
     public function __construct(
         private readonly PaymentStatisticsRepository $statistics,
         private readonly RuntimeStatusService $runtime,
-        private readonly Clock $clock,
     ) {}
 
     /**
@@ -90,9 +88,10 @@ final class PaymentStatisticsService extends BaseService
                 ),
             ];
         });
-        // 文件读取在数据库事务外；平台在线状态始终未知，不能从某条心跳推断。
+        // 文件读取在数据库事务外；observed_at 仅供展示，不参与统计口径或交易判断。
+        // 平台在线状态始终未知，不能从某条心跳推断。
         return $result + [
-            'observed_at' => $this->clock->now()->format('Y-m-d H:i:s'),
+            'observed_at' => date('Y-m-d H:i:s'),
             'runtime' => $this->runtime->workers(),
             'device_status' => 'unknown',
         ];

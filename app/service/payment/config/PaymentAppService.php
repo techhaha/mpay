@@ -7,7 +7,6 @@ use app\service\system\audit\ConfigurationAuditService;
 use app\service\system\audit\ConfigurationActionContext;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
-use app\common\util\Clock;
 use app\common\util\HttpTargetPolicy;
 use app\exception\BusinessException;
 use app\model\payment\PaymentApp;
@@ -24,7 +23,6 @@ final class PaymentAppService extends BaseService
         private readonly ConfigurationAuditService $audit,
         private readonly AdminAuthService $auth,
         private readonly EpayV1Signer $signer,
-        private readonly Clock $clock,
         private readonly \app\service\payment\routing\DefaultRoutingService $defaults,
     ) {}
 
@@ -110,7 +108,7 @@ final class PaymentAppService extends BaseService
                 $name,
                 $enabled,
                 $hosts,
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                date('Y-m-d H:i:s'),
             );
             $this->audit->record($actor, 'application.save', 'payment_app', $id, 'updated', [
                 'enabled' => $enabled,
@@ -282,7 +280,7 @@ final class PaymentAppService extends BaseService
                 $this->apps->setDefaultRoute(
                     $app,
                     $useDefault,
-                    $this->clock->now()->format('Y-m-d H:i:s'),
+                    date('Y-m-d H:i:s'),
                 );
             }
             $this->audit->record($actor, 'application.routing', 'payment_app', $id, 'updated', [

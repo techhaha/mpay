@@ -9,7 +9,6 @@ use app\common\util\Money;
 use app\exception\BusinessException;
 use app\exception\ReceiptMessageException;
 use DateTimeImmutable;
-use DateTimeZone;
 use DOMXPath;
 use InvalidArgumentException;
 use JsonException;
@@ -138,7 +137,7 @@ final class BankReceiptMessage
         return $amount;
     }
 
-    /** 将已解析的上海时间分量转换为 Unix 秒，不使用宽松日期自动纠正。 */
+    /** 按应用上海时区将已核对的日期分量转为 Unix 秒，不使用宽松日期自动纠正。 */
     public function timestamp(
         int $year,
         int $month,
@@ -156,7 +155,6 @@ final class BankReceiptMessage
         $date = DateTimeImmutable::createFromFormat(
             '!Y-m-d H:i:s',
             sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $minute, $second),
-            new DateTimeZone('Asia/Shanghai'),
         );
         if ($date === false) {
             throw new ReceiptMessageException('invalid_message');

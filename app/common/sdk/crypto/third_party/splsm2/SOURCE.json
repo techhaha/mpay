@@ -1,0 +1,31 @@
+{
+  "source": "https://github.com/lpilp/simplesm2",
+  "license": "MIT AND Apache-2.0",
+  "retrieved": "2026-10-25",
+  "sha256": {
+    "SimpleSm2.php": "f957e31a1e730077b527894a4992038675d98a8fed5e7c69ceaa7ca350d169b6",
+    "SimpleSm4.php": "347f37d6f8eca2622d38cd9ab4ea4cc139ee129ddadf235e3876c6c1291f6836",
+    "Sm2Asn1.php": "30e12210f78cc440dc88327c82bc8bc35c0fd2d14ac4f74e0bb346954f8524f2",
+    "Sm2Ecc.php": "4db11c6aaa647a0c2e661be528b38d55ced43684bce791db8b04b8931b49d29c",
+    "Sm2Point.php": "862861d1c4f6247849f65280d3db2246b6e8d4d1b8b2f4931fb1484f2ab0605b",
+    "Sm3.php": "7af66be5137c881df4ae2ad1f1854a95e4ba9a47df29ebff7063d7d12078f7cf",
+    "Sm4.php": "79ba8f2955f3404e90cf93c61d24d827f61defd9d0c90b9d72c8d22643131ed6"
+  },
+  "version": "2.0.1",
+  "revision": "d51b5b7eb5816b29561e9f4761dfe47221da5f96",
+  "delivery": "Bundled V1 base SDK; not installed by Composer",
+  "license_notes": "The primary package declares MIT; retained SM3/SM4 source headers credit Apache-2.0 upstream. See LICENSE.txt and NOTICE.txt.",
+  "secondary_sources": [
+    {
+      "source": "https://github.com/lizhichao/sm",
+      "package": "lizhichao/one-sm",
+      "license": "Apache-2.0",
+      "attributed_files": [
+        "Sm3.php",
+        "Sm4.php",
+        "SimpleSm4.php"
+      ],
+      "license_file": "LICENSE-APACHE-2.0.txt"
+    }
+  ]
+}

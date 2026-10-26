@@ -36,7 +36,7 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
         'code' => 'shouqianba_receipt',
         'name' => '收钱吧码牌收款',
         'version' => '1.0.0',
-        'pay_types' => ['alipay', 'wxpay'],
+        'pay_types' => ['alipay', 'wxpay', 'unionpay'],
         'prelogin' => true,
         'config_schema' => [
             [
@@ -183,10 +183,7 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             $pay = $this->orders->lock($payNo);
             // 同一通道跨应用、跨配置版本使用同一行锁；不反向锁其他订单。
             $this->channels->lock($pay['channel_id']);
-            if (
-                $pay['channel_id'] !== $channelId ||
-                $pay['biz_no'] !== $biz['biz_no']
-            ) {
+            if ($pay['channel_id'] !== $channelId || $pay['biz_no'] !== $biz['biz_no']) {
                 throw new LogicException('插件与支付单通道不一致');
             }
             $ext = $pay['ext_json'] ?? [];
@@ -364,7 +361,10 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             $seen[$record['event_key']] = true;
             $byChannel = [];
             foreach ($orders as $pay) {
-                if (($pay['ext_json']['payment_context']['pay_type'] ?? null) !== $record['pay_type']) {
+                if (
+                    ($pay['ext_json']['payment_context']['pay_type'] ?? null) !==
+                    $record['pay_type']
+                ) {
                     continue;
                 }
                 if (!array_key_exists($pay['pay_no'], $prepared)) {
@@ -778,6 +778,7 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             $type = match ((string) ($row['payway'] ?? '')) {
                 '2' => 'alipay',
                 '3' => 'wxpay',
+                '17' => 'unionpay',
                 default => null,
             };
             if ($type === null) {
@@ -872,7 +873,9 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             if ($timestamp > 9999999999) {
                 $timestamp = intdiv($timestamp, 1000);
             }
-            return (new DateTimeImmutable('@' . $timestamp))->setTimezone(new DateTimeZone('Asia/Shanghai'));
+            return (new DateTimeImmutable('@' . $timestamp))->setTimezone(
+                new DateTimeZone('Asia/Shanghai'),
+            );
         }
         $date = is_string($value)
             ? DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value)

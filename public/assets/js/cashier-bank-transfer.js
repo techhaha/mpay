@@ -9,7 +9,8 @@
             || typeof params.card_number !== 'string' || !/^[0-9]{12,19}$/.test(params.card_number)) {
             throw new Error('银行卡收款资料无效，请联系商户。');
         }
-        host.innerHTML = '<div class="cashier-bank-intro"><p class="cashier-scan-title">银行卡转账</p>'
+        host.innerHTML = '<div class="cashier-payment-brand"></div>'
+            + '<div class="cashier-bank-intro"><p class="cashier-scan-title">银行卡转账</p>'
             + '<p class="cashier-hint">请向以下银行卡转入上方应付金额，到账后会自动更新订单。</p>'
             + '<button type="button" class="layui-btn layui-btn-sm layui-btn-primary" data-bank-copy="amount">复制应付金额</button></div>'
             + '<dl class="cashier-bank-details"><div><dt>收款银行</dt><dd class="cashier-bank-name"></dd></div>'
@@ -20,6 +21,8 @@
             + '<div class="cashier-receipt-guide"><div class="cashier-payment-tip"><span>转账提示</span>'
             + '<p>请严格按上方应付金额转账，无需填写付款备注。</p></div>'
             + '<div class="cashier-countdown"><span>剩余时间</span><strong></strong></div></div>';
+        const brand = MpayBrand.paymentImage(order.pay_type, true);
+        if (brand) host.querySelector('.cashier-payment-brand').append(brand);
         host.querySelector('.cashier-bank-name').textContent = params.bank_name;
         host.querySelector('.cashier-bank-account').textContent = params.account_name;
         host.querySelector('.cashier-bank-number').textContent = params.card_number.replace(/([0-9]{4})(?=[0-9])/g, '$1 ');

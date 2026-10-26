@@ -359,7 +359,8 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
         if (preg_match('/^二维码消费（尾号[0-9]{4}）$/uD', $type)) {
             return null;
         }
-        if (!preg_match('/^银联入账（尾号([0-9]{4})）$/uD', $type, $tail)) {
+        // 仅接受已核实的两种入账类型，共用卡尾提取及后续金额、时间和订单核验。
+        if (!preg_match('/^(?:银联入账|网上快捷提现)（尾号([0-9]{4})）$/uD', $type, $tail)) {
             throw new BusinessException('中国银行交易类型尚未验证为入账', ApiResponseConstant::VALIDATION_FAILED);
         }
         if (!preg_match('/^人民币\s*(.+)$/uD', $this->messages->field($description, '交易金额'), $money)) {

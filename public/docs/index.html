@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="description" content="MPAY 本地易支付 V1 接口文档：页面下单、API 下单、通知验签、查单和退款。">
-    <meta name="mpay-doc-source-sha256" content="af13a2dead01c8c4a64a5bd0ff5d7d181d675ea6df793879ce21934342670db9">
+    <meta name="mpay-doc-source-sha256" content="cc37d175067be045ed52add238f722c8eea4d8089efe93e214dfcab5d84cde12">
     <title>易支付 V1 接口文档 · MPAY</title>
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="/assets/layui/css/layui.css">
@@ -356,6 +356,11 @@ echo $result[&#39;payurl&#39;];</code></pre></div>
 <td>wxpay</td>
 <td>微信支付</td>
 <td>应用有可用微信通道</td>
+</tr>
+<tr>
+<td>unionpay</td>
+<td>云闪付</td>
+<td>应用有可用云闪付通道，例如已开通对应能力的收钱吧码牌通道</td>
 </tr>
 <tr>
 <td>bank</td>
@@ -1026,7 +1031,7 @@ echo $result[&#39;payurl&#39;];</code></pre></div>
 <p><code>refund_status</code> 独立表示内部状态，保持 0 处理中、1 成功、2 拒绝或未执行、3 结果未知；不能与协议 code 混用。<code>code=-1</code> 不证明平台一定未退款，处理中和结果未知仍保留金额占用，不能换号重复申请，也不会自动重发。</p>
 <p>明确拒绝与结果未知的异常说明分别记录在私有技术日志 <code>payment.refund_rejected</code> 和 <code>payment.refund_unknown</code>，可按 pay_no、refund_no、plugin_code 和 request_id 排查。说明由插件/SDK 脱敏，最多 2048 个 UTF-8 字节，超长带 message_truncated 标记；不将完整报文或凭证写入日志、数据库原因码或公开响应。</p>
 <p>读取订单快照、校验配置或初始化插件失败时，尚未进入 <code>refund()</code>，记录为状态 2，原因为“退款准备失败，尚未执行”，不占用可退额度。原退款号再次请求仍返回该失败记录；排除原因后发起新的退款申请应使用新的商户退款号。进入退款动作后发生超时、异常或无法验证返回结果，仍按结果未知保留额度，不能据此判断平台没有退款。</p>
-<p>当前微信/支付宝手机、支付宝账单、收钱吧码牌四个监听插件没有原路退款接口，由插件返回不支持，后台订单详情可查看请求记录。通用退款入口并不承诺任何未来平台的异步结果查询；引入该类插件前须补齐平台查询/回调及结果核对。原支付成功和已发送的付款通知不会因退款改成未支付。</p>
+<p>内置手机/PC、账单、码牌及银行卡监听插件没有原路退款接口，由插件返回不支持，后台订单详情可查看请求记录。通用退款入口并不承诺任何未来平台的异步结果查询；引入该类插件前须补齐平台查询/回调及结果核对。原支付成功和已发送的付款通知不会因退款改成未支付。</p>
 <p>易支付 V1 插件会调用其配置平台的退款接口，是否成功以原订单插件及平台实际结果为准。不要将查询的成功码 <code>1</code> 用于判断退款成功。</p>
 <h2 id="异步通知与返回页面" tabindex="-1">异步通知与返回页面</h2>
 <p>确认到账后，MPAY 默认向订单的 <code>notify_url</code> 发送付款结果。管理员人工确认时可以选择暂不发送异步通知，之后在后台放行；期间查询接口仍返回支付成功，但收银台须等商户有效确认后才允许返回。通知使用 GET 参数，包含：</p>

@@ -86,7 +86,7 @@ schema 声明在插件发现/定义阶段由 PluginDefinition 检查；配置值
 ## 示例
 
 ```php
-private array $paymentInfo = [
+protected array $paymentInfo = [
     'description' => "填写平台收款参数。\n账号信息可在平台管理页查看。",
     'config_schema' => [
         ['type' => 'select', 'field' => 'match_mode', 'title' => '匹配方式',

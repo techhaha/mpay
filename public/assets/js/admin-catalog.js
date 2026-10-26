@@ -13,7 +13,7 @@ MpayAdmin.ready(function () {
         directoryDialog.node.querySelector('[data-type-count]').textContent=UI.catalog.types.length+' 种';
         node.innerHTML='<table class="payment-types-table"></table>';
         UI.table({elem:node.querySelector('table'),data:UI.catalog.types,className:'admin-table-two-line',cols:[[
-            {title:'支付方式',width:140,unresize:true,align:'center',templet:type=>'<div class="admin-two-line">'+UI.payment(type.code)+'<small class="admin-row-sub">'+E(type.code)+'</small></div>'},
+            {title:'支付方式',width:180,unresize:true,align:'center',templet:type=>'<div class="admin-payment-type"><img src="'+E(type.icon||MpayBrand.fallbackImage)+'" alt=""><div class="admin-two-line"><span>'+E(type.name)+'</span><small class="admin-row-sub">'+E(type.code)+'</small></div></div>'},
             {field:'sort_order',title:'排序',width:80,align:'center'},
             {title:'状态',width:100,align:'center',templet:type=>enabledLabel(type.enabled)},
             // 单一支付方式保持固定宽度，由此列接收余宽，避免表体右侧留白；窄屏沿用官方横向滚动。
@@ -43,7 +43,7 @@ MpayAdmin.ready(function () {
 
     function editType(type) {
         const assets={icon:type?.icon_asset_id||null,logo:type?.logo_asset_id||null};
-        const imageField=(kind,title,url)=>'<div class="admin-field"><label>'+title+'</label><div class="admin-catalog-image" data-image-box="'+kind+'">'+(url?'<img src="'+E(url)+'" alt="'+title+'">':UI.icon('picture'))+'</div><div class="admin-inline-actions"><button type="button" class="layui-btn layui-btn-primary layui-btn-sm" data-image="'+kind+'">选择图片</button><button type="button" class="admin-link" data-default-image="'+kind+'">使用默认</button></div></div>';
+        const imageField=(kind,title,url)=>'<div class="admin-field"><label>'+title+'</label><div class="admin-catalog-image" data-image-box="'+kind+'"><img src="'+E(url||MpayBrand.fallbackImage)+'" alt="'+title+'"></div><div class="admin-inline-actions"><button type="button" class="layui-btn layui-btn-primary layui-btn-sm" data-image="'+kind+'">选择图片</button><button type="button" class="admin-link" data-default-image="'+kind+'">使用通用图标</button></div></div>';
         UI.form({title:type?'编辑支付方式 · '+type.name:'新增支付方式',width:680,
             content:'<div class="admin-form-grid">'+UI.field('名称',UI.input('name',type?.name||'','required maxlength="64"'),{required:true})+
                 UI.field('编码',UI.input('code',type?.code||'','required maxlength="32" pattern="[a-z][a-z0-9_]{0,31}"'+(type?.referenced?' readonly':'')),{required:true,help:'小写字母开头，可包含数字和下划线；接入网站使用此编码。已有引用时不可修改。'})+
@@ -63,7 +63,8 @@ MpayAdmin.ready(function () {
                 form.addEventListener('click',event=>{
                     const button=event.target.closest('[data-default-image]');if(!button)return;
                     const kind=button.dataset.defaultImage;assets[kind]=null;
-                    const box=form.querySelector('[data-image-box="'+kind+'"]');box.textContent='保存后使用默认标识';
+                    const box=form.querySelector('[data-image-box="'+kind+'"]');
+                    const image=document.createElement('img');image.alt=kind==='icon'?'小图标':'完整标识';image.src=MpayBrand.fallbackImage;box.replaceChildren(image);
                     button.dispatchEvent(new Event('change',{bubbles:true}));
                 });
             },

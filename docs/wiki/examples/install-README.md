@@ -48,6 +48,7 @@ HTTP 和 HTTPS 都可以访问，不需要填写 `COOKIE_SECURE` 或固定站点
 app/                  程序代码及内置插件
 config/               程序配置
 database/migrations/  一份最终新装建表定义
+database/seeds/       初装支付方式及品牌图片声明
 public/               网站公开入口、前端资源及空 storage 目录
 public/docs/          本地易支付 V1 接口文档及文本示例
 route/                路由

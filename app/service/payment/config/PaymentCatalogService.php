@@ -20,11 +20,7 @@ use app\service\system\audit\ConfigurationAuditService;
 /** 支付方式及本地插件目录的管理用例；开关只控制新单，存量执行继续按原配置完成。 */
 final class PaymentCatalogService extends BaseService
 {
-    private const BRANDS = [
-        'alipay' => ['alipay-icon.svg', 'alipay-logo.svg'],
-        'wxpay' => ['wechat-pay-icon.svg', 'wechat-pay-logo.svg'],
-        'unionpay' => ['cloudpay-icon.svg', 'cloudpay-logo.svg'],
-    ];
+    private const FALLBACK_IMAGE = '/assets/brand/payment-default.png';
 
     public function __construct(
         private readonly PaymentCatalogRepository $types,
@@ -36,12 +32,11 @@ final class PaymentCatalogService extends BaseService
         private readonly PaymentPollGroupRepository $groups,
     ) {}
 
-    /** @return list<array<string,mixed>> 标识图片只来自内置白名单或已登记的本地图片。 */
+    /** @return list<array<string,mixed>> 图片读取已保存资产引用；未配置时统一使用通用图标。 */
     public function types(bool $withReferences = true): array
     {
         $items = [];
         foreach ($this->types->all() as $row) {
-            $brand = self::BRANDS[$row['code']] ?? [null, null];
             $items[] = [
                 'id' => $row['id'],
                 'code' => $row['code'],
@@ -53,10 +48,10 @@ final class PaymentCatalogService extends BaseService
                 'logo_asset_id' => $row['logo_asset_id'],
                 'icon' =>
                     $this->files->publicImagePath($row['icon_asset_id']) ??
-                    ($brand[0] === null ? null : '/assets/brand/' . $brand[0]),
+                    self::FALLBACK_IMAGE,
                 'logo' =>
                     $this->files->publicImagePath($row['logo_asset_id']) ??
-                    ($brand[1] === null ? null : '/assets/brand/' . $brand[1]),
+                    self::FALLBACK_IMAGE,
                 'referenced' => $withReferences
                     ? $this->types->referenced($row['id'], $row['default_poll_group_id'])
                     : false,

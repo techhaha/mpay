@@ -77,7 +77,7 @@ final class MigrationService
     public function migrate(string $directory): array
     {
         $steps = $this->loadPlan($directory);
-        return $this->locked(function () use ($steps): array {
+        return $this->locked(function () use ($steps, $directory): array {
             $state = $this->state($steps);
             $this->checkSyntax($steps, $state['tables']);
             if (!isset($state['tables']['_mpay_migration_step'])) {
@@ -131,9 +131,13 @@ final class MigrationService
                 }
                 // 初装字典先于该步 complete 写入；已安装后不重新添加管理员删除的支付方式。
                 if ($step->table === 'ma_payment_type') {
-                    $this->pdo->exec(
-                        "INSERT INTO ma_payment_type (code,name,enabled) VALUES ('alipay','支付宝',1),('wxpay','微信支付',1),('unionpay','云闪付',0),('bank','银行卡转账',1) ON DUPLICATE KEY UPDATE code=VALUES(code)",
+                    $types = require dirname($directory) . '/seeds/payment_types.php';
+                    $insert = $this->pdo->prepare(
+                        'INSERT INTO ma_payment_type (code,name,enabled) VALUES (?,?,?) ON DUPLICATE KEY UPDATE code=VALUES(code)',
                     );
+                    foreach ($types as $type) {
+                        $insert->execute([$type['code'], $type['name'], $type['enabled']]);
+                    }
                 }
                 if ($step->table === 'ma_payment_plugin') {
                     // 仅初次安装初始化已交付插件；元信息读取不联网，写入仍严格使用本次迁移的 PDO。

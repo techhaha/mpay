@@ -149,6 +149,9 @@ a.admin-reference{color:var(--mpay-link)}
 
 /* 目录管理沿用表格对齐与品牌图标；两种图片预览保留原比例。 */
 .admin-catalog-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;margin:0 0 16px}
+.admin-payment-type{display:flex;align-items:center;gap:8px;width:112px;max-width:100%;margin:0 auto;text-align:left}
+.admin-payment-type>img{flex:0 0 19px;width:19px;height:19px;object-fit:contain}
+.admin-payment-type>.admin-two-line{flex:1}
 .admin-catalog-summary{display:flex;gap:24px;margin-bottom:20px;align-items:center;color:var(--mpay-muted)}
 .admin-catalog-summary>span{display:flex;align-items:center;gap:8px}
 .admin-catalog-table{min-width:620px}

@@ -6,13 +6,17 @@ namespace app\service\system\install;
 use app\common\base\BaseService;
 use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
+use app\repository\file\FileRecordRepository;
 use app\repository\payment\config\PaymentAppKeyRepository;
 use app\repository\payment\config\PaymentAppRepository;
+use app\repository\payment\config\PaymentCatalogRepository;
 use app\repository\system\AdminOperationLogRepository;
 use app\repository\system\AdminUserRepository;
 use app\repository\system\InitializationRepository;
+use app\service\file\FileAssetService;
 use app\service\payment\config\PaymentAppCredentialService;
 use think\App;
+use think\Filesystem;
 
 /**
  * 已迁移空业务库的首次初始化；命名锁与迁移共用，管理员/首个应用/凭证/标记/审计在一个业务事务提交。
@@ -126,6 +130,7 @@ final class InitializationService extends BaseService
                         ApiResponseConstant::CONFLICT,
                     );
                 }
+                $this->seedPaymentTypeImages();
                 $adminId = $this->admins->create($username, $hash);
                 $appId = $this->apps->create($number, $appName, []);
                 $credentialId = $credentials->rotateLocked($appId, null)['id'];
@@ -156,6 +161,84 @@ final class InitializationService extends BaseService
                 return $references + ['pid' => $number];
             });
         });
+    }
+
+    /**
+     * 初装图片与字典引用在初始化事务内登记；运行时不读取品牌种子或按支付编码补图。
+     * 文件无法随事务回滚，摘要路径允许中断后重用原文件，不删除提交结果未知的资产。
+     */
+    private function seedPaymentTypeImages(): void
+    {
+        $this->requireTransaction();
+        $root = rtrim(str_replace('\\', '/', $this->app->getRootPath()), '/');
+        $filesystem = $this->app->make(Filesystem::class);
+        if (
+            $filesystem->getDiskConfig('public', 'type') !== 'local' ||
+            rtrim(str_replace('\\', '/', (string) $filesystem->getDiskConfig('public', 'root')), '/') !==
+                $root . '/public/storage'
+        ) {
+            throw new \RuntimeException('支付方式图片仅支持本项目 public/storage 本地磁盘');
+        }
+        $types = $this->app->make(PaymentCatalogRepository::class);
+        $files = $this->app->make(FileRecordRepository::class);
+        $disk = $filesystem->disk('public');
+        $assets = [];
+        $seeds = require $root . '/database/seeds/payment_types.php';
+        foreach ($seeds as $seed) {
+            $type = $types->lockType($seed['code']) ??
+                throw new \RuntimeException('安装支付方式字典缺失：' . $seed['code']);
+            $values = [];
+            foreach (['icon', 'logo'] as $kind) {
+                $field = $kind . '_asset_id';
+                if ($type[$field] !== null) {
+                    continue;
+                }
+                $name = $seed[$kind];
+                $content = file_get_contents(
+                    $root . '/public/assets/brand/' . $name,
+                    false,
+                    null,
+                    0,
+                    FileAssetService::MAX_UPLOAD_BYTES + 1,
+                );
+                $info = $content === false ? false : @getimagesizefromstring($content);
+                if (
+                    $content === false ||
+                    strlen($content) > FileAssetService::MAX_UPLOAD_BYTES ||
+                    $info === false ||
+                    $info[2] !== IMAGETYPE_PNG ||
+                    $info[0] > FileAssetService::MAX_EDGE ||
+                    $info[1] > FileAssetService::MAX_EDGE ||
+                    $info[0] * $info[1] > FileAssetService::MAX_PIXELS
+                ) {
+                    throw new \RuntimeException('安装支付方式图片不可用：' . $name);
+                }
+                $digest = hash('sha256', $content);
+                if (!isset($assets[$digest])) {
+                    $path = 'payment-types/' . $digest . '.png';
+                    if ($disk->fileExists($path)) {
+                        if (hash_file('sha256', $root . '/public/storage/' . $path) !== $digest) {
+                            throw new \RuntimeException('安装支付方式图片摘要不符：' . $name);
+                        }
+                    } else {
+                        $disk->write($path, $content, ['visibility' => 'public']);
+                    }
+                    $assets[$digest] = $files->create([
+                        'storage' => 'local',
+                        'path' => $path,
+                        'original_name' => $name,
+                        'mime_type' => 'image/png',
+                        'size' => strlen($content),
+                        'sha256' => $digest,
+                        'admin_user_id' => null,
+                    ]);
+                }
+                $values[$field] = $assets[$digest];
+            }
+            if ($values !== []) {
+                $types->save($type, $values);
+            }
+        }
     }
 
     /**

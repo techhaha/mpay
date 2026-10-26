@@ -1,18 +1,26 @@
 # MPAY 界面素材
 
-素材来自用户提供的原 V1 旧版本与 MPAY V2 前端。来源相对路径、变体处理和当前 SHA-256 见 sources.json。所有素材随 V1 本地交付，不在运行时读取 V2 或其他网站。
+素材来源、变体处理与当前 SHA-256 见 sources.json。素材随 V1 交付，不在运行时读取 V2 或其他网站。
 
-## 当前使用
+## MPAY 标识
 
 - mpay-logo.svg：V2 标准矢量字标，用于登录、安装、收银台与错误页。
-- mpay-logo-light.svg：标准字标的深色背景版本，只将 PAY 字色改为浅色，用于当前旧 V1 深蓝灰侧栏；图形不变。
-- mpay-mark.svg：V2 独立品牌图形，用于收起的侧栏，不用文字 M 替代。
-- wechat-pay-logo.svg / alipay-logo.svg：V2 完整支付方式标识，用于收银台。
-- wechat-pay-icon.svg / alipay-icon.svg：提取对应 V2 SVG 中已有的品牌图形路径，用于后台、付款方式按钮；不变更路径和品牌色。
-- background.svg：保留的原 V1 登录/安装背景素材；当前页面采用公共浅灰背景。
+- mpay-logo-light.svg：深色背景版本，仅将 PAY 字色改浅，用于后台侧栏。
+- mpay-mark.svg：V2 独立图形，用于收起的侧栏。
+- mpay-logo.png、mpay-login.png、background.svg：原 V1 的 MPAY 品牌及背景素材；与支付方式图片分开维护。
 
-原 V1 PNG、JPG、ICO 保留为原始素材，当前页面改用上述 SVG。public/favicon.ico 仍为原 V1 favicon。云闪付使用 cloudpay-icon.svg / cloudpay-logo.svg：本项目绘制红色云形闪电与文字组合，属于支付方式识别图形，不声称是平台官方商标图稿；没有挪用 V2 的银联标识冒充云闪付。
+## 支付方式图片
 
-品牌图形只用于标明产品或实际付款方式，不代表平台认证；二维码区域不叠加标志。通用菜单和操作继续使用本地 Layui 图标，不混入另一套装饰图标。原项目与第三方版权、许可证不因复制或制作字色/视框变体而改变。
+支付方式的小图标、完整标识及通用兜底统一使用透明 PNG。已移除不再引用的支付方式 SVG，以及旧 JPG/ICO 图片，避免维护重复格式。
 
-小图标用于列表、应用卡片和支付方式选择按钮；完整带字标识仅用于收银台支付品牌区，不将横向字标缩到 20px 图标格内。支付方式编码 unionpay 的展示名称为云闪付，启用及插件支持情况仍由后端确定。
+- alipay-icon.png / alipay-logo.png：来自 V2 的支付宝图形和完整标识，保留品牌色与路径形状。
+- wechat-pay-icon.png / wechat-pay-logo.png：来自 V2 的微信支付图形和完整标识，保留品牌色与路径形状。
+- cloudpay-icon.png / cloudpay-logo.png：本项目绘制的红色云形闪电与“云闪付”文字，非平台官方商标图稿。
+- bank-icon.png / bank-logo.png：本项目绘制的蓝色圆角银行卡及“银行卡”文字，非特定银行商标。
+- payment-default.png：灰蓝通用收款符号，小图标和完整标识未配置时均使用这一张图片，不按编码猜测品牌。
+
+小图标宽 192px；完整标识高 96px，按原比例生成，不把横向字标缩进方形图标格。后台、收银台和首页的支付方式图片均使用 PNG。
+
+安装声明集中在 database/seeds/payment_types.php，首次初始化将品牌图片登记为普通本地图片资产并保存到支付方式配置。运行时只读取配置；管理员可上传替换，或选择“使用通用图标”清除对应引用。已有站点不自动运行种子回填。
+
+品牌图形只用于标明产品或实际付款方式，不代表平台认证。二维码区域不叠加标志，通用菜单和操作继续使用本地 Layui 图标。原项目与第三方版权、许可证不因制作图片变体而改变。public/favicon.ico 继续作为站点图标。

@@ -35,7 +35,7 @@
     const help = text => '<button type="button" class="admin-help-button" data-help="' + escape(text) + '" aria-label="查看说明">' + icon('about') + '</button>';
     function payment(code) {
         const asset = MpayBrand.paymentAsset(code);
-        return '<span class="admin-pay-label">' + (asset?.icon ? '<img src="' + escape(asset.icon) + '" alt="">' : icon('template-1')) + escape(paymentLabels[code] || code) + '</span>';
+        return '<span class="admin-pay-label"><img src="' + escape(asset?.icon || MpayBrand.fallbackImage) + '" alt="">' + escape(paymentLabels[code] || code) + '</span>';
     }
     function badge(label, tone = 'gray') { return '<span class="layui-badge admin-tag ' + escape(tone) + '">' + escape(label) + '</span>'; }
     function state(label) {

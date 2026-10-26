@@ -1,4 +1,6 @@
-# 迁移校验和包含 SQL 字节；跨 Windows/Linux 检出必须保持已登记字符串的换行一致。
+# 新安装定义默认使用 LF；已登记基线的原始 SQL 字节不得被 Git 转换。
 database/migrations/*.php text eol=lf
+# 此基线按 CRLF 登记；禁用文本归一化，提交、检出和归档均保留相同字节。
+database/migrations/202610140100_install.php -text -eol
 # Linux 运维脚本必须保留 LF，防止 Windows 检出后的 CR 被 shell 当作命令或参数的一部分。
 deploy/**/*.sh text eol=lf

@@ -193,7 +193,11 @@ final class SystemDoctorService
             return [
                 'id' => $id,
                 'status' => 'error',
-                'message' => '检查未完成，请核对本项配置及脱敏技术日志',
+                // 按检查项给出固定排查方向，具体原因留在技术日志中。
+                'message' =>
+                    $id === 'migrations'
+                        ? '安装进度核对失败，请检查安装文件、进度记录及技术日志'
+                        : '检查未完成，请核对本项配置及脱敏技术日志',
             ];
         }
     }

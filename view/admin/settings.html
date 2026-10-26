@@ -1,50 +1,76 @@
 {extend name="layouts/admin" /}
-{block name="page_styles"}<link rel="stylesheet" href="/assets/css/settings.css?v=20261015cards">{/block}
+{block name="page_styles"}<link rel="stylesheet" href="/assets/css/settings.css?v=20261026spacious">{/block}
 {block name="content"}
 <section class="admin-intro"><h1>系统设置</h1><div class="admin-actions"><button id="settings-refresh" type="button" class="layui-btn layui-btn-primary">重新读取</button></div></section>
 <div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
-<div class="settings-cards">
-    <section class="layui-card" aria-labelledby="settings-captcha-title">
-        <div class="layui-card-header" id="settings-captcha-title">验证码识别</div>
-        <div class="layui-card-body">
-            <form data-settings-group="captcha" class="layui-form settings-form" novalidate><fieldset disabled>
-                <div class="admin-field"><label for="ttshitu-username">图鉴账号</label><input id="ttshitu-username" name="ttshitu_username" type="text" maxlength="128" class="layui-input" autocomplete="off"></div>
-                <div class="admin-field"><label for="ttshitu-password">图鉴密码</label><input id="ttshitu-password" name="ttshitu_password" type="password" maxlength="256" class="layui-input" lay-affix="eye" autocomplete="new-password"></div>
-                <p class="settings-hint">供需要验证码登录的收款插件使用。</p>
-                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存图鉴设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
-            </fieldset></form>
-        </div>
-    </section>
-    <section class="layui-card" aria-labelledby="settings-pages-title">
-        <div class="layui-card-header" id="settings-pages-title">页面显示</div>
-        <div class="layui-card-body">
-            <form data-settings-group="page_display" class="layui-form settings-form" lay-filter="settings-page-display" novalidate><fieldset disabled>
-                <div class="settings-switch-row"><div class="settings-switch-heading"><label id="home-enabled-label" for="home-enabled">网站首页</label><input id="home-enabled" type="checkbox" name="home_enabled" lay-skin="switch" lay-filter="page-display" title="开启|关闭" aria-labelledby="home-enabled-label"></div><p>关闭后，网站根地址进入后台。</p></div>
-                <div class="settings-switch-row"><div class="settings-switch-heading"><label id="about-enabled-label" for="about-enabled">关于 MPAY</label><input id="about-enabled" type="checkbox" name="about_enabled" lay-skin="switch" lay-filter="page-display" title="开启|关闭" aria-labelledby="about-enabled-label"></div><p>关闭后，隐藏菜单并停止关于页访问。</p></div>
-                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存页面设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
-            </fieldset></form>
-        </div>
-    </section>
-    <section class="layui-card" aria-labelledby="settings-orders-title">
-        <div class="layui-card-header" id="settings-orders-title">订单设置</div>
-        <div class="layui-card-body">
-            <form data-settings-group="payment_defaults" class="layui-form settings-form" novalidate><fieldset disabled>
-                <div class="admin-field"><label for="order-valid-seconds">新业务单有效期</label><div class="admin-unit"><input id="order-valid-seconds" name="order_valid_seconds" type="number" min="1" max="86400" step="1" class="layui-input" required aria-describedby="order-valid-help"><span>秒</span></div></div>
-                <p class="settings-hint" id="order-valid-help">默认 300 秒，可设置 1～86400 秒。<br>仅影响新订单，已有订单保持原有效期。</p>
-                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存订单设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
-            </fieldset></form>
-        </div>
-    </section>
-    <section class="layui-card" aria-labelledby="settings-logs-title">
-        <div class="layui-card-header" id="settings-logs-title">技术日志</div>
-        <div class="layui-card-body">
-            <form data-settings-group="maintenance" class="layui-form settings-form" novalidate><fieldset disabled>
-                <div class="admin-field"><label for="technical-log-days">日志保留天数</label><div class="admin-unit"><input id="technical-log-days" name="technical_log_days" type="number" min="7" max="365" step="1" class="layui-input" required aria-describedby="technical-log-help"><span>天</span></div></div>
-                <p class="settings-hint" id="technical-log-help">默认 30 天，可设置 7～365 天。<br>仅清理技术日志，交易与操作记录不受影响。</p>
-                <div class="settings-actions"><button type="submit" class="layui-btn" aria-label="保存日志设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div>
-            </fieldset></form>
-        </div>
-    </section>
+<div class="layui-row layui-col-space20 settings-cards">
+    <div class="layui-col-md6">
+        <section class="layui-card" aria-labelledby="settings-orders-title">
+            <div class="layui-card-header" id="settings-orders-title">订单设置</div>
+            <div class="layui-card-body">
+                <form data-settings-group="payment_defaults" class="layui-form settings-form" novalidate><fieldset disabled>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label" for="order-valid-seconds">新业务单有效期</label>
+                        <div class="layui-input-block"><div class="layui-input-wrap"><input id="order-valid-seconds" name="order_valid_seconds" type="number" min="1" max="86400" step="1" class="layui-input" required aria-describedby="order-valid-help"><div class="layui-input-suffix">秒</div></div></div>
+                    </div>
+                    <div class="layui-form-item"><div class="layui-input-block layui-text layui-text-em" id="order-valid-help">默认 300 秒，可设置 1～86400 秒。<br>仅影响新业务订单，已有订单保持原有效期。</div></div>
+                    <div class="layui-form-item"><div class="layui-input-block"><button type="submit" class="layui-btn" aria-label="保存订单设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div></div>
+                </fieldset></form>
+            </div>
+        </section>
+    </div>
+    <div class="layui-col-md6">
+        <section class="layui-card" aria-labelledby="settings-pages-title">
+            <div class="layui-card-header" id="settings-pages-title">页面显示</div>
+            <div class="layui-card-body">
+                <form data-settings-group="page_display" class="layui-form settings-form" lay-filter="settings-page-display" novalidate><fieldset disabled>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label" id="home-enabled-label" for="home-enabled">网站首页</label>
+                        <div class="layui-input-block"><input id="home-enabled" type="checkbox" name="home_enabled" lay-skin="switch" lay-filter="page-display" title="开启|关闭" aria-labelledby="home-enabled-label"><div class="layui-text layui-text-em">关闭后，网站根地址进入后台。</div></div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label" id="about-enabled-label" for="about-enabled">关于 MPAY</label>
+                        <div class="layui-input-block"><input id="about-enabled" type="checkbox" name="about_enabled" lay-skin="switch" lay-filter="page-display" title="开启|关闭" aria-labelledby="about-enabled-label"><div class="layui-text layui-text-em">关闭后，隐藏菜单并停止关于页访问。</div></div>
+                    </div>
+                    <div class="layui-form-item"><div class="layui-input-block"><button type="submit" class="layui-btn" aria-label="保存页面设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div></div>
+                </fieldset></form>
+            </div>
+        </section>
+    </div>
+    <div class="layui-col-md6">
+        <section class="layui-card" aria-labelledby="settings-captcha-title">
+            <div class="layui-card-header" id="settings-captcha-title">验证码识别</div>
+            <div class="layui-card-body">
+                <form data-settings-group="captcha" class="layui-form settings-form" novalidate><fieldset disabled>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label" for="ttshitu-username">图鉴账号</label>
+                        <div class="layui-input-block"><input id="ttshitu-username" name="ttshitu_username" type="text" maxlength="128" class="layui-input" autocomplete="off"></div>
+                    </div>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label" for="ttshitu-password">图鉴密码</label>
+                        <div class="layui-input-block"><div class="layui-input-wrap"><input id="ttshitu-password" name="ttshitu_password" type="password" maxlength="256" class="layui-input" lay-affix="eye" autocomplete="new-password"></div></div>
+                    </div>
+                    <div class="layui-form-item"><div class="layui-input-block layui-text layui-text-em">供需要验证码登录的收款插件使用。 <a class="layui-font-blue" href="http://www.ttshitu.com/" target="_blank" rel="noopener noreferrer">图鉴官网</a></div></div>
+                    <div class="layui-form-item"><div class="layui-input-block"><button type="submit" class="layui-btn" aria-label="保存图鉴设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div></div>
+                </fieldset></form>
+            </div>
+        </section>
+    </div>
+    <div class="layui-col-md6">
+        <section class="layui-card" aria-labelledby="settings-logs-title">
+            <div class="layui-card-header" id="settings-logs-title">技术日志</div>
+            <div class="layui-card-body">
+                <form data-settings-group="maintenance" class="layui-form settings-form" novalidate><fieldset disabled>
+                    <div class="layui-form-item">
+                        <label class="layui-form-label" for="technical-log-days">日志保留天数</label>
+                        <div class="layui-input-block"><div class="layui-input-wrap"><input id="technical-log-days" name="technical_log_days" type="number" min="7" max="365" step="1" class="layui-input" required aria-describedby="technical-log-help"><div class="layui-input-suffix">天</div></div></div>
+                    </div>
+                    <div class="layui-form-item"><div class="layui-input-block layui-text layui-text-em" id="technical-log-help">默认 30 天，可设置 7～365 天。<br>仅清理技术日志，交易与操作记录不受影响。</div></div>
+                    <div class="layui-form-item"><div class="layui-input-block"><button type="submit" class="layui-btn" aria-label="保存日志设置" disabled>保存</button><span data-form-status role="status" aria-live="polite"></span></div></div>
+                </fieldset></form>
+            </div>
+        </section>
+    </div>
 </div>
 <details class="layui-card admin-details"><summary class="layui-card-header">站点信息</summary><div class="layui-card-body"><span id="settings-origin"></span><p class="admin-hint">支持多个访问域名，无需保存固定站点网址。</p></div></details>
 {/block}

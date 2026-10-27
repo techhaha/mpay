@@ -4,15 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="description" content="MPAY 本地易支付 V1 接口文档：页面下单、API 下单、通知验签、查单和退款。">
-    <meta name="mpay-doc-source-sha256" content="cc37d175067be045ed52add238f722c8eea4d8089efe93e214dfcab5d84cde12">
+    <meta name="mpay-doc-source-sha256" content="1e17cf80aac94aebf671e72873ecf236a594f203e8605ede744d571574137602">
     <title>易支付 V1 接口文档 · MPAY</title>
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="/assets/layui/css/layui.css">
-    <link rel="stylesheet" href="/assets/css/theme.css?v=20261015focus">
-    <link rel="stylesheet" href="/assets/css/api-docs.css?v=20261022">
+    <link rel="stylesheet" href="/assets/css/theme.css?v=20261028frontend">
+    <link rel="stylesheet" href="/assets/css/api-docs.css?v=20261028frontend">
     <script defer src="/assets/layui/layui.js"></script>
-    <script defer src="/assets/js/clipboard.js"></script>
-    <script defer src="/assets/js/api-docs.js?v=20261022"></script>
+    <script defer src="/assets/js/clipboard.js?v=20261028frontend"></script>
+    <script defer src="/assets/js/api-docs.js?v=20261028frontend"></script>
 </head>
 <body>
 <a class="api-skip" href="#api-content">跳到文档正文</a>
@@ -437,8 +437,8 @@ echo $result[&#39;payurl&#39;];</code></pre></div>
 <td>收银台地址</td>
 <td>payurl</td>
 <td>string</td>
-<td><code>https://pay.example.com/cashier/pay?biz_no=...&amp;token=</code>...</td>
-<td>交给付款浏览器打开，含订单访问凭证</td>
+<td><code>https://pay.example.com/cashier/pay/B.../TOKEN</code></td>
+<td>交给付款浏览器打开，业务号与订单访问凭证均在路径中</td>
 </tr>
 </tbody></table>
 </div><p><code>/submit.php</code> 成功后返回 HTTP 303，跳转至收银台。<code>/mapi.php</code> 成功响应示例：</p>
@@ -446,7 +446,7 @@ echo $result[&#39;payurl&#39;];</code></pre></div>
   &quot;code&quot;: 1,
   &quot;msg&quot;: &quot;订单已受理&quot;,
   &quot;trade_no&quot;: &quot;P2026102212000012345&quot;,
-  &quot;payurl&quot;: &quot;https://pay.example.com/cashier/pay?biz_no=...&amp;token=...&quot;
+  &quot;payurl&quot;: &quot;https://pay.example.com/cashier/pay/B.../TOKEN&quot;
 }</code></pre></div>
 <p><code>code=1</code> 表示订单已受理，尚不代表付款成功。拒绝请求时返回 <code>code=0</code> 及 <code>msg</code>；程序或基础设施故障也可能返回非 2xx HTTP 状态。</p>
 <p>同一应用重复提交相同订单号和相同业务参数时返回原订单；参数冲突时返回错误。不同应用的同名订单互不影响。请求超时后应先查询原订单，避免用新订单号重复下单。</p>
@@ -1024,14 +1024,14 @@ echo $result[&#39;payurl&#39;];</code></pre></div>
 <td>0 处理中、1 成功、2 拒绝或未执行、3 未知</td>
 </tr>
 </tbody></table>
-</div><p>向 <code>/api.php?act=refund</code> 发送 POST 表单，正文提供当前应用 <code>pid/key</code>、<code>trade_no</code>（或 <code>out_trade_no</code>）和 <code>money</code>，不重复提交 URL 中的 act。<code>money</code> 为本次退款的正数元字符串，最多两位小数。只能退款本应用已支付成功的订单，累计成功/处理中/未知退款不得超过原业务金额。</p>
+</div><p>向 <code>/api.php?act=refund</code> 发送 POST 表单，正文提供当前应用 <code>pid/key</code>、<code>trade_no</code>（或 <code>out_trade_no</code>）和 <code>money</code>，不重复提交 URL 中的 act。<code>money</code> 为本次退款的正数元字符串，最多两位小数。只能退款本应用已支付成功的订单，累计成功/处理中/未知退款不得超过该支付单已确认的用户实际支付金额。例如原业务金额 10.00 元、实际支付 10.01 元，未有其他退款占用时可申请 10.01 元；实际支付金额缺失时拒绝申请，不用原金额或提示金额补算。后台退款与本接口共用可退额度，是否接受部分退款由原订单插件和平台决定。</p>
 <p>退款要求实际 HTTP 方法为 POST。GET 退款请求在进入认证和退款服务前返回 HTTP 405、<code>Allow: POST</code>，JSON 为 <code>code=-1</code> 和错误说明，不认领退款或调用插件；查询接口继续支持 GET/POST。</p>
 <p><code>refund_no</code> 为业务网站自定的幂等号，1～64 位字母、数字、下划线或连字符。同一支付单内，同号重试返回原退款结果，金额不同则拒绝。省略时使用原支付单唯一默认请求；需要多次部分退款时，每次业务退款必须有不同的 <code>refund_no</code>，网络重试继续使用原号。</p>
 <p>退款处理结果含 <code>code/msg/refund_no/trade_no/money/refund_status</code>。返回的 <code>refund_no</code> 是 MPAY 的 20 位内部退款号；只有已明确退款成功才返回 <code>code=0</code>，处理中、拒绝或未执行、结果未知均返回 <code>code=-1</code>。参数、认证或程序异常同样返回非零的 <code>code=-1</code> 和 <code>msg</code>，可能不含退款记录字段。</p>
 <p><code>refund_status</code> 独立表示内部状态，保持 0 处理中、1 成功、2 拒绝或未执行、3 结果未知；不能与协议 code 混用。<code>code=-1</code> 不证明平台一定未退款，处理中和结果未知仍保留金额占用，不能换号重复申请，也不会自动重发。</p>
 <p>明确拒绝与结果未知的异常说明分别记录在私有技术日志 <code>payment.refund_rejected</code> 和 <code>payment.refund_unknown</code>，可按 pay_no、refund_no、plugin_code 和 request_id 排查。说明由插件/SDK 脱敏，最多 2048 个 UTF-8 字节，超长带 message_truncated 标记；不将完整报文或凭证写入日志、数据库原因码或公开响应。</p>
 <p>读取订单快照、校验配置或初始化插件失败时，尚未进入 <code>refund()</code>，记录为状态 2，原因为“退款准备失败，尚未执行”，不占用可退额度。原退款号再次请求仍返回该失败记录；排除原因后发起新的退款申请应使用新的商户退款号。进入退款动作后发生超时、异常或无法验证返回结果，仍按结果未知保留额度，不能据此判断平台没有退款。</p>
-<p>内置手机/PC、账单、码牌及银行卡监听插件没有原路退款接口，由插件返回不支持，后台订单详情可查看请求记录。通用退款入口并不承诺任何未来平台的异步结果查询；引入该类插件前须补齐平台查询/回调及结果核对。原支付成功和已发送的付款通知不会因退款改成未支付。</p>
+<p>内置手机/PC、账单、码牌及银行卡监听插件没有原路退款接口，由插件返回不支持，后台订单详情可查看请求记录，也可按<a href="https://gitee.com/technical-laohu/mpay/wikis/V1-09-%E8%AE%A2%E5%8D%95%E4%B8%8E%E5%88%B0%E8%B4%A6%E6%B5%81%E6%B0%B4#%E5%90%8E%E5%8F%B0%E7%94%B3%E8%AF%B7%E9%80%80%E6%AC%BE">后台申请退款</a>操作。后台不根据插件分类预判能力；管理员申请使用独立幂等编号，不能冒充业务网站的商户退款号。通用退款入口并不承诺任何未来平台的异步结果查询；引入该类插件前须补齐平台查询/回调及结果核对。原支付成功和已发送的付款通知不会因退款改成未支付，也不新增商户退款通知。</p>
 <p>易支付 V1 插件会调用其配置平台的退款接口，是否成功以原订单插件及平台实际结果为准。不要将查询的成功码 <code>1</code> 用于判断退款成功。</p>
 <h2 id="异步通知与返回页面" tabindex="-1">异步通知与返回页面</h2>
 <p>确认到账后，MPAY 默认向订单的 <code>notify_url</code> 发送付款结果。管理员人工确认时可以选择暂不发送异步通知，之后在后台放行；期间查询接口仍返回支付成功，但收银台须等商户有效确认后才允许返回。通知使用 GET 参数，包含：</p>

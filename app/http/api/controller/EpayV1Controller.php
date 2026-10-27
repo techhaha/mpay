@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace app\http\api\controller;
 
 use app\common\constant\ApiResponseConstant;
+use app\common\util\ClientDevice;
 use app\common\util\RequestContext;
 use app\common\util\UrlEncodedForm;
 use app\exception\BusinessException;
@@ -27,7 +28,7 @@ final class EpayV1Controller
             $this->parameters(),
             'submit',
             $this->request->ip(),
-            $this->detectedDevice(),
+            ClientDevice::detect((string) $this->request->header('User-Agent', '')),
             $this->context->id(),
         );
         return redirect($result['payurl'], 303);
@@ -61,12 +62,13 @@ final class EpayV1Controller
         try {
             $parameters = $this->parameters();
             // 查询仍支持 GET/POST；退款在进入认证及业务服务前核对原始 HTTP 方法。
-            if (($parameters['act'] ?? null) === 'refund' && $this->request->method(true) !== 'POST') {
-                return json(
-                    ['code' => -1, 'msg' => '退款接口仅支持 POST 请求'],
-                    405,
-                    ['Allow' => 'POST'],
-                );
+            if (
+                ($parameters['act'] ?? null) === 'refund' &&
+                $this->request->method(true) !== 'POST'
+            ) {
+                return json(['code' => -1, 'msg' => '退款接口仅支持 POST 请求'], 405, [
+                    'Allow' => 'POST',
+                ]);
             }
             return json($this->protocol->api($parameters));
         } catch (BusinessException $exception) {
@@ -103,18 +105,5 @@ final class EpayV1Controller
             );
         }
         return UrlEncodedForm::merge($query, UrlEncodedForm::parse($this->request->getInput()));
-    }
-
-    /** 页面下单按付款浏览器识别展示环境；mapi 使用请求 device，不调用此方法。 */
-    private function detectedDevice(): string
-    {
-        $agent = (string) $this->request->header('User-Agent', '');
-        return match (true) {
-            stripos($agent, 'AlipayClient') !== false => 'alipay',
-            stripos($agent, 'MicroMessenger') !== false => 'wechat',
-            stripos($agent, 'QQ/') !== false => 'qq',
-            preg_match('/Mobile|Android|iPhone|iPad/i', $agent) === 1 => 'mobile',
-            default => 'pc',
-        };
     }
 }

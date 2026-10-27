@@ -4,7 +4,10 @@ declare(strict_types=1);
 namespace app\http\admin\controller;
 
 use app\common\base\BaseAdminController;
+use app\common\constant\PaymentResultCode;
+use app\common\constant\RefundConstant;
 use app\common\util\Clock;
+use app\common\util\Money;
 use app\http\admin\response\CsvResponse;
 use app\http\admin\validation\PayOrderValidator;
 use app\service\payment\order\AdminActionContext;
@@ -72,6 +75,34 @@ final class PayOrderController extends BaseAdminController
         $input = $validator->action('close', $this->jsonBody());
         $actions->closeBusiness($input['biz_no'], $this->actor($input['reason']));
         return $this->success(null, '已本地关闭；收款二维码未被平台撤销');
+    }
+
+    /** 仅回传持久退款身份和状态；成功响应表示请求处理完成，不代表插件一定退款成功。 */
+    public function refund(
+        PayOrderValidator $validator,
+        PayOrderQueryService $orders,
+        PayOrderAdminActionService $actions,
+    ): Response {
+        $input = $validator->action('refund', $this->jsonBody());
+        $result = $actions->refund(
+            $orders->paymentNumber($input['biz_no']),
+            $input['refund_amount'],
+            $input['request_no'],
+            $this->actor($input['reason']),
+            $input['current_password'],
+        );
+        $refund = $result['refund'];
+        return $this->success(
+            [
+                'refund_no' => $refund['refund_no'],
+                'amount' => Money::format((int) $refund['refund_amount']),
+                'status' => (int) $refund['status'],
+                'status_label' => RefundConstant::label((int) $refund['status']),
+                'result_code' => $refund['result_code'],
+                'result_label' => PaymentResultCode::label($refund['result_code']),
+            ],
+            $result['message'],
+        );
     }
 
     /** 返回已持久化的调度结果；首次放行或提前发送沿用自动策略，已结束任务仅补发一次，不等同远端 ACK。 */

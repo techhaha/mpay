@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace app\repository\system;
 
+use app\common\constant\NotifyConstant;
 use app\common\constant\TradeConstant;
 use app\model\payment\NotifyTask;
 use app\model\payment\PaymentPluginConf;
@@ -17,10 +18,12 @@ final class RuntimeDiagnosticRepository
         private readonly PaymentPluginConf $configurations,
     ) {}
 
+    /** 隔离任务固定停止重试且不能直接补发，先按状态排除已成功历史。 */
     public function notificationSummary(string $now): array
     {
         return [
             'quarantined' => (int) $this->notifications
+                ->where('status', NotifyConstant::STATUS_EXHAUSTED)
                 ->whereIn('last_response', [
                     'quarantined_frozen_payload_invalid',
                     'quarantined_attempt_state_invalid',
@@ -28,18 +31,26 @@ final class RuntimeDiagnosticRepository
                 ])
                 ->count(),
             'expired_leases' => (int) $this->notifications
-                ->where('status', 1)
+                ->where('status', NotifyConstant::STATUS_SENDING)
                 ->where('lease_until', '<=', $now)
                 ->count(),
         ];
     }
 
+    /** 运行维护只使用这三类积压；工作台的全部通知状态统计独立保留。 */
     public function backlogs(): array
     {
         return [
             'notifications' => array_map(
                 'intval',
-                $this->notifications->group('status')->column('COUNT(*)', 'status'),
+                $this->notifications
+                    ->whereIn('status', [
+                        NotifyConstant::STATUS_PENDING,
+                        NotifyConstant::STATUS_SENDING,
+                        NotifyConstant::STATUS_EXHAUSTED,
+                    ])
+                    ->group('status')
+                    ->column('COUNT(*)', 'status'),
             ),
         ];
     }

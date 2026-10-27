@@ -25,7 +25,10 @@ final class PayOrderValidator extends Validate
         'poll_group_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'channel_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'pay_type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
-        'status' => ['string', 'in' => ['0', '1', '2', '3', '4', '5']],
+        'status' => [
+            'string',
+            'regex' => '/^(?:[0-5]|refund_(?:partial|full|processing|unknown|failed))$/D',
+        ],
         'notification_status' => [
             'string',
             'regex' => '/^(?:none|acknowledged|[0-9])$/D',
@@ -58,6 +61,12 @@ final class PayOrderValidator extends Validate
         'reference' => ['require', 'string', 'max' => 1024, 'nonBlank'],
         'platform_trade_no' => ['string', 'max' => 128],
         'current_password' => ['require', 'string', 'regex' => '/^[^\x00]{1,72}$/D'],
+        'refund_amount' => [
+            'require',
+            'string',
+            'regex' => '/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,2})?$/D',
+        ],
+        'request_no' => ['require', 'string', 'regex' => '/^[a-f0-9]{32}$/D'],
         'notify_merchant' => ['require', 'booleanJson'],
         'expected_attempts' => [
             'require',
@@ -95,6 +104,7 @@ final class PayOrderValidator extends Validate
             'notify_merchant',
         ],
         'retry' => ['biz_no', 'reason', 'expected_attempts'],
+        'refund' => ['biz_no', 'reason', 'refund_amount', 'request_no', 'current_password'],
     ];
 
     public function __construct(
@@ -109,7 +119,7 @@ final class PayOrderValidator extends Validate
      * notification_status 的 none 表示没有付款通知任务；0～4 表示当前调度状态，acknowledged 表示曾确认成功，空值表示不限定。
      *
      * @param array<string,mixed> $input
-     * @return array{filters:array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string},page:int,limit:int}
+     * @return array{filters:array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string},page:int,limit:int}
      */
     public function filters(array $input, bool $export = false): array
     {
@@ -127,7 +137,11 @@ final class PayOrderValidator extends Validate
             'filters' => [
                 'from' => $range['from'],
                 'until' => $range['until'],
-                'status' => isset($values['status']) ? (int) $values['status'] : null,
+                'status' => isset($values['status'])
+                    ? (ctype_digit($values['status'])
+                        ? (int) $values['status']
+                        : $values['status'])
+                    : null,
                 'biz_no' => $values['biz_no'] ?? null,
                 'notification_status' => $values['notification_status'] ?? null,
                 'app_id' => $values['app_id'] ?? null,
@@ -167,10 +181,17 @@ final class PayOrderValidator extends Validate
      */
     public function action(string $action, array $input): array
     {
-        if (!in_array($action, ['confirm', 'close', 'retry'], true)) {
+        if (!in_array($action, ['confirm', 'close', 'retry', 'refund'], true)) {
             throw new LogicException('未知订单操作场景');
         }
         $this->known($input, $this->scene[$action]);
+        if (
+            $action === 'refund' &&
+            (!isset($input['reason']) ||
+                (is_string($input['reason']) && trim($input['reason']) === ''))
+        ) {
+            $input['reason'] = '管理员申请退款';
+        }
         foreach (['platform_trade_no'] as $optional) {
             if (($input[$optional] ?? null) === '') {
                 unset($input[$optional]);
@@ -179,6 +200,21 @@ final class PayOrderValidator extends Validate
         $this->checkInput($action, $input);
         if ($action === 'retry') {
             $input['expected_attempts'] = (int) $input['expected_attempts'];
+        } elseif ($action === 'refund') {
+            try {
+                $input['refund_amount'] = Money::parse($input['refund_amount']);
+            } catch (InvalidArgumentException) {
+                throw new BusinessException(
+                    '退款金额必须为有效的正数元金额',
+                    ApiResponseConstant::VALIDATION_FAILED,
+                );
+            }
+            if ($input['refund_amount'] < 1) {
+                throw new BusinessException(
+                    '退款金额必须大于零',
+                    ApiResponseConstant::VALIDATION_FAILED,
+                );
+            }
         }
         return $input;
     }

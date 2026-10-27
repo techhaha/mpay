@@ -30,6 +30,7 @@ final class PaymentChannelTestService extends BaseService
      * 金额单位为分；弹层请求键作为普通外部订单号，复用应用内唯一键及参数指纹。
      * PID 和密钥版本只从锁定应用取得。只固定通道和商品名，其余走普通建单及确认流程。
      *
+     * @param string $detectedDevice 后台 HTTP 入口识别的浏览器环境，不接收表单伪造的 device。
      * @throws BusinessException 非后台身份、应用不可接入或同单请求参数冲突。
      */
     public function create(
@@ -39,6 +40,7 @@ final class PaymentChannelTestService extends BaseService
         string $requestKey,
         ConfigurationActionContext $actor,
         DateTimeImmutable $now,
+        string $detectedDevice,
     ): CreatedOrder {
         if ($actor->origin !== 'admin' || !preg_match('/^[a-f0-9]{32}$/D', $requestKey)) {
             throw new BusinessException('付款请求无效', ApiResponseConstant::FORBIDDEN);
@@ -50,6 +52,7 @@ final class PaymentChannelTestService extends BaseService
             $requestKey,
             $actor,
             $now,
+            $detectedDevice,
         ): CreatedOrder {
             $this->audit->authorize($actor);
             $application = $this->apps->lock($appId);
@@ -73,6 +76,7 @@ final class PaymentChannelTestService extends BaseService
                 clientIp: $actor->clientIp,
                 device: null,
                 param: '',
+                detectedDevice: $detectedDevice,
                 channelId: $channelId,
             );
             $created = $this->orders->createLocked($input, $now);

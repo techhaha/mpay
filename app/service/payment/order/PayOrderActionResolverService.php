@@ -12,11 +12,22 @@ use app\model\payment\PayOrder;
 /** 计算当前页面可以提供的动作；只作展示提示，真正执行仍由动作服务在锁内校验身份、证据和状态。 */
 final class PayOrderActionResolverService
 {
-    /** @return array{confirm:bool,confirm_unavailable_reason:?string,close:bool,retry_notification:bool,notification_action:string} 无支付尝试时不能凭页面创建虚构收款事实。 */
-    public function resolve(BizOrder $biz, ?PayOrder $pay, ?NotifyTask $task): array
-    {
+    /** @return array{confirm:bool,confirm_unavailable_reason:?string,close:bool,refund:bool,retry_notification:bool,notification_action:string} 无支付尝试时不能凭页面创建虚构收款事实。 */
+    public function resolve(
+        BizOrder $biz,
+        ?PayOrder $pay,
+        ?NotifyTask $task,
+        int $refundableAmount,
+        bool $refundUnresolved,
+    ): array {
         $status = $pay === null ? null : (int) $pay['status'];
         return [
+            // 是否支持退款交由插件处理；此处只检查交易状态、实际支付额度及待核实申请。
+            'refund' =>
+                $status === TradeConstant::ORDER_STATUS_SUCCESS &&
+                (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS &&
+                $refundableAmount > 0 &&
+                !$refundUnresolved,
             'confirm' =>
                 $pay !== null &&
                 in_array(

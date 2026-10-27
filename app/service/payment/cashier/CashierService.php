@@ -249,11 +249,13 @@ final class CashierService extends BaseService
             throw new RuntimeException('订单返回地址缺少通知责任');
         }
         $result['action'] = $hasReturn ? 'return' : 'success';
-        $result['next_url'] =
-            '/cashier/' .
-            $result['action'] .
-            '?' .
-            http_build_query(['biz_no' => $biz['biz_no'], 'token' => $accessToken]);
+        $result['next_url'] = (string) url('cashier.' . $result['action'], [
+            'biz_no' => $biz['biz_no'],
+            'token' => $accessToken,
+        ])
+            ->suffix(false)
+            ->domain(false)
+            ->root('');
         return $result;
     }
 

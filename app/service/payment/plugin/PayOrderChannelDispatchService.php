@@ -104,7 +104,8 @@ final class PayOrderChannelDispatchService
         }
         // 通用对接参数由服务从原业务单生成；插件不需要为取商品名或回跳凭证查询业务表。
         $notifyUrl = (string) url('/api/pay/' . $payNo . '/notify')->suffix(false)->domain(true)->root('');
-        $returnUrl = (string) url('/cashier/pay', [
+        // 本站身份在路径中，第三方追加的协议 query 不覆盖业务号或访问凭证。
+        $returnUrl = (string) url('cashier.pay', [
             'biz_no' => $biz['biz_no'],
             'token' => $biz['ext_json']['cashier_token'],
         ])->suffix(false)->domain(true)->root('');

@@ -19,7 +19,7 @@ use think\db\Query;
  */
 final class BizOrderRepository extends BaseRepository
 {
-    public function __construct(BizOrder $model)
+    public function __construct(BizOrder $model, private readonly RefundOrderRepository $refunds)
     {
         parent::__construct($model);
     }
@@ -146,7 +146,7 @@ final class BizOrderRepository extends BaseRepository
     /**
      * 后台列表与导出共用筛选；服务已校验日期、状态和订单号，不接收任意查询列或排序表达式。
      *
-     * @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
      * @return list<BizOrder>
      */
     public function adminPage(array $filters, int $page, int $limit): array
@@ -158,7 +158,7 @@ final class BizOrderRepository extends BaseRepository
             ->all();
     }
 
-    /** @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
+    /** @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
     public function adminCount(array $filters): int
     {
         return (int) $this->adminQuery($filters)->count();
@@ -167,7 +167,7 @@ final class BizOrderRepository extends BaseRepository
     /**
      * 导出按主键向前读取，不使用大偏移分页；一致快照和总行数限制由服务拥有。
      *
-     * @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
      * @return list<BizOrder>
      */
     public function exportBatch(array $filters, string $afterId, int $limit): array
@@ -180,7 +180,7 @@ final class BizOrderRepository extends BaseRepository
             ->all();
     }
 
-    /** @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
+    /** @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
     private function adminQuery(array $filters): Query
     {
         $query = $this->model
@@ -190,7 +190,6 @@ final class BizOrderRepository extends BaseRepository
             [
                 'app_id' => 'app_id',
                 'pid' => 'pid',
-                'status' => 'status',
                 'biz_no' => 'biz_no',
                 'pay_no' => 'active_pay_no',
                 'merchant_order_no' => 'merchant_order_no',
@@ -201,48 +200,63 @@ final class BizOrderRepository extends BaseRepository
                 $query->where($column, $filters[$key]);
             }
         }
+        if (($filters['status'] ?? null) !== null) {
+            if (is_int($filters['status'])) {
+                // 支付成功仍包含已退款订单，退款仅影响后台展示。
+                $query->where('status', $filters['status']);
+            } else {
+                $query->where('status', TradeConstant::ORDER_STATUS_SUCCESS);
+                $query->whereExists(function (Query $refunds) use ($filters): void {
+                    $this->refunds->filterForOrder($refunds, $filters['status']);
+                });
+            }
+        }
         if (
             ($filters['poll_group_id'] ?? null) !== null ||
             ($filters['channel_id'] ?? null) !== null ||
             ($filters['pay_type'] ?? null) !== null
         ) {
-            // ORM 子查询限定支付尝试，不 JOIN 放大业务单列表或导出计数。
-            $query->whereIn('biz_no', static function (Query $payments) use ($filters): void {
-                $payments->table('ma_pay_order')->field('biz_no');
+            // 按当前业务号定位支付尝试，不先展开符合条件的全部历史支付号。
+            $query->whereExists(static function (Query $payments) use ($filters): void {
+                $payments
+                    ->table('ma_pay_order')
+                    ->alias('filter_pay')
+                    ->whereColumn('filter_pay.biz_no', 'ma_biz_order.biz_no')
+                    ->fieldRaw('1');
                 foreach (['poll_group_id', 'channel_id'] as $field) {
                     if (($filters[$field] ?? null) !== null) {
-                        $payments->where($field, $filters[$field]);
+                        $payments->where('filter_pay.' . $field, $filters[$field]);
                     }
                 }
                 if (($filters['pay_type'] ?? null) !== null) {
-                    $payments->whereIn('pay_type_id', static function (Query $types) use (
-                        $filters,
-                    ): void {
-                        $types
-                            ->table('ma_payment_type')
-                            ->field('id')
-                            ->where('code', $filters['pay_type']);
-                    });
+                    $payments
+                        ->join(
+                            'ma_payment_type filter_type',
+                            'filter_type.id=filter_pay.pay_type_id',
+                        )
+                        ->where('filter_type.code', $filters['pay_type']);
                 }
             });
         }
         if (($filters['notification_status'] ?? null) !== null) {
-            // 按通知责任筛选，发送尝试是一对多，不能 JOIN 尝试表放大订单和导出计数。
+            // 按当前业务号检查唯一通知责任，发送尝试不参与外层列表或计数。
             $condition = static function (Query $tasks) use ($filters): void {
                 $tasks
                     ->table('ma_notify_task')
-                    ->field('biz_no')
-                    ->where('event_type', NotifyConstant::EVENT_PAY_SUCCESS);
+                    ->alias('filter_notify')
+                    ->whereColumn('filter_notify.biz_no', 'ma_biz_order.biz_no')
+                    ->fieldRaw('1')
+                    ->where('filter_notify.event_type', NotifyConstant::EVENT_PAY_SUCCESS);
                 if ($filters['notification_status'] === 'acknowledged') {
-                    $tasks->whereNotNull('first_ack_at');
+                    $tasks->whereNotNull('filter_notify.first_ack_at');
                 } elseif ($filters['notification_status'] !== 'none') {
-                    $tasks->where('status', (int) $filters['notification_status']);
+                    $tasks->where('filter_notify.status', (int) $filters['notification_status']);
                 }
             };
             if ($filters['notification_status'] === 'none') {
-                $query->whereNotIn('biz_no', $condition);
+                $query->whereNotExists($condition);
             } else {
-                $query->whereIn('biz_no', $condition);
+                $query->whereExists($condition);
             }
         }
         return $query;

@@ -50,7 +50,7 @@ final class ReceiptFlowRepository extends BaseRepository
 
     /**
      * @param array{from?:string,until?:string,id?:string,scope_key?:string,plugin_code?:string,pay_no?:string} $filters 按系统接收时间筛选，日期缺省时查询全部。
-     * @return array{items:list<ReceiptFlow>,total:int} 服务拥有一致读取事务，不在这里猜测匹配结果。
+     * @return array{items:list<ReceiptFlow>,total:int} 列表只读投影；完整证据由详情读取，服务拥有一致事务。
      */
     public function adminPage(array $filters, int $page, int $limit): array
     {
@@ -75,7 +75,14 @@ final class ReceiptFlowRepository extends BaseRepository
         }
         return [
             'total' => (int) (clone $query)->count(),
-            'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all(),
+            'items' => $query
+                ->field(
+                    'id,receipt_scope_key,plugin_code,reason_code,amount,paid_at,received_at,platform_trade_no,pay_no',
+                )
+                ->order('id', 'desc')
+                ->page($page, $limit)
+                ->select()
+                ->all(),
         ];
     }
 

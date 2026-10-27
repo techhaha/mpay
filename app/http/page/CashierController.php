@@ -18,17 +18,22 @@ final class CashierController extends BaseController
 {
     /** 成功页重新验证持有者凭证及数据库事实；不能通过手改 URL 把未付款订单展示成成功。 */
     public function completed(
+        string $biz_no,
+        string $token,
         CashierValidator $validator,
         CashierService $cashier,
     ): Response {
-        $identity = $validator->identity($this->request->get());
+        $identity = $validator->identity(compact('biz_no', 'token'));
         $result = $cashier->successPage($identity['biz_no'], $identity['token']);
         $completion = $result['completion'];
         if ($completion['action'] === 'return') {
             return redirect($completion['next_url'], 303);
         }
         if ($completion['action'] !== 'success') {
-            return redirect('/cashier/pay?' . http_build_query($identity), 303);
+            return redirect(
+                (string) url('cashier.pay', $identity)->suffix(false)->domain(false)->root(''),
+                303,
+            );
         }
         // 成功页只有只读信息；公共布局仍需要明确的 CSRF 占位，避免模板读取未定义变量。
         return view('cashier/success', [
@@ -39,12 +44,14 @@ final class CashierController extends BaseController
     }
 
     public function index(
+        string $biz_no,
+        string $token,
         CashierValidator $validator,
         CashierService $cashier,
         AdminSessionService $session,
         Clock $clock,
     ): Response {
-        $identity = $validator->identity($this->request->get());
+        $identity = $validator->identity(compact('biz_no', 'token'));
         $data = $cashier->view($identity['biz_no'], $identity['token'], $clock->now());
         return view('cashier/index', [
             'title' => 'MPAY 收银台',
@@ -61,16 +68,23 @@ final class CashierController extends BaseController
     }
 
     /** 回跳重读原单并核验收款和商户确认，只签名跳转，不接受外部 success 参数确认收款。 */
-    public function back(CashierValidator $validator, EpayV1ProtocolService $protocol): Response
-    {
-        $identity = $validator->identity($this->request->get());
+    public function back(
+        string $biz_no,
+        string $token,
+        CashierValidator $validator,
+        EpayV1ProtocolService $protocol,
+    ): Response {
+        $identity = $validator->identity(compact('biz_no', 'token'));
         try {
             return redirect($protocol->returnUrl($identity['biz_no'], $identity['token']), 303);
         } catch (BusinessException $exception) {
             if ($exception->getCode() !== ApiResponseConstant::CONFLICT) {
                 throw $exception;
             }
-            return redirect('/cashier/pay?' . http_build_query($identity), 303);
+            return redirect(
+                (string) url('cashier.pay', $identity)->suffix(false)->domain(false)->root(''),
+                303,
+            );
         }
     }
 }

@@ -81,7 +81,7 @@ final class EpayV1ProtocolService extends BaseService
         }
         return [
             'trade_no' => $created->payNo ?? '',
-            'payurl' => (string) url('/cashier/pay', [
+            'payurl' => (string) url('cashier.pay', [
                 'biz_no' => $created->bizNo,
                 'token' => $created->accessToken,
             ])

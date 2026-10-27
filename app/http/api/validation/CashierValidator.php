@@ -8,7 +8,7 @@ use app\common\validation\PaymentTypeCode;
 use app\exception\BusinessException;
 use think\Validate;
 
-/** 收银台字段及场景校验；只接收访问凭证和方式选择，不接收客户端金额或成功声明。 */
+/** 收银台读取身份仅来自路由路径，写操作来自 JSON；不接收客户端金额或成功声明。 */
 final class CashierValidator extends Validate
 {
     /** @var array<string,array> 编号按不透明标识查询；生成格式由 BusinessNumber 负责，访问仍核对独立随机凭证。 */
@@ -20,7 +20,7 @@ final class CashierValidator extends Validate
     protected $scene = ['identity' => ['biz_no', 'token'], 'selection' => ['type']];
 
     /**
-     * @param array<string,mixed> $input 不可信的查询/JSON 参数。
+     * @param array<string,mixed> $input 不可信的路由路径或写操作 JSON 参数，不与 query 合并。
      * @return array{biz_no:string,token:string}
      * @throws BusinessException 身份格式错误统一返回 403，不区分哪个秘密字段错误。
      */

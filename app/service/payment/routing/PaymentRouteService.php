@@ -86,6 +86,8 @@ final class PaymentRouteService
             (int) $a['id'] <=> (int) $b['id'],
         );
         $eligible = [];
+        // 插件行已锁定后，本次选路复用同编码的准入结果和定义；不跨事务缓存。
+        $definitions = [];
         foreach ($candidates as $candidate) {
             $configuration = $this->configurations->lock($candidate['api_config_id']);
             $channel = $this->channels->lock($candidate['id']);
@@ -107,11 +109,14 @@ final class PaymentRouteService
                     (int) $configuration['config_version'],
                     true,
                 ) ?? throw new RuntimeException('当前收款配置版本缺失');
-            if (!$this->management->allowsNew($channel['plugin_code'], true)) {
-                continue;
+            $code = $channel['plugin_code'];
+            if (!array_key_exists($code, $definitions)) {
+                $definitions[$code] = $this->management->allowsNew($code, true)
+                    ? $this->plugins->definition($code)
+                    : null;
             }
-            $definition = $this->plugins->definition($channel['plugin_code']);
-            if (!in_array($payType, $definition->payTypes, true)) {
+            $definition = $definitions[$code];
+            if ($definition === null || !in_array($payType, $definition->payTypes, true)) {
                 continue;
             }
             $authorized = $this->scopeAccess->current($configuration, false);
@@ -131,31 +136,6 @@ final class PaymentRouteService
                 continue;
             }
             $this->assertRules($channel);
-            // 通道锁取得后再按当前自然日和可用时段判断，避免跨午夜仍沿用请求时间。
-            $evaluatedAt = $this->clock->now();
-            if (!$this->withinHours($channel, $evaluatedAt->format('H:i'))) {
-                continue;
-            }
-            if (
-                (int) $channel['daily_limit_amount'] > 0 ||
-                (int) $channel['daily_limit_count'] > 0
-            ) {
-                $day = $evaluatedAt->setTime(0, 0);
-                $usage = $this->orders->channelDailyUsage(
-                    $channel['id'],
-                    $day->format('Y-m-d H:i:s'),
-                    $day->modify('+1 day')->format('Y-m-d H:i:s'),
-                    $evaluatedAt->format('Y-m-d H:i:s'),
-                );
-                if (
-                    ((int) $channel['daily_limit_amount'] > 0 &&
-                        $usage['amount'] + $amount > (int) $channel['daily_limit_amount']) ||
-                    ((int) $channel['daily_limit_count'] > 0 &&
-                        $usage['count'] >= (int) $channel['daily_limit_count'])
-                ) {
-                    continue;
-                }
-            }
             $eligible[] = [
                 'member' => $members[$channel['id']],
                 'poll_group_id' => $group['id'],
@@ -165,6 +145,41 @@ final class PaymentRouteService
                 'config_version' => (int) $configuration['config_version'],
                 'plugin_version' => $definition->version,
             ];
+        }
+        // 等待全部候选锁后统一读取时间；日额度只统计本轮真正可用且启用限制的通道。
+        $evaluatedAt = $this->clock->now();
+        $limitedIds = [];
+        foreach ($eligible as $index => $row) {
+            $channel = $row['channel'];
+            if (!$this->withinHours($channel, $evaluatedAt->format('H:i'))) {
+                unset($eligible[$index]);
+                continue;
+            }
+            if (
+                (int) $channel['daily_limit_amount'] > 0 ||
+                (int) $channel['daily_limit_count'] > 0
+            ) {
+                $limitedIds[] = $channel['id'];
+            }
+        }
+        $day = $evaluatedAt->setTime(0, 0);
+        $usages = $this->orders->channelDailyUsages(
+            $limitedIds,
+            $day->format('Y-m-d H:i:s'),
+            $day->modify('+1 day')->format('Y-m-d H:i:s'),
+            $evaluatedAt->format('Y-m-d H:i:s'),
+        );
+        foreach ($eligible as $index => $row) {
+            $channel = $row['channel'];
+            $usage = $usages[$channel['id']] ?? ['amount' => 0, 'count' => 0];
+            if (
+                ((int) $channel['daily_limit_amount'] > 0 &&
+                    $usage['amount'] + $amount > (int) $channel['daily_limit_amount']) ||
+                ((int) $channel['daily_limit_count'] > 0 &&
+                    $usage['count'] >= (int) $channel['daily_limit_count'])
+            ) {
+                unset($eligible[$index]);
+            }
         }
         if ($eligible === []) {
             throw new BusinessException(

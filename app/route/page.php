@@ -57,11 +57,15 @@ Route::group('admin', function (): void {
     ->middleware('rate', ['rule' => 'admin_ip'])
     ->middleware('session');
 Route::group('cashier', function (): void {
-    Route::rule('success', [CashierController::class, 'completed'], 'GET|HEAD')->name(
-        'cashier.success',
-    );
-    Route::rule('pay', [CashierController::class, 'index'], 'GET|HEAD')
+    Route::rule(
+        'success/:biz_no/:token',
+        [CashierController::class, 'completed'],
+        'GET|HEAD',
+    )->name('cashier.success');
+    Route::rule('pay/:biz_no/:token', [CashierController::class, 'index'], 'GET|HEAD')
         ->name('cashier.pay')
         ->middleware('session');
-    Route::rule('return', [CashierController::class, 'back'], 'GET|HEAD')->name('cashier.return');
+    Route::rule('return/:biz_no/:token', [CashierController::class, 'back'], 'GET|HEAD')->name(
+        'cashier.return',
+    );
 })->middleware('rate', ['rule' => 'cashier_ip']);

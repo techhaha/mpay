@@ -17,8 +17,10 @@ use app\exception\PaymentUncertainException;
 use app\exception\UnsupportedPaymentOperationException;
 use app\model\payment\RefundOrder;
 use app\repository\payment\trade\BizOrderRepository;
+use app\repository\payment\trade\PayOrderOperationLogRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\repository\payment\trade\RefundOrderRepository;
+use app\repository\system\AdminUserRepository;
 use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use RuntimeException;
@@ -41,6 +43,8 @@ final class RefundService extends BaseService
         private readonly BusinessNumber $numbers,
         private readonly Clock $clock,
         private readonly SafeLogger $logger,
+        private readonly AdminUserRepository $admins,
+        private readonly PayOrderOperationLogRepository $operations,
     ) {}
 
     /**
@@ -53,18 +57,60 @@ final class RefundService extends BaseService
         int $amount,
         ?string $requestNo,
     ): RefundOrder {
+        return $this->execute(
+            $payNo,
+            $amount,
+            $requestNo === null ? 'default' : 'merchant:' . $requestNo,
+            $appId,
+        )['refund'];
+    }
+
+    /**
+     * 后台身份在认领事务内复核；与应用接口共用额度、原单插件和结果处理。
+     *
+     * @return array{refund:RefundOrder,message:string} 平台说明仅用于本次响应，持久诊断沿用原因码和技术日志。
+     */
+    public function refundByAdmin(
+        string $payNo,
+        int $amount,
+        string $requestNo,
+        AdminActionContext $actor,
+    ): array {
+        return $this->execute($payNo, $amount, 'admin:' . $requestNo, $actor);
+    }
+
+    /**
+     * @param string|AdminActionContext $owner 已认证应用编号或服务端管理员上下文。
+     * @return array{refund:RefundOrder,message:string}
+     */
+    private function execute(
+        string $payNo,
+        int $amount,
+        string $key,
+        string|AdminActionContext $owner,
+    ): array {
         $pay =
             $this->payments->find($payNo) ??
             throw new BusinessException('订单不存在', Code::NOT_FOUND);
-        $claim = $this->transactionRetry(function () use (
-            $appId,
-            $pay,
-            $amount,
-            $requestNo,
-        ): array {
+        $claim = $this->transactionRetry(function () use ($pay, $amount, $key, $owner): array {
+            if ($owner instanceof AdminActionContext) {
+                $admin = $this->admins->lock($owner->adminId);
+                if (
+                    $admin === null ||
+                    (int) $admin['status'] !== 1 ||
+                    (int) $admin['session_version'] !== $owner->sessionVersion
+                ) {
+                    throw new BusinessException('管理员会话已失效', Code::UNAUTHENTICATED);
+                }
+            }
+            // 与其他人工动作保持管理员 → 业务单 → 支付单的锁顺序，平台请求不在事务内。
             $biz = $this->business->lock($pay['biz_no']);
             $locked = $this->payments->lock($pay['pay_no']);
-            if ($biz['app_id'] !== $appId || $biz['active_pay_no'] !== $locked['pay_no']) {
+            if (
+                (is_string($owner) && $biz['app_id'] !== $owner) ||
+                $biz['active_pay_no'] !== $locked['pay_no'] ||
+                $locked['biz_no'] !== $biz['biz_no']
+            ) {
                 throw new BusinessException('订单不存在', Code::NOT_FOUND);
             }
             if (
@@ -73,7 +119,6 @@ final class RefundService extends BaseService
             ) {
                 throw new BusinessException('订单尚未支付成功', Code::CONFLICT);
             }
-            $key = $requestNo === null ? 'default' : 'merchant:' . $requestNo;
             $existing = $this->refunds->forRequest($locked['pay_no'], $key);
             if ($existing !== null) {
                 if ((int) $existing['refund_amount'] !== $amount) {
@@ -81,12 +126,19 @@ final class RefundService extends BaseService
                 }
                 return ['execute' => false, 'refund' => $existing, 'pay' => $locked];
             }
-            if (
-                $amount < 1 ||
-                $this->refunds->reservedAmount($locked['pay_no']) + $amount >
-                    $locked->originalAmount()
-            ) {
+            $received = $locked->receivedAmount();
+            if ($received === null || $received < 1) {
+                throw new BusinessException('支付单缺少已确认的实际支付金额', Code::CONFLICT);
+            }
+            $reservation = $this->refunds->reservation($locked['pay_no']);
+            if ($amount < 1 || $reservation['reserved_amount'] + $amount > $received) {
                 throw new BusinessException('退款金额超过订单可退金额', Code::CONFLICT);
+            }
+            if ($owner instanceof AdminActionContext && $reservation['has_unresolved']) {
+                throw new BusinessException(
+                    '已有退款处理中或结果待核实，请先核对原退款',
+                    Code::CONFLICT,
+                );
             }
             $number = $this->numbers->insert(
                 'R',
@@ -98,11 +150,23 @@ final class RefundService extends BaseService
                     'refund_amount' => $amount,
                 ]),
             );
+            if ($owner instanceof AdminActionContext) {
+                $this->operations->record(
+                    $locked['pay_no'],
+                    $owner->adminId,
+                    $owner->requestId,
+                    $owner->reason,
+                    'manual_refund_requested',
+                    TradeConstant::ORDER_STATUS_SUCCESS,
+                    TradeConstant::ORDER_STATUS_SUCCESS,
+                    ['refund_no' => $number, 'refund_amount' => $amount],
+                );
+            }
             return ['execute' => true, 'refund' => $this->refunds->find($number), 'pay' => $locked];
         });
         $refund = $claim['refund'];
         if (!$claim['execute']) {
-            return $refund;
+            return ['refund' => $refund, 'message' => Result::label($refund['result_code'])];
         }
         $pay = $claim['pay'];
         $status = State::UNKNOWN;
@@ -110,6 +174,7 @@ final class RefundService extends BaseService
         $reason = Result::REFUND_UNKNOWN;
         $fault = null;
         $invoked = false;
+        $message = null;
         try {
             // 配置和平台单号取自原订单，当前通道换插件/停用不改变退款目标。
             $snapshot = $this->revisions->forOrder($pay);
@@ -158,6 +223,8 @@ final class RefundService extends BaseService
             $rejected = $error instanceof PaymentDefinitiveException;
             $status = $rejected ? State::FAILED : State::UNKNOWN;
             $reason = $rejected ? Result::REFUND_REJECTED : Result::REFUND_UNKNOWN;
+            $message =
+                Result::label($reason) . '：' . mb_strcut($error->getMessage(), 0, 2048, 'UTF-8');
             // 插件/SDK 先脱敏；拒绝和未知都留下有界诊断，日志不改变额度及不重发规则。
             $this->logger->record(
                 $rejected ? 'payment.refund_rejected' : 'payment.refund_unknown',
@@ -179,6 +246,7 @@ final class RefundService extends BaseService
             // 快照读取和初始化失败时尚未执行退款，不占用“结果未知”的待核实额度。
             $status = State::FAILED;
             $reason = Result::REFUND_NOT_EXECUTED;
+            $message = null;
         }
         $this->transactionRetry(function () use (
             $pay,
@@ -200,7 +268,11 @@ final class RefundService extends BaseService
         if ($fault !== null) {
             throw $fault;
         }
-        return $this->refunds->find($refund['refund_no']) ??
-            throw new RuntimeException('退款记录缺失');
+        return [
+            'refund' =>
+                $this->refunds->find($refund['refund_no']) ??
+                throw new RuntimeException('退款记录缺失'),
+            'message' => $message ?? Result::label($reason),
+        ];
     }
 }

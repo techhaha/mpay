@@ -34,7 +34,8 @@ final class PayOrderOperationLogRepository extends BaseRepository
 
     /**
      * @param array{received_amount?:int,paid_at?:string,platform_trade_no?:string|null,
-     *     reference?:string,flow_id?:string|null,close_semantics?:string,notify_no?:string,attempt_no?:int} $evidence 脱敏证据，禁止原始平台正文。
+     *     reference?:string,flow_id?:string|null,close_semantics?:string,notify_no?:string,attempt_no?:int,
+     *     refund_no?:string,refund_amount?:int} $evidence 脱敏证据，禁止原始平台正文。
      */
     public function record(
         string $payNo,

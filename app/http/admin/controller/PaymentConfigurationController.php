@@ -5,6 +5,7 @@ namespace app\http\admin\controller;
 
 use app\common\base\BaseAdminController;
 use app\common\constant\ApiResponseConstant;
+use app\common\util\ClientDevice;
 use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\http\admin\validation\ConfigurationQueryValidator;
@@ -39,6 +40,7 @@ final class PaymentConfigurationController extends BaseAdminController
             $input['request_key'],
             $this->actor(),
             $clock->now(),
+            ClientDevice::detect((string) $this->request->header('User-Agent', '')),
         );
         return $this->success(
             [
@@ -46,7 +48,7 @@ final class PaymentConfigurationController extends BaseAdminController
                 'pay_no' => $order->payNo,
                 'reused' => $order->reused,
                 // 后台内跳转使用相对地址，沿用浏览器当前站点，不依赖代理回源时观察到的协议或域名。
-                'cashier_url' => (string) url('/cashier/pay', [
+                'cashier_url' => (string) url('cashier.pay', [
                     'biz_no' => $order->bizNo,
                     'token' => $order->accessToken,
                 ])

@@ -56,7 +56,7 @@ final class PayOrderQueryService extends BaseService
     ) {}
 
     /**
-     * @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters 已校验的上海时区左闭右开范围。
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters 已校验的上海时区左闭右开范围。
      * @return array{items:list<array<string,mixed>>,total:int,page:int,limit:int} 金额输出为定点元字符串。
      */
     public function listing(array $filters, int $page, int $limit): array
@@ -71,7 +71,12 @@ final class PayOrderQueryService extends BaseService
         );
     }
 
-    /** @return array{order:array<string,mixed>,notification:?array,receipt:?array,actions:array<string,bool|string|null>} */
+    /**
+     * @return array{order:array<string,mixed>,notification:?array,refunds:list<array>,
+     *     refund_summary:array{paid_amount:?string,refunded_amount:string,pending_amount:string,
+     *         available_amount:string,has_unresolved:bool,status_label:string,request_no:string},
+     *     receipt:?array,actions:array<string,bool|string|null>}
+     */
     public function detail(string $bizNo): array
     {
         return $this->transaction(function () use ($bizNo): array {
@@ -106,34 +111,71 @@ final class PayOrderQueryService extends BaseService
             }
             // 只取原单保存的产品/动作标识，不读取活动插件推测，也不公开其他展示参数。
             $presentation = $pay === null ? [] : $pay['ext_json']['presentation'] ?? [];
+            $refunds = $pay === null ? [] : $this->refunds->forPayment($pay['pay_no']);
+            $totals = [
+                'count' => count($refunds),
+                'refunded' => 0,
+                'processing' => 0,
+                'unknown' => 0,
+            ];
+            foreach ($refunds as $refund) {
+                $amount = (int) $refund['refund_amount'];
+                match ((int) $refund['status']) {
+                    RefundConstant::SUCCESS => ($totals['refunded'] += $amount),
+                    RefundConstant::PROCESSING => ($totals['processing'] += $amount),
+                    RefundConstant::UNKNOWN => ($totals['unknown'] += $amount),
+                    RefundConstant::FAILED => null,
+                    default => throw new RuntimeException('未知退款状态'),
+                };
+            }
+            $summary = $this->refundSummary($pay, $totals);
             return [
                 'order' => $this->row(
                     $biz,
                     $pay,
                     $task,
                     $pay === null ? [] : $this->catalog->typeCodes(),
+                    $summary,
                 ) + [
                     'pay_product' => $presentation['pay_product'] ?? null,
                     'pay_action' => $presentation['pay_action'] ?? null,
                 ],
                 'notification' => $this->notificationQuery->summary($task),
-                'refunds' =>
-                    $pay === null
-                        ? []
-                        : array_map(
-                            static fn($refund): array => [
-                                'refund_no' => $refund['refund_no'],
-                                'amount' => Money::format((int) $refund['refund_amount']),
-                                'status_label' => RefundConstant::label((int) $refund['status']),
-                                'result_code' => $refund['result_code'],
-                                'result_label' => PaymentResultCode::label($refund['result_code']),
-                                'channel_refund_no' => $refund['channel_refund_no'],
-                                'created_at' => $refund['created_at'],
-                            ],
-                            $this->refunds->forPayment($pay['pay_no']),
-                        ),
+                'refunds' => array_map(
+                    static fn($refund): array => [
+                        'refund_no' => $refund['refund_no'],
+                        'amount' => Money::format((int) $refund['refund_amount']),
+                        'status' => (int) $refund['status'],
+                        'status_label' => RefundConstant::label((int) $refund['status']),
+                        'result_code' => $refund['result_code'],
+                        'result_label' => PaymentResultCode::label($refund['result_code']),
+                        'channel_refund_no' => $refund['channel_refund_no'],
+                        'created_at' => $refund['created_at'],
+                        'updated_at' => $refund['updated_at'],
+                    ],
+                    $refunds,
+                ),
+                'refund_summary' => [
+                    'paid_amount' =>
+                        $summary['paid_amount'] === null
+                            ? null
+                            : Money::format($summary['paid_amount']),
+                    'refunded_amount' => Money::format($summary['refunded_amount']),
+                    'pending_amount' => Money::format($summary['pending_amount']),
+                    'available_amount' => Money::format($summary['available_amount']),
+                    'has_unresolved' => $summary['has_unresolved'],
+                    'status_label' => $summary['status_label'],
+                    // 每次打开详情产生一次申请号；同一表单提交和读取结果始终沿用它。
+                    'request_no' => bin2hex(random_bytes(16)),
+                ],
                 'receipt' => $receiptView,
-                'actions' => $this->actions->resolve($biz, $pay, $task),
+                'actions' => $this->actions->resolve(
+                    $biz,
+                    $pay,
+                    $task,
+                    $summary['available_amount'],
+                    $summary['has_unresolved'],
+                ),
             ];
         });
     }
@@ -237,12 +279,19 @@ final class PayOrderQueryService extends BaseService
                                 'attempt_no',
                                 'notify_merchant',
                                 'previous_notify_status',
+                                'refund_no',
+                                'refund_amount',
                             ]),
                         )
                         : [];
                     if (isset($item['evidence']['received_amount'])) {
                         $item['evidence']['received_amount'] = Money::format(
                             (int) $item['evidence']['received_amount'],
+                        );
+                    }
+                    if (isset($item['evidence']['refund_amount'])) {
+                        $item['evidence']['refund_amount'] = Money::format(
+                            (int) $item['evidence']['refund_amount'],
                         );
                     }
                 }
@@ -268,7 +317,7 @@ final class PayOrderQueryService extends BaseService
      * 同一读取快照按 200 行分批写入临时流，最大 10000 行；生成完毕提交审计后才发送 HTTP，避免导出中混入错误 JSON。
      * 临时流最多在内存保留 1 MiB，之后由 PHP 临时流管理文件；不返回文件路径，响应持有者必须关闭流。
      *
-     * @param array{from:string,until:string,status:?int,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
      * @return resource 可读 CSV 流；不是文件路径或公开下载链接。
      */
     public function export(array $filters, AdminActionContext $actor): mixed
@@ -314,7 +363,12 @@ final class PayOrderQueryService extends BaseService
                     '外部订单号',
                     '支付单号',
                     '订单名称',
-                    '状态',
+                    '订单状态',
+                    '支付状态',
+                    '退款情况',
+                    '已成功退款（元）',
+                    '未决退款占用（元）',
+                    '剩余可退（元）',
                     '业务金额（元）',
                     '提示付款金额（元）',
                     '已确认实收（元）',
@@ -340,7 +394,12 @@ final class PayOrderQueryService extends BaseService
                             $row['merchant_order_no'],
                             $row['pay_no'] ?? '',
                             $row['subject'],
+                            $row['display_status_label'],
                             $row['status_label'],
+                            $row['refund_status_label'],
+                            $row['refunded_amount'],
+                            $row['refund_pending_amount'],
+                            $row['refundable_amount'] ?? '',
                             $row['order_amount'],
                             $row['receipt_amount'] ?? '',
                             $row['received_amount'] ?? '',
@@ -421,6 +480,9 @@ final class PayOrderQueryService extends BaseService
         $tasks = $this->tasks->forPayOrders(
             array_map(static fn(PayOrder $pay): string => $pay['pay_no'], array_values($pays)),
         );
+        $refunds = $this->refunds->summaries(
+            array_map(static fn(PayOrder $pay): string => $pay['pay_no'], array_values($pays)),
+        );
         // 按支付单保存的方式 ID 批量映射，包含停用方式；不从通道当前配置推测，不逐行查询。
         $typeCodes = $pays === [] ? [] : $this->catalog->typeCodes();
         return array_map(
@@ -431,6 +493,12 @@ final class PayOrderQueryService extends BaseService
                     ? $tasks[$pays[$biz['biz_no']]['pay_no']] ?? null
                     : null,
                 $typeCodes,
+                $this->refundSummary(
+                    $pays[$biz['biz_no']] ?? null,
+                    isset($pays[$biz['biz_no']])
+                        ? $refunds[$pays[$biz['biz_no']]['pay_no']] ?? []
+                        : [],
+                ),
             ),
             $businesses,
         );
@@ -438,10 +506,16 @@ final class PayOrderQueryService extends BaseService
 
     /**
      * @param array<int|string,string> $typeCodes 含已停用方式的字典，关联依据为支付单冻结的 pay_type_id。
+     * @param array{status:string,status_label:string,paid_amount:?int,refunded_amount:int,pending_amount:int,available_amount:int,has_unresolved:bool} $refund 同一读取快照的退款汇总，金额为分。
      * @return array<string,mixed> 未选择方式和未确认实收保留 null；字典缺失时仍保留方式 ID 供区分异常。
      */
-    private function row(BizOrder $biz, ?PayOrder $pay, ?NotifyTask $task, array $typeCodes): array
-    {
+    private function row(
+        BizOrder $biz,
+        ?PayOrder $pay,
+        ?NotifyTask $task,
+        array $typeCodes,
+        array $refund,
+    ): array {
         if (
             ($biz['active_pay_no'] === null) !== ($pay === null) ||
             ($pay !== null &&
@@ -461,6 +535,9 @@ final class PayOrderQueryService extends BaseService
         ) {
             throw new RuntimeException('原通知责任与业务身份不一致');
         }
+        $hasRefund =
+            (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS &&
+            $refund['status'] !== 'none';
         return [
             'app_id' => $biz['app_id'],
             'pid' => $biz['pid'],
@@ -472,6 +549,22 @@ final class PayOrderQueryService extends BaseService
             'subject' => $biz['subject'],
             'status' => (int) $biz['status'],
             'status_label' => TradeConstant::label((int) $biz['status']),
+            'display_status' => $hasRefund ? $refund['status'] : (string) $biz['status'],
+            'display_status_label' =>
+                $hasRefund && $refund['status'] !== 'refund_failed'
+                    ? $refund['status_label']
+                    : TradeConstant::label((int) $biz['status']),
+            'refund_status_label' =>
+                (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS
+                    ? $refund['status_label']
+                    : '—',
+            'refunded_amount' => Money::format($refund['refunded_amount']),
+            'refund_pending_amount' => Money::format($refund['pending_amount']),
+            'refundable_amount' =>
+                (int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS &&
+                $refund['paid_amount'] !== null
+                    ? Money::format($refund['available_amount'])
+                    : null,
             'order_amount' => Money::format((int) $biz['order_amount']),
             'created_at' => $biz['created_at'],
             'paid_at' => $biz['paid_at'],
@@ -508,6 +601,46 @@ final class PayOrderQueryService extends BaseService
                         ((int) $biz['status'] === TradeConstant::ORDER_STATUS_SUCCESS
                             ? '异常：缺少通知记录'
                             : '尚未生成通知'),
+        ];
+    }
+
+    /**
+     * 后台列表、详情及导出共用的只读退款口径；金额保持整数分，公开映射时才格式化。
+     * 未决优先，全退只比较累计成功退款与实付，不用剩余可退额度推断。
+     *
+     * @param array{count?:int,refunded?:int,processing?:int,unknown?:int} $totals
+     * @return array{status:string,status_label:string,paid_amount:?int,refunded_amount:int,
+     *     pending_amount:int,available_amount:int,has_unresolved:bool}
+     */
+    private function refundSummary(?PayOrder $pay, array $totals): array
+    {
+        $received = $pay?->receivedAmount();
+        $refunded = $totals['refunded'] ?? 0;
+        $processing = $totals['processing'] ?? 0;
+        $unknown = $totals['unknown'] ?? 0;
+        $status = match (true) {
+            $unknown > 0 => 'refund_unknown',
+            $processing > 0 => 'refund_processing',
+            $refunded > 0 && $refunded === $received => 'refund_full',
+            $refunded > 0 => 'refund_partial',
+            ($totals['count'] ?? 0) > 0 => 'refund_failed',
+            default => 'none',
+        };
+        return [
+            'status' => $status,
+            'status_label' => match ($status) {
+                'refund_unknown' => '退款结果待核实',
+                'refund_processing' => '退款处理中',
+                'refund_full' => '已全部退款',
+                'refund_partial' => '已部分退款',
+                'refund_failed' => '退款未成功',
+                default => '尚未退款',
+            },
+            'paid_amount' => $received,
+            'refunded_amount' => $refunded,
+            'pending_amount' => $processing + $unknown,
+            'available_amount' => max(0, ($received ?? 0) - $refunded - $processing - $unknown),
+            'has_unresolved' => $processing + $unknown > 0,
         ];
     }
 }

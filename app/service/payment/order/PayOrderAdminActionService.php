@@ -10,6 +10,7 @@ use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\model\payment\PayOrder;
+use app\model\payment\RefundOrder;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\repository\payment\trade\BizOrderRepository;
 use app\repository\payment\trade\PayOrderOperationLogRepository;
@@ -34,6 +35,7 @@ final class PayOrderAdminActionService extends BaseService
         private readonly AdminAuthService $authentication,
         private readonly NotificationPolicy $notificationPolicy,
         private readonly Clock $clock,
+        private readonly RefundService $refunds,
     ) {}
 
     /**
@@ -58,12 +60,31 @@ final class PayOrderAdminActionService extends BaseService
     }
 
     /** 本地关闭要求有效身份和非空原因；不能向用户宣称平台二维码已撤销。 */
-    public function close(
-        string $payNo,
-        AdminActionContext $actor,
-    ): PayOrder {
+    public function close(string $payNo, AdminActionContext $actor): PayOrder
+    {
         // 生命周期在关闭事务内核验管理员，取得必要锁后读取本次关闭时间。
         return $this->lifecycle->closeLocally($payNo, $actor);
+    }
+
+    /**
+     * 密码复核后交给退款服务认领；不能用外层事务包住平台退款请求。
+     *
+     * @return array{refund:RefundOrder,message:string}
+     */
+    public function refund(
+        string $payNo,
+        int $amount,
+        string $requestNo,
+        AdminActionContext $actor,
+        string $currentPassword,
+    ): array {
+        $this->authentication->verifyPassword(
+            $actor->adminId,
+            $actor->sessionVersion,
+            $actor->requestId,
+            $currentPassword,
+        );
+        return $this->refunds->refundByAdmin($payNo, $amount, $requestNo, $actor);
     }
 
     /**
@@ -71,10 +92,8 @@ final class PayOrderAdminActionService extends BaseService
      * 从读取到加锁期间若生成了尝试，返回冲突让页面刷新；不在已开启事务里嵌套调用生命周期事务。
      * 无支付单时，在管理员和业务单锁内读取关闭时间；重复关闭保留原时间。
      */
-    public function closeBusiness(
-        string $bizNo,
-        AdminActionContext $actor,
-    ): void {
+    public function closeBusiness(string $bizNo, AdminActionContext $actor): void
+    {
         $observed =
             $this->bizOrders->find($bizNo) ??
             throw new BusinessException('业务订单不存在', ApiResponseConstant::NOT_FOUND);

@@ -14,6 +14,12 @@ use app\model\payment\NotifyTask;
  */
 final class NotifyTaskRepository extends BaseRepository
 {
+    /** 列表只读摘要统一使用 n 别名；不加载冻结正文、凭证或认领令牌。 */
+    private const SUMMARY_FIELDS =
+        'n.notify_no,n.biz_no,n.pay_no,n.status,n.retry_count,n.manual_attempt_no,' .
+        'n.first_ack_at,n.released_at,n.next_retry_at,n.last_notify_at,n.created_at,' .
+        'n.notify_url,n.last_response';
+
     public function __construct(NotifyTask $model)
     {
         parent::__construct($model);
@@ -68,11 +74,11 @@ final class NotifyTaskRepository extends BaseRepository
 
     /**
      * @param array{from?:string,until?:string,app_id?:string,notify_no?:string,pay_no?:string,biz_no?:string,status?:int|'acknowledged'} $filters 日期缺省时查询全部；acknowledged 按首次有效应答筛选，不受后来补发结果影响。
-     * @return array{items:list<NotifyTask>,total:int} 尝试次数不是任务条数。
+     * @return array{items:list<NotifyTask>,total:int} 只读摘要；尝试次数不是任务条数。
      */
     public function adminPage(array $filters, int $page, int $limit): array
     {
-        $query = $this->model->alias('n')->field('n.*');
+        $query = $this->model->alias('n')->field(self::SUMMARY_FIELDS);
         if (isset($filters['from'], $filters['until'])) {
             $query
                 ->where('n.created_at', '>=', $filters['from'])
@@ -99,7 +105,7 @@ final class NotifyTaskRepository extends BaseRepository
     }
 
     /**
-     * 批量读取原成功责任，避免列表逐行查库。
+     * 批量读取原成功责任的只读摘要，避免列表逐行查库；不能用于发送或交易更新。
      * @param list<string> $payNos
      * @return array<string,NotifyTask>
      */
@@ -111,8 +117,10 @@ final class NotifyTaskRepository extends BaseRepository
         $result = [];
         foreach (
             $this->model
-                ->where('event_type', NotifyConstant::EVENT_PAY_SUCCESS)
-                ->whereIn('pay_no', $payNos)
+                ->alias('n')
+                ->field(self::SUMMARY_FIELDS)
+                ->where('n.event_type', NotifyConstant::EVENT_PAY_SUCCESS)
+                ->whereIn('n.pay_no', $payNos)
                 ->select()
             as $task
         ) {

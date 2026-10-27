@@ -127,27 +127,32 @@ final class PayOrderRepository extends BaseRepository
     }
 
     /**
-     * 调用方已锁定通道，查询当天发起且成功/有效待付款的原订单金额与笔数。
-     * 主事务的通道锁串行化检查与新尝试插入；独立只读连接取得刚提交的记录，避免 RR 旧快照。
+     * 调用方已锁定本批全部通道，按通道汇总当天成功/有效待付款的原金额与笔数。
+     * 主事务的通道锁串行化检查与新尝试插入；本批共用一次独立读取，避免 RR 旧快照。
      * 不锁已有业务单/支付单，避免和支付准备、状态推进反向取锁；查询不写入或提交主事务。
      * 仅启用日限制时调用，失败/关闭/已超时单不占用；到账偏移不计入通道限额。
-     * @return array{amount:int,count:int}
+     *
+     * @param list<string> $channelIds 仅包含启用了日限制且仍可用的已锁通道。
+     * @return array<string,array{amount:int,count:int}> 无占用的通道没有分组行，由调用方按零处理。
      */
-    public function channelDailyUsage(
-        string $channelId,
+    public function channelDailyUsages(
+        array $channelIds,
         string $from,
         string $to,
         string $now,
     ): array {
         $this->requireTransaction();
+        if ($channelIds === []) {
+            return [];
+        }
         // 以配置数组作为 ThinkORM 连接键，与名为 mysql 的主事务连接分离。
         $reader = Db::connect(Db::getConfig('connections.mysql'));
         try {
-            $row = $reader
+            $rows = $reader
                 ->table('ma_pay_order')
                 ->alias('p')
                 ->join('ma_biz_order b', 'b.biz_no=p.biz_no')
-                ->where('p.channel_id', $channelId)
+                ->whereIn('p.channel_id', array_values(array_unique($channelIds)))
                 ->where('p.created_at', '>=', $from)
                 ->where('p.created_at', '<', $to)
                 ->where(function (Query $query) use ($now): void {
@@ -162,11 +167,20 @@ final class PayOrderRepository extends BaseRepository
                                 ->where('p.expire_at', '>', $now);
                         });
                 })
+                ->field('p.channel_id')
                 ->fieldRaw(
                     'COUNT(*) AS used_count, COALESCE(SUM(b.order_amount), 0) AS used_amount',
                 )
-                ->find();
-            return ['amount' => (int) $row['used_amount'], 'count' => (int) $row['used_count']];
+                ->group('p.channel_id')
+                ->select();
+            $result = [];
+            foreach ($rows as $row) {
+                $result[$row['channel_id']] = [
+                    'amount' => (int) $row['used_amount'],
+                    'count' => (int) $row['used_count'],
+                ];
+            }
+            return $result;
         } finally {
             $reader->close();
         }
@@ -237,7 +251,9 @@ final class PayOrderRepository extends BaseRepository
             if ($paidAt === null) {
                 $query->where('expire_at', '>', $now);
             } else {
-                $query->where('request_at', '<=', $paidUntil ?? $paidAt)->where('expire_at', '>', $paidAt);
+                $query
+                    ->where('request_at', '<=', $paidUntil ?? $paidAt)
+                    ->where('expire_at', '>', $paidAt);
             }
             $rows = $query->order('id')->limit(500)->select();
             foreach ($rows as $row) {
@@ -284,7 +300,7 @@ final class PayOrderRepository extends BaseRepository
 
     /**
      * @param list<string> $numbers 已保存的支付引用，不按金额或时间猜单。
-     * @return array<string,PayOrder> 后台流水列表批量关联业务号，空引用不退化为全表读取。
+     * @return array<string,PayOrder> 后台流水列表的只读关联投影，空引用不退化为全表读取；不用于交易更新。
      */
     public function forNumbers(array $numbers): array
     {
@@ -293,7 +309,10 @@ final class PayOrderRepository extends BaseRepository
         }
         $result = [];
         foreach (
-            $this->model->whereIn('pay_no', array_values(array_unique($numbers)))->select()
+            $this->model
+                ->whereIn('pay_no', array_values(array_unique($numbers)))
+                ->field('pay_no,biz_no,receipt_scope_key')
+                ->select()
             as $pay
         ) {
             $result[$pay['pay_no']] = $pay;

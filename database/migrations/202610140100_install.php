@@ -22,7 +22,8 @@ CREATE TABLE ma_admin_operation_log (
   PRIMARY KEY (`id`),
   KEY `idx_admin_audit_created` (`created_at`,`id`),
   KEY `idx_admin_operation_created` (`admin_user_id`,`created_at`),
-  KEY `idx_admin_target` (`target_type`,`target_id`,`id`)
+  KEY `idx_admin_target` (`target_type`,`target_id`,`id`),
+  KEY `idx_admin_request` (`request_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='管理员配置、凭证及系统管理动作的脱敏审计记录'
 SQL,
 
@@ -56,7 +57,8 @@ CREATE TABLE ma_channel_notify_log (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录最后更新时间，上海时区',
   PRIMARY KEY (`id`),
   KEY `idx_channel_ingress_created` (`created_at`,`id`),
-  KEY `idx_channel_notify_created` (`channel_id`,`created_at`)
+  KEY `idx_channel_notify_created` (`channel_id`,`created_at`),
+  KEY `idx_channel_ingress_request` (`request_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='通道通知入口的接收与校验日志，包含未能确认订单的请求'
 SQL,
 

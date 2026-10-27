@@ -15,11 +15,13 @@ use think\Response;
 final class CashierController extends BaseController
 {
     public function order(
+        string $biz_no,
+        string $token,
         CashierValidator $validator,
         CashierService $cashier,
         Clock $clock,
     ): Response {
-        $identity = $validator->identity($this->request->get());
+        $identity = $validator->identity(compact('biz_no', 'token'));
         return $this->success(
             $cashier->view($identity['biz_no'], $identity['token'], $clock->now()),
             '查询成功',
@@ -27,20 +29,26 @@ final class CashierController extends BaseController
     }
 
     public function status(
+        string $biz_no,
+        string $token,
         CashierValidator $validator,
         CashierService $cashier,
         Clock $clock,
     ): Response {
-        $identity = $validator->identity($this->request->get());
+        $identity = $validator->identity(compact('biz_no', 'token'));
         return $this->success(
             $cashier->status($identity['biz_no'], $identity['token'], $clock->now()),
             '查询成功',
         );
     }
 
-    public function completion(CashierValidator $validator, CashierService $cashier): Response
-    {
-        $identity = $validator->identity($this->request->get());
+    public function completion(
+        string $biz_no,
+        string $token,
+        CashierValidator $validator,
+        CashierService $cashier,
+    ): Response {
+        $identity = $validator->identity(compact('biz_no', 'token'));
         return $this->success(
             $cashier->completion($identity['biz_no'], $identity['token']),
             '查询成功',

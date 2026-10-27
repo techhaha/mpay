@@ -17,7 +17,7 @@ interface PaymentInterface extends PayPluginInterface
      *     pay_no:string,biz_no:string,channel_id:string,pay_type_code:string,amount:int,expire_at:string,
      *     subject:string,client_ip:?string,notify_url:string,return_url:string,_env:string,_submit_type:string,
      *     assets:array<string,?string>,extra:array<string,mixed>
-     * } $order notify_url 指向本地支付号入口，return_url 回到本地收银台，不是商户回跳地址。
+     * } $order notify_url 指向本地支付号入口，return_url 使用本站业务号/token 路径，不是商户回跳地址；平台可追加协议 query。
      * pending 必须包含 pay_type/pay_product/pay_action 和 presentation；产品及动作由插件按实际准备路径填写。
      * 这两个标识用于追踪，不等同于支付成功或采集接口方法；公开 pay_params 由插件生成并冻结。
      * 平台地址/材料由插件校验，前端按 pay_page/_page 选择已交付组件；核心不注册平台专用展示类。
@@ -47,7 +47,7 @@ interface PaymentInterface extends PayPluginInterface
     public function close(array $order): array;
 
     /**
-     * @param array{refund_no:string,pay_no:string,refund_amount:int,chan_order_no:?string,chan_trade_no:?string,extra:array} $order 原订单及本次退款身份；金额为分。
+     * @param array{refund_no:string,pay_no:string,channel_id:string,refund_amount:int,chan_order_no:?string,chan_trade_no:?string,extra:array} $order 原订单及本次退款身份；金额为分，累计额度以已确认实收为上限。
      * @return array{status:string,refund_no:string,pay_no:string,refund_amount:int,chan_refund_no:?string} status 为 success/pending/unknown/failed。
      * @throws UnsupportedPaymentOperationException 插件没有退款接口。
      * @throws PaymentDefinitiveException 平台明确拒绝且未退款；说明由插件脱敏，供受限技术日志记录。

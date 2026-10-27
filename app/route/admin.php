@@ -259,6 +259,14 @@ Route::group('adminapi', function (): void {
             Route::post('close', [PayOrderController::class, 'close'])
                 ->name('admin.orders.close')
                 ->middleware('admin.write');
+            Route::post('refund', [PayOrderController::class, 'refund'])
+                ->name('admin.orders.refund')
+                ->middleware('rate', [
+                    'rule' => 'admin_sensitive',
+                    'identity' => 'admin',
+                    'action' => 'refund',
+                ])
+                ->middleware('admin.write');
             Route::post('retry-notification', [PayOrderController::class, 'retryNotification'])
                 ->name('admin.orders.retry')
                 ->middleware('rate', [

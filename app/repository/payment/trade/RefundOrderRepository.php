@@ -116,12 +116,16 @@ final class RefundOrderRepository extends BaseRepository
         return $result;
     }
 
-    /** 业务单筛选中的相关 EXISTS：只汇总当前 active_pay_no，不先汇总整张退款表。 */
+    /** 相关子查询只检查当前 active_pay_no；paid_only 用 NOT EXISTS 排除非失败申请，其余按原单汇总。 */
     public function filterForOrder(Query $query, string $status): void
     {
         $query
             ->table('ma_refund_order')
             ->whereColumn('ma_refund_order.pay_no', 'ma_biz_order.active_pay_no');
+        if ($status === 'paid_only') {
+            $query->fieldRaw('1')->where('ma_refund_order.status', '<>', RefundConstant::FAILED);
+            return;
+        }
         if (in_array($status, ['refund_full', 'refund_partial'], true)) {
             $query->join(
                 'ma_pay_order refund_payment',

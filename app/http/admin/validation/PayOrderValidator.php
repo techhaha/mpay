@@ -27,7 +27,7 @@ final class PayOrderValidator extends Validate
         'pay_type' => ['string', 'regex' => PaymentTypeCode::PATTERN],
         'status' => [
             'string',
-            'regex' => '/^(?:[0-5]|refund_(?:partial|full|processing|unknown|failed))$/D',
+            'regex' => '/^(?:[0-5]|paid_only|refund_(?:partial|full|processing|unknown|failed))$/D',
         ],
         'notification_status' => [
             'string',
@@ -116,6 +116,7 @@ final class PayOrderValidator extends Validate
 
     /**
      * 默认最近七天；列表最多一年，导出最多 31 天，截止日转换为次日零时的排他上界。
+     * status=2 包含退款；paid_only 排除成功及未决退款，只有失败申请的订单仍计入。
      * notification_status 的 none 表示没有付款通知任务；0～4 表示当前调度状态，acknowledged 表示曾确认成功，空值表示不限定。
      *
      * @param array<string,mixed> $input

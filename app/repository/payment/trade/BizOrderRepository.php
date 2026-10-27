@@ -206,9 +206,14 @@ final class BizOrderRepository extends BaseRepository
                 $query->where('status', $filters['status']);
             } else {
                 $query->where('status', TradeConstant::ORDER_STATUS_SUCCESS);
-                $query->whereExists(function (Query $refunds) use ($filters): void {
+                $condition = function (Query $refunds) use ($filters): void {
                     $this->refunds->filterForOrder($refunds, $filters['status']);
-                });
+                };
+                if ($filters['status'] === 'paid_only') {
+                    $query->whereNotExists($condition);
+                } else {
+                    $query->whereExists($condition);
+                }
             }
         }
         if (

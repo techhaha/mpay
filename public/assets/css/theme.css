@@ -54,32 +54,111 @@
 }
 
 /* 只给默认按钮设主色；官方 primary/normal/warm/danger 和颜色类保留各自语义。 */
-.layui-btn {border-radius:4px}
-.layui-btn:where(:not(.layui-btn-primary):not(.layui-btn-normal):not(.layui-btn-warm):not(.layui-btn-danger):not(.layui-btn-disabled):not([class*="layui-bg-"])) {
-    background:var(--mpay-action);color:var(--mpay-on-action);font-weight:500;
+.layui-btn {
+    border-radius: 4px;
 }
-.layui-btn:where(:not(.layui-btn-primary):not(.layui-btn-normal):not(.layui-btn-warm):not(.layui-btn-danger):not(.layui-btn-disabled):not([class*="layui-bg-"])):hover {
-    background:var(--mpay-action-hover);color:var(--mpay-on-action);opacity:1;
+.layui-btn:where(
+    :not(.layui-btn-primary):not(.layui-btn-normal):not(.layui-btn-warm):not(.layui-btn-danger):not(
+            .layui-btn-disabled
+        ):not([class*='layui-bg-'])
+) {
+    background: var(--mpay-action);
+    color: var(--mpay-on-action);
+    font-weight: 500;
 }
-.layui-btn-primary {background:var(--mpay-surface);color:var(--mpay-text);border-color:var(--mpay-input-border)}
-.layui-btn-primary:hover {color:var(--mpay-primary-dark);border-color:var(--mpay-primary);background:var(--mpay-primary-soft);opacity:1}
-.layui-btn-normal {background:var(--mpay-link);color:var(--mpay-on-blue)}
-.layui-btn-normal:hover {color:var(--mpay-on-blue)}
-.layui-btn-warm {background:var(--mpay-warning);color:var(--mpay-on-warning)}
-.layui-btn-warm:hover {color:var(--mpay-on-warning)}
-.layui-btn-danger {background:var(--mpay-danger);color:#fff}
+.layui-btn:where(
+        :not(.layui-btn-primary):not(.layui-btn-normal):not(.layui-btn-warm):not(
+                .layui-btn-danger
+            ):not(.layui-btn-disabled):not([class*='layui-bg-'])
+    ):hover {
+    background: var(--mpay-action-hover);
+    color: var(--mpay-on-action);
+    opacity: 1;
+}
+.layui-btn-primary {
+    background: var(--mpay-surface);
+    color: var(--mpay-text);
+    border-color: var(--mpay-input-border);
+}
+.layui-btn-primary:hover {
+    color: var(--mpay-primary-dark);
+    border-color: var(--mpay-primary);
+    background: var(--mpay-primary-soft);
+    opacity: 1;
+}
+.layui-btn-normal {
+    background: var(--mpay-link);
+    color: var(--mpay-on-blue);
+}
+.layui-btn-normal:hover {
+    color: var(--mpay-on-blue);
+}
+.layui-btn-warm {
+    background: var(--mpay-warning);
+    color: var(--mpay-on-warning);
+}
+.layui-btn-warm:hover {
+    color: var(--mpay-on-warning);
+}
+.layui-btn-danger {
+    background: var(--mpay-danger);
+    color: #fff;
+}
 /* disabled 必须盖过默认实心及描边的悬停效果，避免误示为可执行。 */
-.layui-btn:disabled,.layui-btn-disabled,.layui-btn:disabled:hover,.layui-btn-disabled:hover {
-    background:var(--mpay-neutral-soft)!important;color:var(--mpay-disabled)!important;border-color:var(--mpay-border)!important;cursor:not-allowed;opacity:1;
+.layui-btn:disabled,
+.layui-btn-disabled,
+.layui-btn:disabled:hover,
+.layui-btn-disabled:hover {
+    background: var(--mpay-neutral-soft) !important;
+    color: var(--mpay-disabled) !important;
+    border-color: var(--mpay-border) !important;
+    cursor: not-allowed;
+    opacity: 1;
 }
-.layui-input,.layui-textarea,.layui-select {border-color:var(--mpay-input-border);color:var(--mpay-text)}
-.layui-input::placeholder,.layui-textarea::placeholder {color:var(--mpay-placeholder)}
+.layui-input,
+.layui-textarea,
+.layui-select {
+    border-color: var(--mpay-input-border);
+    color: var(--mpay-text);
+}
+.layui-input::placeholder,
+.layui-textarea::placeholder {
+    color: var(--mpay-placeholder);
+}
 /* 输入框以边框和浅色光晕标识焦点，避免与通用 focus-visible 外轮廓叠成双框；按钮与链接保留轮廓。 */
-.layui-input:focus,.layui-textarea:focus {outline:none;outline-offset:0;border-color:var(--mpay-primary)!important;box-shadow:0 0 0 2px var(--mpay-focus-ring)}
-.layui-form-radioed>i,.layui-form-radio:hover>i {color:var(--mpay-primary)}
-.layui-form-checked[lay-skin=primary]>i,.layui-form-onswitch {border-color:var(--mpay-primary)!important;background:var(--mpay-primary);color:var(--mpay-on-primary)}
-.layui-form-select dl dd.layui-this,.layui-select-panel-wrap dd.layui-this {background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
-.layui-form-select dl dd:hover,.layui-select-panel-wrap dd:hover {background:var(--mpay-surface-muted)}
-.layui-laypage-curr .layui-laypage-em {background:var(--mpay-primary)}
-.layui-laypage .layui-laypage-curr em {color:var(--mpay-on-primary)}
-:focus-visible {outline:2px solid var(--mpay-primary-dark);outline-offset:3px}
+.layui-input:focus,
+.layui-textarea:focus {
+    outline: none;
+    outline-offset: 0;
+    border-color: var(--mpay-primary) !important;
+    box-shadow: 0 0 0 2px var(--mpay-focus-ring);
+}
+.layui-form-radioed > i,
+.layui-form-radio:hover > i {
+    color: var(--mpay-primary);
+}
+.layui-form-checked[lay-skin='primary'] > i,
+.layui-form-onswitch {
+    border-color: var(--mpay-primary) !important;
+    background: var(--mpay-primary);
+    color: var(--mpay-on-primary);
+}
+.layui-form-select dl dd.layui-this,
+.layui-select-panel-wrap dd.layui-this {
+    background: var(--mpay-primary-soft);
+    color: var(--mpay-primary-dark);
+}
+.layui-form-select dl dd:hover,
+.layui-select-panel-wrap dd:hover {
+    background: var(--mpay-surface-muted);
+}
+.layui-laypage-curr .layui-laypage-em {
+    background: var(--mpay-primary);
+}
+.layui-laypage .layui-laypage-curr em {
+    color: var(--mpay-on-primary);
+}
+:focus-visible {
+    outline: 2px solid var(--mpay-primary-dark);
+    outline-offset: 3px;
+}

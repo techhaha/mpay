@@ -10,10 +10,13 @@
         },
         mount(host, order, context) {
             const presentation = order.presentation;
-            const key = presentation?.pay_page + ':' + (presentation?.pay_page === 'page' ? presentation.pay_params?._page : '');
+            const key =
+                presentation?.pay_page +
+                ':' +
+                (presentation?.pay_page === 'page' ? presentation.pay_params?._page : '');
             const mount = pages.get(key);
             if (!mount) throw new Error('当前版本不支持该付款页面，请联系商户。');
             return mount(host, order, presentation.pay_params, context);
-        }
+        },
     };
 })(window);

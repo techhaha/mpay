@@ -1,13 +1,55 @@
 /* 使用 Layui 原生表单和栅格；页面仅调整上置标签、统一宽度与卡片留白。 */
-.settings-cards{margin-bottom:12px}
-.settings-cards .layui-card{margin-bottom:0}
-.settings-cards .layui-card-header{padding-left:32px;padding-right:32px}
-.settings-cards .layui-card-body{padding:32px;min-height:280px}
-.settings-form{max-width:560px}
-.settings-form fieldset{border:0;padding:0;margin:0;min-width:0}
-.settings-form .layui-form-item{margin-bottom:24px}
-.settings-form .layui-form-item:last-child{margin-bottom:0}
-.settings-form .layui-form-label{float:none;width:auto;padding:0;margin-bottom:12px;text-align:left}
-.settings-form .layui-input-block{margin-left:0}
-.settings-form [data-form-status]{margin-left:12px;font-size:12px;color:var(--mpay-muted)}
-@media(max-width:991px){.settings-cards .layui-card-header{padding-left:24px;padding-right:24px}.settings-cards .layui-card-body{padding:24px;min-height:0}}
+.settings-cards {
+    margin-bottom: 12px;
+}
+.settings-cards .layui-card {
+    margin-bottom: 0;
+}
+.settings-cards .layui-card-header {
+    padding-left: 32px;
+    padding-right: 32px;
+}
+.settings-cards .layui-card-body {
+    padding: 32px;
+    min-height: 280px;
+}
+.settings-form {
+    max-width: 560px;
+}
+.settings-form fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+}
+.settings-form .layui-form-item {
+    margin-bottom: 24px;
+}
+.settings-form .layui-form-item:last-child {
+    margin-bottom: 0;
+}
+.settings-form .layui-form-label {
+    float: none;
+    width: auto;
+    padding: 0;
+    margin-bottom: 12px;
+    text-align: left;
+}
+.settings-form .layui-input-block {
+    margin-left: 0;
+}
+.settings-form [data-form-status] {
+    margin-left: 12px;
+    font-size: 12px;
+    color: var(--mpay-muted);
+}
+@media (max-width: 991px) {
+    .settings-cards .layui-card-header {
+        padding-left: 24px;
+        padding-right: 24px;
+    }
+    .settings-cards .layui-card-body {
+        padding: 24px;
+        min-height: 0;
+    }
+}

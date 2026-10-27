@@ -1,33 +1,245 @@
 /* 关于页复用后台卡片与按钮，仅定义介绍、资料链接和服务信息的内容排版。 */
-.about-intro .layui-card-body{padding:28px}
-.about-brand{display:flex;align-items:center;gap:20px}
-.about-brand>span{padding-left:20px;border-left:1px solid var(--mpay-border);font-size:13px;color:var(--mpay-muted)}
-.about-intro h2{font-size:23px;font-weight:600;color:var(--mpay-heading);margin:22px 0 10px}
-.about-intro p{font-size:14px;line-height:1.9;color:var(--mpay-muted);margin:0;max-width:780px}
-.about-capabilities{display:flex;gap:10px;flex-wrap:wrap;margin-top:20px}
-.about-capabilities>span{font-size:12px;color:var(--mpay-primary-dark);background:var(--mpay-primary-soft);border-radius:4px;padding:6px 12px}
-.about-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
-.about-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.about-links>a{display:flex;align-items:center;gap:12px;padding:14px;border-radius:5px;background:var(--mpay-surface-muted);color:var(--mpay-text);min-width:0}
-.about-links>a:hover{background:var(--mpay-primary-soft);color:var(--mpay-primary-dark)}
-.about-links .layui-icon{color:var(--mpay-primary-dark);font-size:21px}
-.about-links>a>span:nth-child(2){flex:1;min-width:0;font-size:13px}
-.about-links small{display:block;font-size:12px;line-height:1.6;margin-top:5px;color:var(--mpay-muted)}
-.about-links>a>span:last-child{color:var(--mpay-muted)}
-.about-feedback{display:inline-block;margin-top:18px;font-size:13px}
-.about-author{display:flex;gap:14px;align-items:center}
-.about-avatar{display:grid;place-items:center;width:48px;height:48px;border-radius:10px;background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);font-size:22px}
-.about-author h2{font-size:17px;font-weight:600;margin:0 0 6px;color:var(--mpay-heading)}
-.about-author p{font-size:12px;color:var(--mpay-muted);margin:0}
-.about-wechat{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 0;margin-top:10px;border-bottom:1px solid var(--mpay-border)}
-.about-wechat>div{display:flex;align-items:center;gap:16px}.about-wechat span{color:var(--mpay-muted);font-size:13px}.about-wechat strong{font-size:17px;font-weight:500;color:var(--mpay-heading);letter-spacing:1px}
-.about-contact-hint{margin:14px 0 0;font-size:12px;color:var(--mpay-muted);line-height:1.9}
-.about-services{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
-.about-services article{min-width:0;padding:4px 0 12px}
-.about-services .layui-icon{display:grid;place-items:center;width:38px;height:38px;border-radius:8px;background:var(--mpay-primary-soft);color:var(--mpay-primary-dark);font-size:21px}
-.about-services h3{font-size:15px;font-weight:600;margin:15px 0 10px;color:var(--mpay-heading)}
-.about-services p{font-size:13px;color:var(--mpay-muted);line-height:1.9;margin:0}
-.about-cases{display:flex;align-items:baseline;gap:18px;padding-top:18px;margin-top:10px;border-top:1px solid var(--mpay-border)}
-.about-cases>span{font-size:12px;color:var(--mpay-muted);flex-shrink:0}.about-cases>div{display:flex;flex-wrap:wrap;gap:8px}.about-cases>div>span{font-size:12px;background:var(--mpay-surface-muted);color:var(--mpay-text);padding:5px 10px;border-radius:4px}
-@media(max-width:1100px){.about-grid{grid-template-columns:1fr;gap:0}}
-@media(max-width:640px){.about-intro .layui-card-body{padding:22px}.about-brand{gap:14px}.about-brand .mpay-logo{width:132px}.about-brand>span{padding-left:14px}.about-intro h2{font-size:20px}.about-intro p{font-size:13px}.about-links,.about-services{grid-template-columns:1fr}.about-services{gap:18px}.about-cases{align-items:flex-start;flex-direction:column;gap:12px}.about-wechat{gap:10px}.about-wechat>div{gap:12px}}
+.about-intro .layui-card-body {
+    padding: 28px;
+}
+.about-brand {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.about-brand > span {
+    padding-left: 20px;
+    border-left: 1px solid var(--mpay-border);
+    font-size: 13px;
+    color: var(--mpay-muted);
+}
+.about-intro h2 {
+    font-size: 23px;
+    font-weight: 600;
+    color: var(--mpay-heading);
+    margin: 22px 0 10px;
+}
+.about-intro p {
+    font-size: 14px;
+    line-height: 1.9;
+    color: var(--mpay-muted);
+    margin: 0;
+    max-width: 780px;
+}
+.about-capabilities {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 20px;
+}
+.about-capabilities > span {
+    font-size: 12px;
+    color: var(--mpay-primary-dark);
+    background: var(--mpay-primary-soft);
+    border-radius: 4px;
+    padding: 6px 12px;
+}
+.about-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px;
+}
+.about-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+.about-links > a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 5px;
+    background: var(--mpay-surface-muted);
+    color: var(--mpay-text);
+    min-width: 0;
+}
+.about-links > a:hover {
+    background: var(--mpay-primary-soft);
+    color: var(--mpay-primary-dark);
+}
+.about-links .layui-icon {
+    color: var(--mpay-primary-dark);
+    font-size: 21px;
+}
+.about-links > a > span:nth-child(2) {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+}
+.about-links small {
+    display: block;
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 5px;
+    color: var(--mpay-muted);
+}
+.about-links > a > span:last-child {
+    color: var(--mpay-muted);
+}
+.about-feedback {
+    display: inline-block;
+    margin-top: 18px;
+    font-size: 13px;
+}
+.about-author {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+}
+.about-avatar {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    background: var(--mpay-primary-soft);
+    color: var(--mpay-primary-dark);
+    font-size: 22px;
+}
+.about-author h2 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    color: var(--mpay-heading);
+}
+.about-author p {
+    font-size: 12px;
+    color: var(--mpay-muted);
+    margin: 0;
+}
+.about-wechat {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 0;
+    margin-top: 10px;
+    border-bottom: 1px solid var(--mpay-border);
+}
+.about-wechat > div {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+.about-wechat span {
+    color: var(--mpay-muted);
+    font-size: 13px;
+}
+.about-wechat strong {
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--mpay-heading);
+    letter-spacing: 1px;
+}
+.about-contact-hint {
+    margin: 14px 0 0;
+    font-size: 12px;
+    color: var(--mpay-muted);
+    line-height: 1.9;
+}
+.about-services {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+}
+.about-services article {
+    min-width: 0;
+    padding: 4px 0 12px;
+}
+.about-services .layui-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: var(--mpay-primary-soft);
+    color: var(--mpay-primary-dark);
+    font-size: 21px;
+}
+.about-services h3 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 15px 0 10px;
+    color: var(--mpay-heading);
+}
+.about-services p {
+    font-size: 13px;
+    color: var(--mpay-muted);
+    line-height: 1.9;
+    margin: 0;
+}
+.about-cases {
+    display: flex;
+    align-items: baseline;
+    gap: 18px;
+    padding-top: 18px;
+    margin-top: 10px;
+    border-top: 1px solid var(--mpay-border);
+}
+.about-cases > span {
+    font-size: 12px;
+    color: var(--mpay-muted);
+    flex-shrink: 0;
+}
+.about-cases > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.about-cases > div > span {
+    font-size: 12px;
+    background: var(--mpay-surface-muted);
+    color: var(--mpay-text);
+    padding: 5px 10px;
+    border-radius: 4px;
+}
+@media (max-width: 1100px) {
+    .about-grid {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}
+@media (max-width: 640px) {
+    .about-intro .layui-card-body {
+        padding: 22px;
+    }
+    .about-brand {
+        gap: 14px;
+    }
+    .about-brand .mpay-logo {
+        width: 132px;
+    }
+    .about-brand > span {
+        padding-left: 14px;
+    }
+    .about-intro h2 {
+        font-size: 20px;
+    }
+    .about-intro p {
+        font-size: 13px;
+    }
+    .about-links,
+    .about-services {
+        grid-template-columns: 1fr;
+    }
+    .about-services {
+        gap: 18px;
+    }
+    .about-cases {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .about-wechat {
+        gap: 10px;
+    }
+    .about-wechat > div {
+        gap: 12px;
+    }
+}

@@ -10,7 +10,10 @@
     /** 保存稳定应用码、字段错误和关联号，页面不应通过解析 message 文案判断业务分支。 */
     class ApiError extends Error {
         constructor(message, code, data, requestId, outcomeUnknown = false, retryAfter = 0) {
-            super(message); this.code = code; this.data = data; this.requestId = requestId;
+            super(message);
+            this.code = code;
+            this.data = data;
+            this.requestId = requestId;
             this.outcomeUnknown = outcomeUnknown;
             this.retryAfter = retryAfter;
         }
@@ -40,43 +43,100 @@
         const timer = setTimeout(() => controller.abort(), options.timeout || 15000);
         if (write) pending.add(key);
         try {
-            const headers = {Accept: 'application/json', ...options.headers};
+            const headers = { Accept: 'application/json', ...options.headers };
             const multipart = write && options.data instanceof FormData;
             if (write) {
-                headers['X-Csrf-Token'] = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                headers['X-Csrf-Token'] =
+                    document.querySelector('meta[name="csrf-token"]')?.content || '';
                 // multipart 的 boundary 由浏览器生成；上传仍复用同源、超时、登录过期及重复提交处理。
                 if (multipart) {
-                    Object.keys(headers).forEach(key => { if (key.toLowerCase() === 'content-type') delete headers[key]; });
+                    Object.keys(headers).forEach((key) => {
+                        if (key.toLowerCase() === 'content-type') delete headers[key];
+                    });
                 } else headers['Content-Type'] = 'application/json';
             }
-            const payload = write ? (multipart ? options.data : JSON.stringify(options.data || {})) : undefined;
+            const payload = write
+                ? multipart
+                    ? options.data
+                    : JSON.stringify(options.data || {})
+                : undefined;
             let response;
             try {
-                response = await fetch(url, {method, headers, credentials: 'same-origin', signal: controller.signal, body: payload});
+                response = await fetch(url, {
+                    method,
+                    headers,
+                    credentials: 'same-origin',
+                    signal: controller.signal,
+                    body: payload,
+                });
             } catch (error) {
                 // 只有写请求的网络中断/超时意味着结果未知，不能把页面代码的 TypeError 当成重复提交风险。
-                throw new ApiError(error.name === 'AbortError' ? '请求超时，请查询原操作结果' : '连接中断，请检查网络后重新读取', 0, null, null, write);
+                throw new ApiError(
+                    error.name === 'AbortError'
+                        ? '请求超时，请查询原操作结果'
+                        : '连接中断，请检查网络后重新读取',
+                    0,
+                    null,
+                    null,
+                    write,
+                );
             }
             let body;
             // 非 2xx 也先读取统一错误体；登录 HTML 或代理错误页不能作为 JSON 成功继续。
-            try { body = await response.json(); } catch (_) { throw new ApiError('服务响应格式异常', 50000, null, response.headers.get('X-Request-Id'), write); }
-            if (!body || typeof body.code !== 'number') throw new ApiError('服务响应格式异常', 50000, null, response.headers.get('X-Request-Id'), write);
+            try {
+                body = await response.json();
+            } catch (_) {
+                throw new ApiError(
+                    '服务响应格式异常',
+                    50000,
+                    null,
+                    response.headers.get('X-Request-Id'),
+                    write,
+                );
+            }
+            if (!body || typeof body.code !== 'number')
+                throw new ApiError(
+                    '服务响应格式异常',
+                    50000,
+                    null,
+                    response.headers.get('X-Request-Id'),
+                    write,
+                );
             // 多个并行请求同时过期只发一次事件，由页面统一提示/跳转，不在请求模块反复操作 UI。
             if (body.code === 40100 && !sessionExpired) {
                 sessionExpired = true;
-                global.dispatchEvent(new CustomEvent('mpay:session-expired', {detail: body}));
+                global.dispatchEvent(new CustomEvent('mpay:session-expired', { detail: body }));
             }
             // HTTP 状态和应用码同时满足才认定处理中，不能把任意成功解析的响应当作操作完成。
-            if (response.status === 202 && body.code === 20200) return {...body, processing: true};
-            if (!response.ok || body.code !== 200) throw new ApiError(body.message || '请求未完成', body.code, body.data, body.request_id,
-                write && response.headers.get('X-Request-Rejected') !== '1' && (response.status >= 500 || body.code >= 50000), retryAfter(response, body));
+            if (response.status === 202 && body.code === 20200)
+                return { ...body, processing: true };
+            if (!response.ok || body.code !== 200)
+                throw new ApiError(
+                    body.message || '请求未完成',
+                    body.code,
+                    body.data,
+                    body.request_id,
+                    write &&
+                        response.headers.get('X-Request-Rejected') !== '1' &&
+                        (response.status >= 500 || body.code >= 50000),
+                    retryAfter(response, body),
+                );
             return body;
-        } finally { clearTimeout(timer); if (write) pending.delete(key); }
+        } finally {
+            clearTimeout(timer);
+            if (write) pending.delete(key);
+        }
     }
     /** 仅把 code=200 的分页结果适配为 Layui 格式；错误和处理中不能伪装成空表成功。 */
     function tableData(body) {
-        if (body.code !== 200 || !body.data || !Array.isArray(body.data.items)) throw new ApiError(body.message || '列表加载失败', body.code, body.data, body.request_id);
-        return {code: 0, msg: body.message, count: body.data.total, data: body.data.items};
+        if (body.code !== 200 || !body.data || !Array.isArray(body.data.items))
+            throw new ApiError(
+                body.message || '列表加载失败',
+                body.code,
+                body.data,
+                body.request_id,
+            );
+        return { code: 0, msg: body.message, count: body.data.total, data: body.data.items };
     }
     /**
      * 有界后台文件下载；错误仍按统一 JSON 解释，不能把登录页或错误 JSON 保存成 CSV。
@@ -84,29 +144,54 @@
      */
     async function download(path, filename) {
         const url = new URL(path, location.origin);
-        if (url.origin !== location.origin || !/^[a-zA-Z0-9_.-]{1,80}$/.test(filename)) throw new ApiError('下载参数无效', 40000);
+        if (url.origin !== location.origin || !/^[a-zA-Z0-9_.-]{1,80}$/.test(filename))
+            throw new ApiError('下载参数无效', 40000);
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 60000);
         try {
-            const response = await fetch(url, {credentials:'same-origin', signal:controller.signal, headers:{Accept:'text/csv'}});
+            const response = await fetch(url, {
+                credentials: 'same-origin',
+                signal: controller.signal,
+                headers: { Accept: 'text/csv' },
+            });
             if (!response.ok || !response.headers.get('Content-Type')?.startsWith('text/csv')) {
                 let body;
-                try { body = await response.json(); } catch (_) { throw new ApiError('下载响应格式异常', 50000); }
-                if (body.code === 40100 && !sessionExpired) {
-                    sessionExpired = true; global.dispatchEvent(new CustomEvent('mpay:session-expired', {detail:body}));
+                try {
+                    body = await response.json();
+                } catch (_) {
+                    throw new ApiError('下载响应格式异常', 50000);
                 }
-                throw new ApiError(body.message || '下载未完成', body.code, body.data, body.request_id, false, retryAfter(response, body));
+                if (body.code === 40100 && !sessionExpired) {
+                    sessionExpired = true;
+                    global.dispatchEvent(new CustomEvent('mpay:session-expired', { detail: body }));
+                }
+                throw new ApiError(
+                    body.message || '下载未完成',
+                    body.code,
+                    body.data,
+                    body.request_id,
+                    false,
+                    retryAfter(response, body),
+                );
             }
             const file = await response.blob();
-            if (file.size === 0) throw new ApiError('导出内容为空，请重新导出或联系管理员检查日志', 50000);
+            if (file.size === 0)
+                throw new ApiError('导出内容为空，请重新导出或联系管理员检查日志', 50000);
             const objectUrl = URL.createObjectURL(file);
-            const link = document.createElement('a'); link.href = objectUrl; link.download = filename;
-            document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = filename;
+            document.body.append(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
             return file.size;
         } catch (error) {
             if (error.name === 'AbortError') throw new ApiError('下载超时，请缩小范围后重试', 0);
             throw error;
-        } finally { clearTimeout(timer); }
+        } finally {
+            clearTimeout(timer);
+        }
     }
-    global.MpayHttp = {request, tableData, download, ApiError};
+    global.MpayHttp = { request, tableData, download, ApiError };
 })(window);

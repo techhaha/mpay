@@ -1,6 +1,6 @@
 {extend name="layouts/base" /}
 {block name="body_class"}cashier-body{/block}
-{block name="styles"}<link rel="stylesheet" href="/assets/css/cashier.css?v=20261025dynamic">{/block}
+{block name="styles"}<link rel="stylesheet" href="/assets/css/cashier.css?v=20261028frontend">{/block}
 {block name="content"}
 <section class="cashier-page" id="cashier" data-biz-no="{$biz_no|htmlspecialchars}" data-token="{$access_token|htmlspecialchars}">
     <header class="cashier-header"><img class="mpay-logo" src="/assets/brand/mpay-logo.svg" alt="MPAY 码支付" width="120" height="30"><span id="cashier-status" class="cashier-status">正在读取订单</span></header>
@@ -33,10 +33,10 @@
 {block name="scripts"}
 <script src="/assets/qrcode-generator/qrcode.js"></script>
 <script src="/assets/qrcode-generator/qrcode_UTF8.js"></script>
-<script src="/assets/js/cashier-pages.js?v=20261012flow"></script>
-<script src="/assets/js/clipboard.js?v=20261014copy"></script>
-<script src="/assets/js/cashier-receipt.js?v=20261025dynamic"></script>
-<script src="/assets/js/cashier-bank-transfer.js?v=20261026brand"></script>
-<script src="/assets/js/cashier-jump.js?v=20261022autojump"></script>
-<script src="/assets/js/cashier.js?v=20261025bank"></script>
+<script src="/assets/js/cashier-pages.js?v=20261028frontend"></script>
+<script src="/assets/js/clipboard.js?v=20261028frontend"></script>
+<script src="/assets/js/cashier-receipt.js?v=20261028frontend"></script>
+<script src="/assets/js/cashier-bank-transfer.js?v=20261028frontend"></script>
+<script src="/assets/js/cashier-jump.js?v=20261028frontend"></script>
+<script src="/assets/js/cashier.js?v=20261028frontend"></script>
 {/block}

@@ -8,13 +8,19 @@
 
     function prepare(root = document) {
         if (root.matches?.('form')) root.noValidate = true;
-        root.querySelectorAll('form').forEach(form => form.noValidate = true);
-        root.querySelectorAll('input:not([type=hidden]):not([type=file]),select,textarea').forEach(input => {
-            if (['button','submit','reset'].includes(input.type) || input.closest('.layui-form-select')) return;
-            const rules = (input.getAttribute('lay-verify') || '').split('|').filter(Boolean);
-            if (!rules.includes('mpayConstraint')) rules.push('mpayConstraint');
-            input.setAttribute('lay-verify', rules.join('|'));
-        });
+        root.querySelectorAll('form').forEach((form) => (form.noValidate = true));
+        root.querySelectorAll('input:not([type=hidden]):not([type=file]),select,textarea').forEach(
+            (input) => {
+                if (
+                    ['button', 'submit', 'reset'].includes(input.type) ||
+                    input.closest('.layui-form-select')
+                )
+                    return;
+                const rules = (input.getAttribute('lay-verify') || '').split('|').filter(Boolean);
+                if (!rules.includes('mpayConstraint')) rules.push('mpayConstraint');
+                input.setAttribute('lay-verify', rules.join('|'));
+            },
+        );
     }
 
     function configure() {
@@ -24,9 +30,11 @@
             mpayConstraint(value, input) {
                 // 禁用、只读字段沿用 HTML 校验语义；只读取约束结果，不调用浏览器验证气泡。
                 if (!input.willValidate || input.validity.valid) return;
-                const label = input.labels?.[0]?.textContent.replace('ⓘ','').trim() || input.getAttribute('aria-label');
+                const label =
+                    input.labels?.[0]?.textContent.replace('ⓘ', '').trim() ||
+                    input.getAttribute('aria-label');
                 return layui.util.escape((label ? label + '：' : '') + input.validationMessage);
-            }
+            },
         });
     }
 
@@ -37,8 +45,12 @@
     }
 
     function ready(callback) {
-        layui.use(['form','util'], () => { configure(); prepare(); callback(); });
+        layui.use(['form', 'util'], () => {
+            configure();
+            prepare();
+            callback();
+        });
     }
 
-    global.MpayForm = {prepare, valid, ready};
+    global.MpayForm = { prepare, valid, ready };
 })(window);

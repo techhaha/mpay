@@ -1,88 +1,424 @@
 /* Document layout; official Layui tables/buttons and the shared MPAY palette. */
-html { scroll-padding-top: 96px; }
-body { margin: 0; color: var(--mpay-text); background: #fff; font: 14px/1.8 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif; }
-a { color: var(--mpay-link); }
-a:hover { color: var(--mpay-primary-dark); }
-:focus-visible { outline: 2px solid var(--mpay-primary-dark); outline-offset: 4px; }
-.api-header { position: sticky; top: 0; z-index: 10; height: 72px; padding: 0 max(28px, calc((100vw - 1360px) / 2)); display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--mpay-border); background: #fff; }
-.api-brand { display: flex; align-items: center; gap: 22px; color: var(--mpay-heading); white-space: nowrap; }
-.api-brand span { padding-left: 22px; border-left: 1px solid var(--mpay-border); font-size: 15px; }
-.api-header nav { display: flex; gap: 26px; white-space: nowrap; }
-.api-header nav a { color: var(--mpay-muted); }
-.api-layout { display: grid; grid-template-columns: 228px minmax(0,1fr); gap: 48px; max-width: 1280px; margin: auto; padding: 0 32px; }
-.api-sidebar { position: sticky; top: 97px; align-self: start; max-height: calc(100vh - 120px); overflow-y: auto; padding: 4px 16px 20px 0; }
-.api-outline summary { font-size: 12px; letter-spacing: 1px; color: var(--mpay-muted); padding: 8px 14px 14px; list-style: none; cursor: pointer; }
-.api-outline summary::-webkit-details-marker { display: none; }
-.api-outline summary span { float: right; }
-.api-outline nav a { display: flex; gap: 10px; align-items: baseline; padding: 6px 12px; margin: 2px 0; line-height: 1.7; font-size: 13px; color: var(--mpay-muted); border-radius: 4px; }
-.api-outline nav a span { flex-shrink: 0; font: 11px ui-monospace,monospace; color: #87919d; }
-.api-outline nav a:hover { background: var(--mpay-surface-muted); }
-.api-outline nav a[aria-current] { background: var(--mpay-primary-soft); color: var(--mpay-primary-dark); font-weight: 600; }
-.api-sidebar-note { border-top: 1px solid var(--mpay-border); padding: 18px 12px 0; margin-top: 22px; color: var(--mpay-muted); font-size: 12px; }
-main { min-width: 0; padding: 38px 0 0; }
-.api-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--mpay-primary-dark); margin-bottom: 12px; }
-.api-intro h1 { font-size: 32px; font-weight: 650; letter-spacing: -.5px; margin: 0 0 8px; color: var(--mpay-heading); }
-.api-intro > p { color: var(--mpay-muted); }
-.api-gateway { display: flex; justify-content: space-between; gap: 16px; align-items: center; background: var(--mpay-primary-soft); border: 1px solid #d5efea; border-radius: 8px; padding: 16px 20px; margin: 26px 0 10px; }
-.api-gateway div { min-width: 0; }
-.api-gateway span { display: block; font-size: 12px; color: var(--mpay-primary-dark); margin-bottom: 2px; }
-.api-gateway code { font-size: 16px; word-break: break-all; }
-.api-gateway button { flex-shrink: 0; margin: 0; }
-.api-intro-note { font-size: 12px; }
-.api-content { margin-top: 28px; }
-.api-content p { margin: 14px 0; }
-.api-source-link { margin-left: 8px; white-space: nowrap; font-size: 12px; color: var(--mpay-muted); }
-.api-content h2 { margin: 44px 0 18px; padding-top: 18px; border-top: 1px solid var(--mpay-border); color: var(--mpay-heading); font-size: 23px; font-weight: 600; scroll-margin-top: 20px; }
-.api-content h3 { margin: 28px 0 12px; color: var(--mpay-heading); font-size: 17px; font-weight: 600; }
-.api-content ul,.api-content ol { padding-left: 25px; margin: 16px 0; }
-.api-content ul li { list-style: disc; }
-.api-content ol li { list-style: decimal; }
-.api-content li { margin: 6px 0; }
-.api-content code { font: .92em/1.7 ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",monospace; }
-.api-content :not(pre) > code { background: #f1f5f8; color: #31516b; border-radius: 3px; padding: 2px 5px; overflow-wrap: anywhere; }
-.api-content blockquote { margin: 20px 0; padding: 2px 18px; border-left: 3px solid var(--mpay-primary); background: var(--mpay-surface-muted); }
-.api-example { border: 1px solid var(--mpay-border); border-radius: 7px; margin: 18px 0; overflow: hidden; }
-.api-example-bar { background: #f3f6f9; border-bottom: 1px solid var(--mpay-border); padding: 7px 12px 7px 18px; display: flex; align-items: center; justify-content: space-between; color: var(--mpay-muted); font-size: 12px; }
-.api-example pre { background: #fafbfd; padding: 18px; margin: 0; overflow-x: auto; color: #294155; tab-size: 4; }
-.api-example pre code { font-size: 13px; white-space: pre; }
-.api-table-scroll { max-width: 100%; overflow-x: auto; margin: 18px 0; border: 1px solid var(--mpay-border); border-radius: 6px; }
-.api-table-scroll .layui-table { margin: 0; border: 0; }
-.api-table-scroll th { white-space: nowrap; background: #f6f8fa; color: #485465; font-weight: 600; }
-.api-table-scroll th,.api-table-scroll td { border: 0; border-bottom: 1px solid var(--mpay-border); padding: 11px 13px; font-size: 13px; line-height: 1.7; }
-.api-table-scroll tr:last-child td { border-bottom: 0; }
-.api-table-scroll td:first-child { min-width: 72px; }
-.api-table-scroll td:last-child { min-width: 200px; }
-.api-footer { border-top: 1px solid var(--mpay-border); margin-top: 40px; padding: 24px 0 36px; display: flex; justify-content: space-between; gap: 20px; color: var(--mpay-muted); font-size: 12px; }
-.api-skip { position: fixed; left: 12px; top: -80px; z-index: 20; padding: 10px 18px; background: white; }
-.api-skip:focus { top: 8px; }
+html {
+    scroll-padding-top: 96px;
+}
+body {
+    margin: 0;
+    color: var(--mpay-text);
+    background: #fff;
+    font:
+        14px/1.8 -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        'Microsoft YaHei',
+        sans-serif;
+}
+a {
+    color: var(--mpay-link);
+}
+a:hover {
+    color: var(--mpay-primary-dark);
+}
+:focus-visible {
+    outline: 2px solid var(--mpay-primary-dark);
+    outline-offset: 4px;
+}
+.api-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    height: 72px;
+    padding: 0 max(28px, calc((100vw - 1360px) / 2));
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    border-bottom: 1px solid var(--mpay-border);
+    background: #fff;
+}
+.api-brand {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    color: var(--mpay-heading);
+    white-space: nowrap;
+}
+.api-brand span {
+    padding-left: 22px;
+    border-left: 1px solid var(--mpay-border);
+    font-size: 15px;
+}
+.api-header nav {
+    display: flex;
+    gap: 26px;
+    white-space: nowrap;
+}
+.api-header nav a {
+    color: var(--mpay-muted);
+}
+.api-layout {
+    display: grid;
+    grid-template-columns: 228px minmax(0, 1fr);
+    gap: 48px;
+    max-width: 1280px;
+    margin: auto;
+    padding: 0 32px;
+}
+.api-sidebar {
+    position: sticky;
+    top: 97px;
+    align-self: start;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    padding: 4px 16px 20px 0;
+}
+.api-outline summary {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--mpay-muted);
+    padding: 8px 14px 14px;
+    list-style: none;
+    cursor: pointer;
+}
+.api-outline summary::-webkit-details-marker {
+    display: none;
+}
+.api-outline summary span {
+    float: right;
+}
+.api-outline nav a {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 6px 12px;
+    margin: 2px 0;
+    line-height: 1.7;
+    font-size: 13px;
+    color: var(--mpay-muted);
+    border-radius: 4px;
+}
+.api-outline nav a span {
+    flex-shrink: 0;
+    font:
+        11px ui-monospace,
+        monospace;
+    color: #87919d;
+}
+.api-outline nav a:hover {
+    background: var(--mpay-surface-muted);
+}
+.api-outline nav a[aria-current] {
+    background: var(--mpay-primary-soft);
+    color: var(--mpay-primary-dark);
+    font-weight: 600;
+}
+.api-sidebar-note {
+    border-top: 1px solid var(--mpay-border);
+    padding: 18px 12px 0;
+    margin-top: 22px;
+    color: var(--mpay-muted);
+    font-size: 12px;
+}
+main {
+    min-width: 0;
+    padding: 38px 0 0;
+}
+.api-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--mpay-primary-dark);
+    margin-bottom: 12px;
+}
+.api-intro h1 {
+    font-size: 32px;
+    font-weight: 650;
+    letter-spacing: -0.5px;
+    margin: 0 0 8px;
+    color: var(--mpay-heading);
+}
+.api-intro > p {
+    color: var(--mpay-muted);
+}
+.api-gateway {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    background: var(--mpay-primary-soft);
+    border: 1px solid #d5efea;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 26px 0 10px;
+}
+.api-gateway div {
+    min-width: 0;
+}
+.api-gateway span {
+    display: block;
+    font-size: 12px;
+    color: var(--mpay-primary-dark);
+    margin-bottom: 2px;
+}
+.api-gateway code {
+    font-size: 16px;
+    word-break: break-all;
+}
+.api-gateway button {
+    flex-shrink: 0;
+    margin: 0;
+}
+.api-intro-note {
+    font-size: 12px;
+}
+.api-content {
+    margin-top: 28px;
+}
+.api-content p {
+    margin: 14px 0;
+}
+.api-source-link {
+    margin-left: 8px;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--mpay-muted);
+}
+.api-content h2 {
+    margin: 44px 0 18px;
+    padding-top: 18px;
+    border-top: 1px solid var(--mpay-border);
+    color: var(--mpay-heading);
+    font-size: 23px;
+    font-weight: 600;
+    scroll-margin-top: 20px;
+}
+.api-content h3 {
+    margin: 28px 0 12px;
+    color: var(--mpay-heading);
+    font-size: 17px;
+    font-weight: 600;
+}
+.api-content ul,
+.api-content ol {
+    padding-left: 25px;
+    margin: 16px 0;
+}
+.api-content ul li {
+    list-style: disc;
+}
+.api-content ol li {
+    list-style: decimal;
+}
+.api-content li {
+    margin: 6px 0;
+}
+.api-content code {
+    font:
+        0.92em/1.7 ui-monospace,
+        SFMono-Regular,
+        Consolas,
+        'Liberation Mono',
+        monospace;
+}
+.api-content :not(pre) > code {
+    background: #f1f5f8;
+    color: #31516b;
+    border-radius: 3px;
+    padding: 2px 5px;
+    overflow-wrap: anywhere;
+}
+.api-content blockquote {
+    margin: 20px 0;
+    padding: 2px 18px;
+    border-left: 3px solid var(--mpay-primary);
+    background: var(--mpay-surface-muted);
+}
+.api-example {
+    border: 1px solid var(--mpay-border);
+    border-radius: 7px;
+    margin: 18px 0;
+    overflow: hidden;
+}
+.api-example-bar {
+    background: #f3f6f9;
+    border-bottom: 1px solid var(--mpay-border);
+    padding: 7px 12px 7px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--mpay-muted);
+    font-size: 12px;
+}
+.api-example pre {
+    background: #fafbfd;
+    padding: 18px;
+    margin: 0;
+    overflow-x: auto;
+    color: #294155;
+    tab-size: 4;
+}
+.api-example pre code {
+    font-size: 13px;
+    white-space: pre;
+}
+.api-table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+    margin: 18px 0;
+    border: 1px solid var(--mpay-border);
+    border-radius: 6px;
+}
+.api-table-scroll .layui-table {
+    margin: 0;
+    border: 0;
+}
+.api-table-scroll th {
+    white-space: nowrap;
+    background: #f6f8fa;
+    color: #485465;
+    font-weight: 600;
+}
+.api-table-scroll th,
+.api-table-scroll td {
+    border: 0;
+    border-bottom: 1px solid var(--mpay-border);
+    padding: 11px 13px;
+    font-size: 13px;
+    line-height: 1.7;
+}
+.api-table-scroll tr:last-child td {
+    border-bottom: 0;
+}
+.api-table-scroll td:first-child {
+    min-width: 72px;
+}
+.api-table-scroll td:last-child {
+    min-width: 200px;
+}
+.api-footer {
+    border-top: 1px solid var(--mpay-border);
+    margin-top: 40px;
+    padding: 24px 0 36px;
+    display: flex;
+    justify-content: space-between;
+    gap: 20px;
+    color: var(--mpay-muted);
+    font-size: 12px;
+}
+.api-skip {
+    position: fixed;
+    left: 12px;
+    top: -80px;
+    z-index: 20;
+    padding: 10px 18px;
+    background: white;
+}
+.api-skip:focus {
+    top: 8px;
+}
 @media (max-width: 900px) {
-    html { scroll-padding-top: 135px; }
-    .api-header { height: 62px; padding: 0 18px; }
-    .api-brand { gap: 12px; }
-    .api-brand img { width: 104px; height: auto; }
-    .api-brand span { padding-left: 12px; font-size: 13px; }
-    .api-header nav { gap: 14px; font-size: 12px; }
-    .api-layout { display: block; padding: 0 20px; }
-    .api-sidebar { top: 62px; z-index: 9; max-height: 60vh; padding: 0; margin: 0 -20px; border-bottom: 1px solid var(--mpay-border); background: white; }
-    .api-outline summary { padding: 12px 20px; font-size: 13px; }
-    .api-outline nav { padding: 0 12px 12px; }
-    .api-sidebar-note { display: none; }
-    main { padding-top: 28px; }
-    .api-intro h1 { font-size: 26px; }
-    .api-gateway { padding: 14px; }
-    .api-gateway code { font-size: 14px; }
-    .api-content h2 { font-size: 21px; }
-    .api-table-scroll::before { content: '表格可左右滑动查看'; display: block; position: sticky; left: 0; padding: 7px 12px; color: var(--mpay-muted); font-size: 11px; background: var(--mpay-surface-muted); }
-    .api-table-scroll .api-wide-table { min-width: 900px; }
-    .api-footer { flex-wrap: wrap; }
+    html {
+        scroll-padding-top: 135px;
+    }
+    .api-header {
+        height: 62px;
+        padding: 0 18px;
+    }
+    .api-brand {
+        gap: 12px;
+    }
+    .api-brand img {
+        width: 104px;
+        height: auto;
+    }
+    .api-brand span {
+        padding-left: 12px;
+        font-size: 13px;
+    }
+    .api-header nav {
+        gap: 14px;
+        font-size: 12px;
+    }
+    .api-layout {
+        display: block;
+        padding: 0 20px;
+    }
+    .api-sidebar {
+        top: 62px;
+        z-index: 9;
+        max-height: 60vh;
+        padding: 0;
+        margin: 0 -20px;
+        border-bottom: 1px solid var(--mpay-border);
+        background: white;
+    }
+    .api-outline summary {
+        padding: 12px 20px;
+        font-size: 13px;
+    }
+    .api-outline nav {
+        padding: 0 12px 12px;
+    }
+    .api-sidebar-note {
+        display: none;
+    }
+    main {
+        padding-top: 28px;
+    }
+    .api-intro h1 {
+        font-size: 26px;
+    }
+    .api-gateway {
+        padding: 14px;
+    }
+    .api-gateway code {
+        font-size: 14px;
+    }
+    .api-content h2 {
+        font-size: 21px;
+    }
+    .api-table-scroll::before {
+        content: '表格可左右滑动查看';
+        display: block;
+        position: sticky;
+        left: 0;
+        padding: 7px 12px;
+        color: var(--mpay-muted);
+        font-size: 11px;
+        background: var(--mpay-surface-muted);
+    }
+    .api-table-scroll .api-wide-table {
+        min-width: 900px;
+    }
+    .api-footer {
+        flex-wrap: wrap;
+    }
 }
 @media (max-width: 400px) {
-    .api-brand span { display: none; }
+    .api-brand span {
+        display: none;
+    }
 }
 @media print {
-    .api-header,.api-sidebar,[data-copy],.api-skip { display: none; }
-    .api-layout { display: block; padding: 0; }
-    main { padding: 0; }
-    .api-table-scroll,.api-example pre { overflow: visible; }
-    .api-example pre code { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .api-header,
+    .api-sidebar,
+    [data-copy],
+    .api-skip {
+        display: none;
+    }
+    .api-layout {
+        display: block;
+        padding: 0;
+    }
+    main {
+        padding: 0;
+    }
+    .api-table-scroll,
+    .api-example pre {
+        overflow: visible;
+    }
+    .api-example pre code {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
 }

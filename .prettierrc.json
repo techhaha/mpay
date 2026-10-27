@@ -12,6 +12,29 @@
                 "singleQuote": true,
                 "endOfLine": "lf"
             }
+        },
+        {
+            "files": ["public/assets/js/**/*.js"],
+            "options": {
+                "parser": "babel",
+                "tabWidth": 4,
+                "useTabs": false,
+                "printWidth": 100,
+                "singleQuote": true,
+                "quoteProps": "preserve",
+                "endOfLine": "lf"
+            }
+        },
+        {
+            "files": ["public/assets/css/**/*.css"],
+            "options": {
+                "parser": "css",
+                "tabWidth": 4,
+                "useTabs": false,
+                "printWidth": 100,
+                "singleQuote": true,
+                "endOfLine": "lf"
+            }
         }
     ]
 }

@@ -1,5 +1,5 @@
 {extend name="layouts/admin" /}
-{block name="page_styles"}<link rel="stylesheet" href="/assets/css/settings.css?v=20261026spacious">{/block}
+{block name="page_styles"}<link rel="stylesheet" href="/assets/css/settings.css?v=20261028frontend">{/block}
 {block name="content"}
 <section class="admin-intro"><h1>系统设置</h1><div class="admin-actions"><button id="settings-refresh" type="button" class="layui-btn layui-btn-primary">重新读取</button></div></section>
 <div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
@@ -74,4 +74,4 @@
 </div>
 <details class="layui-card admin-details"><summary class="layui-card-header">站点信息</summary><div class="layui-card-body"><span id="settings-origin"></span><p class="admin-hint">支持多个访问域名，无需保存固定站点网址。</p></div></details>
 {/block}
-{block name="scripts"}<script src="/assets/js/admin-settings.js?v=20261025captcha"></script>{/block}
+{block name="scripts"}<script src="/assets/js/admin-settings.js?v=20261028frontend"></script>{/block}

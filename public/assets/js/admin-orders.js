@@ -296,22 +296,8 @@ MpayAdmin.ready(async function () {
     function detailContent(data, focusNotification, refundFeedback) {
         const order = data.order,
             hasRefundTab = order.status === 2 || data.refunds.length > 0;
-        const related = data.receipt
-            ? '<div class="admin-filter-buttons"><a class="layui-btn layui-btn-primary" href="/admin/receipts?id=' +
-              encodeURIComponent(data.receipt.id) +
-              '">查看流水详情</a></div>'
-            : '';
-        const receipt = data.receipt
-            ? UI.facts({
-                  '流水编号': data.receipt.id,
-                  '实际收款金额（元）': data.receipt.amount,
-                  '来源付款时间': data.receipt.paid_at,
-                  '接收时间': data.receipt.received_at,
-                  '来源流水号': data.receipt.platform_trade_no,
-                  '付款备注': data.receipt.remark,
-                  '核对说明': data.receipt.reason_label,
-              }) + related
-            : UI.notice('尚无关联到账流水');
+        const callbacks =
+            '<table class="order-callbacks-table"></table><div class="order-callbacks-feedback admin-feedback" role="status"></div>';
         const notification = data.notification
             ? UI.facts({
                   '通知号': data.notification.notify_no,
@@ -397,19 +383,19 @@ MpayAdmin.ready(async function () {
                                 : ''),
                     },
                     ...(hasRefundTab ? [{ title: '退款记录', content: refunds }] : []),
-                    { title: '到账流水', content: receipt },
+                    { title: '收款回调', content: callbacks },
                     { title: '商户通知', content: notification },
                     {
                         title: '处理记录',
                         content:
-                            '<div class="layui-form"><select class="order-history-kind"><option value="operations">人工操作</option><option value="callbacks">支付执行与回调</option></select></div><table class="order-history-table"></table><div class="order-history-feedback admin-feedback" role="status"></div>' +
+                            '<table class="order-history-table"></table><div class="order-history-feedback admin-feedback" role="status"></div>' +
                             (order.channel_id
                                 ? '<details class="admin-details"><summary>技术信息</summary>' +
                                   UI.facts({
                                       '支付产品（pay_product）': order.pay_product,
                                       '支付动作（pay_action）': order.pay_action,
                                   }) +
-                                  '<a class="admin-link" href="/admin/ingress?channel_id=' +
+                                  '<a class="admin-link" href="/admin/callbacks?channel_id=' +
                                   encodeURIComponent(order.channel_id) +
                                   '">查询该通道回调</a></details>'
                                 : ''),
@@ -475,23 +461,51 @@ MpayAdmin.ready(async function () {
                 action('retry-notification', data);
             });
             UI.render(handle.node);
-            function history(current, notificationTab = false) {
-                const kind = notificationTab
-                    ? 'notifications'
-                    : handle.node.querySelector('.order-history-kind').value;
-                const prefix = notificationTab ? 'order-notify' : 'order-history';
+            function history(current, kind = 'operations') {
+                const prefix =
+                    kind === 'notifications'
+                        ? 'order-notify'
+                        : kind === 'callbacks'
+                          ? 'order-callbacks'
+                          : 'order-history';
                 const columns =
                     kind === 'operations'
                         ? [
                               col('created_at', '时间', 175),
-                              col('action', '操作'),
+                              {
+                                  title: '操作',
+                                  templet: (row) => E(row.action_label || row.action),
+                              },
+                              col('actor_label', '操作者'),
                               col('reason', '原因', 220),
                           ]
                         : kind === 'callbacks'
                           ? [
-                                col('created_at', '时间', 175),
-                                col('result_code', '结果', 160),
-                                col('request_id', '请求编号', 280),
+                                col('received_at', '接收时间', 175),
+                                {
+                                    title: '处理结果',
+                                    templet: (row) =>
+                                        UI.badge(
+                                            row.result_label,
+                                            {
+                                                1: 'green',
+                                                2: 'blue',
+                                                3: 'orange',
+                                                4: 'red',
+                                                5: 'gray',
+                                            }[row.result_status] || 'gray',
+                                        ),
+                                },
+                                col('amount', '实收金额（元）', 135),
+                                col('message', '处理说明', 220),
+                                {
+                                    title: '详情',
+                                    width: 80,
+                                    templet: (row) =>
+                                        '<a class="admin-link" href="/admin/callbacks?id=' +
+                                        encodeURIComponent(row.id) +
+                                        '">查看</a>',
+                                },
                             ]
                           : [
                                 { ...col('attempt_no', '次数', 80), align: 'center' },
@@ -510,11 +524,9 @@ MpayAdmin.ready(async function () {
                     cols: [columns],
                 });
             }
-            handle.node
-                .querySelector('.order-history-kind')
-                .addEventListener('change', () => history(1));
             history(1);
-            if (data.notification) history(1, true);
+            history(1, 'callbacks');
+            if (data.notification) history(1, 'notifications');
         } catch (exception) {
             if (!handle.closed) handle.error(exception);
         }
@@ -722,6 +734,9 @@ MpayAdmin.ready(async function () {
         UI.render(filters);
         load(1);
     });
+    document.getElementById('order-refresh').addEventListener('click', () => {
+        if (UI.valid(filters)) load(page);
+    });
     document.getElementById('order-export').addEventListener('click', async (event) => {
         const button = event.currentTarget;
         button.disabled = true;
@@ -773,6 +788,7 @@ MpayAdmin.ready(async function () {
         // 配置摘要和事件就绪后才开放查询，避免页面加载期间触发原生 GET 丢失筛选状态。
         UI.render(filters);
         filters.querySelector('[data-order-query]').disabled = false;
+        document.getElementById('order-refresh').disabled = false;
         load(1);
     });
     if (locationValues.has('biz_no')) show(locationValues.get('biz_no'));

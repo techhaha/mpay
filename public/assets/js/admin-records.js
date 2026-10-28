@@ -1,4 +1,4 @@
-/** 四类记录共享只读列表与详情抽屉；跳转使用服务器已经保存的关联号，不按金额或时间猜关联。 */
+/** 记录页共享只读列表与详情抽屉；跳转使用服务器已经保存的关联号，不按金额或时间猜关联。 */
 MpayAdmin.ready(function () {
     'use strict';
     const UI = MpayAdmin,
@@ -6,22 +6,28 @@ MpayAdmin.ready(function () {
         form = document.getElementById('records-filter');
     if (!form) return;
     const definitions = {
-        receipts: {
-            url: '/adminapi/receipts/list',
-            detail: '/adminapi/receipts/detail',
-            history: '/adminapi/receipts/history',
+        callbacks: {
+            url: '/adminapi/callbacks/list',
+            detail: '/adminapi/callbacks/detail',
             key: 'id',
-            title: '到账详情',
-            date: '按系统接收日期筛选，来源付款时间在列表及详情中单独展示。',
-            main: ['plugin_code'],
-            advanced: { id: '流水 ID', scope_key: '收款范围', pay_no: '关联支付单号' },
+            title: '收款回调详情',
+            date: '按系统接收时间筛选。重复通知不会再次计入收款。',
+            states: { 1: '确认成功', 2: '重复通知', 3: '处理拒绝', 4: '处理异常', 5: '忽略' },
+            main: ['channel_id', 'plugin_code', 'result_status'],
+            advanced: {
+                id: '回调 ID',
+                pay_no: '支付单号',
+                request_id: '请求编号',
+                result_code: '原因码',
+            },
             columns: {
-                id: '流水编号',
-                amount: '实际金额（元）',
-                plugin_code: '收款来源',
+                received_at: '接收时间',
+                channel_id: '收款通道',
+                plugin_code: '插件',
                 biz_no: '关联订单',
-                paid_at: '来源付款时间',
-                reason_label: '核对说明',
+                amount: '实收金额（元）',
+                result_status: '处理结果',
+                message: '处理说明',
             },
         },
         notifications: {
@@ -49,20 +55,6 @@ MpayAdmin.ready(function () {
                 retry_count: '已发送次数',
                 target_host: '通知目标',
                 next_retry_at: '下次发送',
-            },
-        },
-        ingress: {
-            url: '/adminapi/receipts/ingress',
-            key: 'id',
-            title: '通道回调详情',
-            date: '按外部通知的接收日期筛选。接收成功不代表订单支付成功。',
-            main: ['channel_id', 'plugin_code'],
-            advanced: { result_code: '结果代码', request_id: '请求编号' },
-            columns: {
-                created_at: '接收时间',
-                channel_id: '收款通道',
-                result_code: '处理结果',
-                flow_id: '关联流水',
             },
         },
         audit: {
@@ -178,13 +170,14 @@ MpayAdmin.ready(function () {
             name,
             {
                 status: '状态',
+                result_status: '处理结果',
                 plugin_code: '来源插件',
                 channel_id: '收款通道',
                 biz_no: '业务单号',
                 action: '操作类型',
                 result_code: '结果',
             }[name],
-            name === 'status'
+            ['status', 'result_status'].includes(name)
                 ? config.states
                 : name === 'action'
                   ? actions
@@ -203,7 +196,7 @@ MpayAdmin.ready(function () {
         if (locationValues.has(name)) form.elements[name].value = locationValues.get(name);
     });
     // 从待处理队列进入时延续全部日期范围，并以可见开关让用户明确当前筛选。
-    if (['receipts', 'notifications'].includes(kind)) {
+    if (['callbacks', 'notifications'].includes(kind)) {
         const label = document.createElement('label');
         label.className = 'admin-all-dates';
         label.innerHTML =
@@ -248,7 +241,6 @@ MpayAdmin.ready(function () {
             'status_label',
             'result_code',
             'retry_count',
-            'flow_id',
             'attempt_no',
             'http_status',
             'target_type',
@@ -257,14 +249,7 @@ MpayAdmin.ready(function () {
         const width =
             name === 'status_label'
                 ? 175
-                : [
-                        'retry_count',
-                        'flow_id',
-                        'attempt_no',
-                        'http_status',
-                        'admin_user_id',
-                        'id',
-                    ].includes(name)
+                : ['retry_count', 'attempt_no', 'http_status', 'admin_user_id', 'id'].includes(name)
                   ? 105
                   : name === 'amount'
                     ? 150
@@ -283,30 +268,17 @@ MpayAdmin.ready(function () {
                       ? 'center'
                       : 'left',
             templet: (row) => {
-                if (name === 'flow_id')
-                    return row[name]
-                        ? '<a href="/admin/receipts?id=' +
-                              encodeURIComponent(row[name]) +
-                              '">' +
-                              E(row[name]) +
-                              '</a>'
-                        : '—';
+                if (name === 'result_status')
+                    return UI.badge(
+                        row.result_label,
+                        { 1: 'green', 2: 'blue', 3: 'orange', 4: 'red', 5: 'gray' }[
+                            row.result_status
+                        ] || 'gray',
+                    );
                 if (name === 'amount')
                     return '<span class="admin-money">' + E(row[name]) + '</span>';
                 if (name === 'status_label')
                     return UI.badge(row[name], notificationTones[row.status] || 'gray');
-                if (name === 'result_code' && row.result_label) {
-                    const accepted = row[name] === 'channel_accepted',
-                        fault = row[name] === 'channel_fault';
-                    return (
-                        UI.badge(
-                            accepted ? '已接收' : fault ? '处理异常' : '未通过',
-                            accepted ? 'blue' : 'red',
-                        ) +
-                        ' ' +
-                        UI.help(row.result_label)
-                    );
-                }
                 if (name === 'result_code' && results[row[name]])
                     return UI.badge(results[row[name]], resultTones[row[name]] || 'blue');
                 if (compact && row[name]) {
@@ -400,6 +372,8 @@ MpayAdmin.ready(function () {
                 id: '记录编号',
                 amount: '实际金额（元）',
                 status_label: '处理状态',
+                result_label: '处理结果',
+                message: '处理说明',
                 reason_label: '核对说明',
                 plugin_code: '来源插件',
                 paid_at: '来源付款时间',
@@ -416,10 +390,9 @@ MpayAdmin.ready(function () {
                 last_notify_at: '最近发送',
                 created_at: '记录时间',
                 channel_id: '收款通道',
-                flow_id: '关联流水',
                 admin_user_id: '管理员 ID',
                 action: '操作',
-                result_code: '处理结果',
+                result_code: '原因码',
                 target_type: '目标类型',
                 target_id: '目标编号',
                 client_ip: '连接 IP',
@@ -430,15 +403,14 @@ MpayAdmin.ready(function () {
             Object.entries(labels).forEach(([name, label]) => {
                 if (Object.hasOwn(record, name))
                     facts[label] =
-                        name === 'result_code' && record.result_label
-                            ? record.result_label
+                        name === 'result_code' && record.reason_label
+                            ? record.reason_label
                             : labelValue(name, record[name]);
             });
             const technical = {};
             Object.entries({
                 request_id: '请求编号',
                 reason_code: '原因码',
-                scope_key: '收款范围',
                 payload_digest: '报文摘要',
                 event_key: '流水身份',
                 config_revision_id: '接收配置版本',
@@ -447,7 +419,7 @@ MpayAdmin.ready(function () {
                 if (Object.hasOwn(record, name)) technical[label] = record[name];
             });
             if (kind === 'notifications') facts['最近发送结果'] = record.reason_label;
-            if (record.result_label) technical['结果代码'] = record.result_code;
+            if (record.result_label) technical['原因码'] = record.result_code;
             const summaries = {
                 reason: '操作原因',
                 origin: '操作入口',
@@ -469,11 +441,6 @@ MpayAdmin.ready(function () {
                     '<a class="layui-btn layui-btn-primary" href="/admin/orders?biz_no=' +
                     encodeURIComponent(record.biz_no) +
                     '">查看原订单</a>';
-            if (record.flow_id)
-                links +=
-                    '<a class="layui-btn layui-btn-primary" href="/admin/receipts?id=' +
-                    encodeURIComponent(record.flow_id) +
-                    '">查看到账流水</a>';
             if (kind === 'audit' && record.target_type === 'biz_order' && record.target_id)
                 links +=
                     '<a class="layui-btn layui-btn-primary" href="/admin/orders?biz_no=' +
@@ -487,6 +454,25 @@ MpayAdmin.ready(function () {
             const historyId = 'records-history-' + Date.now();
             handle.node.querySelector('.records-detail-content').innerHTML =
                 UI.facts(facts) +
+                (kind === 'callbacks'
+                    ? '<div class="admin-section-title">通知内容</div>' +
+                      (record.payload_truncated
+                          ? UI.notice('通知内容超过保存上限，以下内容已截断。')
+                          : '') +
+                      '<pre class="admin-code">' +
+                      E(record.payload_text ?? '此记录未保存匹配流水正文') +
+                      '</pre>' +
+                      (record.evidence
+                          ? '<div class="admin-section-title">已匹配收款依据</div>' +
+                            UI.facts({
+                                '实际支付金额（元）': record.evidence.amount,
+                                '来源付款时间': record.evidence.paid_at,
+                                '接收时间': record.evidence.received_at,
+                                '来源事件编号': record.evidence.event_key,
+                                '真实交易号': record.evidence.platform_trade_no,
+                            })
+                          : '')
+                    : '') +
                 (links ? '<div class="admin-filter-buttons">' + links + '</div>' : '') +
                 (config.history
                     ? '<div class="admin-section-title">' +
@@ -501,21 +487,14 @@ MpayAdmin.ready(function () {
                       '</details>'
                     : '');
             function history(current) {
-                const columns =
-                    kind === 'notifications'
-                        ? [
-                              column('attempt_no', '次数'),
-                              column('started_at', '发送时间'),
-                              column('http_status', 'HTTP 状态'),
-                              column('duration_ms', '耗时（毫秒）'),
-                              column('result_label', '发送结果'),
-                              UI.responseColumn(),
-                          ]
-                        : [
-                              column('created_at', '时间'),
-                              column('result_label', '处理说明'),
-                              column('request_id', '请求编号'),
-                          ];
+                const columns = [
+                    column('attempt_no', '次数'),
+                    column('started_at', '发送时间'),
+                    column('http_status', 'HTTP 状态'),
+                    column('duration_ms', '耗时（毫秒）'),
+                    column('result_label', '发送结果'),
+                    UI.responseColumn(),
+                ];
                 UI.table({
                     elem: '#' + historyId,
                     url: config.history,

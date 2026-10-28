@@ -26,7 +26,6 @@ layui.use(['element', 'layer'], function () {
     // 通知与回调排查为业务页面的下级入口，侧栏高亮和面包屑保留用户所处上下文。
     const parent = {
         '/admin/notifications': ['/admin/orders', '交易订单'],
-        '/admin/ingress': ['/admin/maintenance', '运行维护'],
     }[location.pathname];
     if (parent) {
         const link = document.createElement('a');

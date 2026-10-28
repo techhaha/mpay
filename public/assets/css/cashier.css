@@ -152,9 +152,6 @@
     font-size: 13px;
     overflow-wrap: anywhere;
 }
-.cashier-dynamic-guide {
-    margin-bottom: 24px;
-}
 .cashier-dynamic-actions {
     display: flex;
     align-items: center;

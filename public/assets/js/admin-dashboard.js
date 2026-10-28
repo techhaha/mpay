@@ -107,7 +107,7 @@ MpayAdmin.ready(function () {
                 workers.append(row);
             });
             document.getElementById('dashboard-other').textContent =
-                '已关联到账流水：' + (data.matched_receipts ?? '—');
+                '已确认收款订单：' + (data.confirmed_orders ?? '—');
             document.getElementById('dashboard-observed').textContent =
                 '读取时间：' + data.observed_at + ' · 上海时区';
             UI.feedback(

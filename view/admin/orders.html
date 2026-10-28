@@ -1,12 +1,12 @@
 {extend name="layouts/admin" /}
 {block name="content"}
-<section class="admin-intro"><h1>交易订单</h1><div class="admin-actions"><a id="order-notifications" class="layui-btn layui-btn-primary" href="/admin/notifications?all_dates=1">商户通知</a><button type="button" id="order-export" class="layui-btn layui-btn-primary">导出订单</button><button type="button" class="admin-help-button" data-help="导出使用当前筛选条件，单次最多 31 天、10000 条。日期按上海时区。" aria-label="订单导出说明">ⓘ</button><button type="button" id="order-refresh" class="layui-btn layui-btn-primary" disabled>刷新</button></div></section>
+<section class="admin-intro"><h1>交易订单</h1><div class="admin-actions"><button type="button" id="order-refresh" class="layui-btn layui-btn-primary" disabled>刷新</button><a id="order-notifications" class="layui-btn layui-btn-primary" href="/admin/notifications?all_dates=1">商户通知</a><button type="button" id="order-export" class="layui-btn layui-btn-primary">导出订单</button><button type="button" class="admin-help-button" data-help="导出使用当前筛选条件，单次最多 31 天、10000 条。日期按上海时区。" aria-label="订单导出说明">ⓘ</button></div></section>
 <div id="admin-feedback" class="admin-feedback" role="status" aria-live="polite"></div>
 <section class="layui-card"><div class="layui-card-body">
 <form id="order-filters" class="layui-form admin-filter-panel" novalidate>
 <div class="admin-filters">
-<label>单号类型<select name="number_kind"><option value="merchant_order_no">商户订单号</option><option value="biz_no">业务单号</option><option value="pay_no">支付单号</option></select></label>
-<label>订单号<input name="number" class="layui-input" maxlength="64" placeholder="输入完整订单号"></label>
+<label>单号类型<select name="number_kind"><option value="merchant_order_no">商户订单号</option><option value="biz_no">业务单号</option><option value="pay_no">支付单号</option><option value="channel_order_no">渠道订单号</option><option value="channel_trade_no">渠道交易号</option></select></label>
+<label>订单号<input name="number" class="layui-input" maxlength="128" placeholder="输入完整订单号"></label>
 <label>应用<select name="app_id" id="order-app-filter" lay-search><option value="">全部应用</option></select></label>
 <label>支付方式<select name="pay_type" data-payment-filter><option value="">全部方式</option></select></label>
 <label>订单状态<select name="status">
@@ -40,4 +40,4 @@
 <table id="order-table" lay-filter="order-table"></table>
 </div></section>
 {/block}
-{block name="scripts"}<script src="/assets/js/admin-orders.js?v=20261028refresh"></script>{/block}
+{block name="scripts"}<script src="/assets/js/admin-orders.js?v=20261028channelno"></script>{/block}

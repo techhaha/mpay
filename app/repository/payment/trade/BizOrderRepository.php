@@ -146,7 +146,9 @@ final class BizOrderRepository extends BaseRepository
     /**
      * 后台列表与导出共用筛选；服务已校验日期、状态和订单号，不接收任意查询列或排序表达式。
      *
-     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no?:?string,
+     *     channel_trade_no?:?string} $filters
      * @return list<BizOrder>
      */
     public function adminPage(array $filters, int $page, int $limit): array
@@ -158,7 +160,11 @@ final class BizOrderRepository extends BaseRepository
             ->all();
     }
 
-    /** @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
+    /**
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no?:?string,
+     *     channel_trade_no?:?string} $filters
+     */
     public function adminCount(array $filters): int
     {
         return (int) $this->adminQuery($filters)->count();
@@ -167,7 +173,9 @@ final class BizOrderRepository extends BaseRepository
     /**
      * 导出按主键向前读取，不使用大偏移分页；一致快照和总行数限制由服务拥有。
      *
-     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no?:?string,
+     *     channel_trade_no?:?string} $filters
      * @return list<BizOrder>
      */
     public function exportBatch(array $filters, string $afterId, int $limit): array
@@ -180,7 +188,11 @@ final class BizOrderRepository extends BaseRepository
             ->all();
     }
 
-    /** @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters */
+    /**
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no?:?string,
+     *     channel_trade_no?:?string} $filters
+     */
     private function adminQuery(array $filters): Query
     {
         $query = $this->model
@@ -219,7 +231,9 @@ final class BizOrderRepository extends BaseRepository
         if (
             ($filters['poll_group_id'] ?? null) !== null ||
             ($filters['channel_id'] ?? null) !== null ||
-            ($filters['pay_type'] ?? null) !== null
+            ($filters['pay_type'] ?? null) !== null ||
+            ($filters['channel_order_no'] ?? null) !== null ||
+            ($filters['channel_trade_no'] ?? null) !== null
         ) {
             // 按当前业务号定位支付尝试，不先展开符合条件的全部历史支付号。
             $query->whereExists(static function (Query $payments) use ($filters): void {
@@ -228,7 +242,10 @@ final class BizOrderRepository extends BaseRepository
                     ->alias('filter_pay')
                     ->whereColumn('filter_pay.biz_no', 'ma_biz_order.biz_no')
                     ->fieldRaw('1');
-                foreach (['poll_group_id', 'channel_id'] as $field) {
+                foreach (
+                    ['poll_group_id', 'channel_id', 'channel_order_no', 'channel_trade_no']
+                    as $field
+                ) {
                     if (($filters[$field] ?? null) !== null) {
                         $payments->where('filter_pay.' . $field, $filters[$field]);
                     }

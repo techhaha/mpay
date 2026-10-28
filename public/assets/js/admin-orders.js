@@ -47,7 +47,13 @@ MpayAdmin.ready(async function () {
         'end_date',
     ])
         if (locationValues.has(name)) filters.elements[name].value = locationValues.get(name);
-    for (const name of ['biz_no', 'pay_no', 'merchant_order_no'])
+    for (const name of [
+        'biz_no',
+        'pay_no',
+        'merchant_order_no',
+        'channel_order_no',
+        'channel_trade_no',
+    ])
         if (locationValues.has(name)) {
             filters.elements.number_kind.value = name;
             filters.elements.number.value = locationValues.get(name);
@@ -269,6 +275,8 @@ MpayAdmin.ready(async function () {
             '业务单号': order.biz_no,
             '商户订单号': order.merchant_order_no,
             '支付单号': order.pay_no,
+            '渠道订单号': order.channel_order_no,
+            '渠道交易号': order.channel_trade_no,
             '应用': appName(order),
             '支付方式': paymentName(order),
             '支付状态': order.status_label,
@@ -281,7 +289,6 @@ MpayAdmin.ready(async function () {
             '创建时间': order.created_at,
             '付款时间': order.paid_at,
             '有效截止时间': order.expires_at,
-            '来源流水号': order.channel_trade_no,
         };
     }
     function refundFacts(summary) {

@@ -45,6 +45,8 @@ final class PayOrderValidator extends Validate
         'biz_no' => ['string', 'regex' => '/^B[A-Za-z0-9]{1,63}$/D'],
         'pay_no' => ['string', 'regex' => '/^P[A-Za-z0-9]{1,63}$/D'],
         'merchant_order_no' => ['string', 'max' => 64],
+        'channel_order_no' => ['string', 'regex' => '/^[^\x00]{1,128}$/D', 'nonBlank'],
+        'channel_trade_no' => ['string', 'regex' => '/^[^\x00]{1,128}$/D', 'nonBlank'],
         'kind' => ['require', 'string', 'in' => ['operations', 'callbacks', 'notifications']],
         'reason' => ['require', 'string', 'max' => 512, 'nonBlank'],
         'received_amount' => [
@@ -89,6 +91,8 @@ final class PayOrderValidator extends Validate
             'biz_no',
             'pay_no',
             'merchant_order_no',
+            'channel_order_no',
+            'channel_trade_no',
         ],
         'identity' => ['biz_no'],
         'history' => ['biz_no', 'kind'],
@@ -120,7 +124,9 @@ final class PayOrderValidator extends Validate
      * notification_status 的 none 表示没有付款通知任务；0～4 表示当前调度状态，acknowledged 表示曾确认成功，空值表示不限定。
      *
      * @param array<string,mixed> $input
-     * @return array{filters:array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string},page:int,limit:int}
+     * @return array{filters:array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no:?string,
+     *     channel_trade_no:?string},page:int,limit:int}
      */
     public function filters(array $input, bool $export = false): array
     {
@@ -152,6 +158,8 @@ final class PayOrderValidator extends Validate
                 'pay_type' => $values['pay_type'] ?? null,
                 'pay_no' => $values['pay_no'] ?? null,
                 'merchant_order_no' => $values['merchant_order_no'] ?? null,
+                'channel_order_no' => $values['channel_order_no'] ?? null,
+                'channel_trade_no' => $values['channel_trade_no'] ?? null,
             ],
         ] + $this->pagination->validate($input);
     }

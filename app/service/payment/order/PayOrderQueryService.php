@@ -54,7 +54,9 @@ final class PayOrderQueryService extends BaseService
     ) {}
 
     /**
-     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters 已校验的上海时区左闭右开范围。
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no?:?string,
+     *     channel_trade_no?:?string} $filters 已校验的上海时区左闭右开范围。
      * @return array{items:list<array<string,mixed>>,total:int,page:int,limit:int} 金额输出为定点元字符串。
      */
     public function listing(array $filters, int $page, int $limit): array
@@ -311,7 +313,9 @@ final class PayOrderQueryService extends BaseService
      * 同一读取快照按 200 行分批写入临时流，最大 10000 行；生成完毕提交审计后才发送 HTTP，避免导出中混入错误 JSON。
      * 临时流最多在内存保留 1 MiB，之后由 PHP 临时流管理文件；不返回文件路径，响应持有者必须关闭流。
      *
-     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,biz_no:?string,pay_no:?string,merchant_order_no:?string} $filters
+     * @param array{from:string,until:string,status:int|string|null,notification_status?:?string,
+     *     biz_no:?string,pay_no:?string,merchant_order_no:?string,channel_order_no?:?string,
+     *     channel_trade_no?:?string} $filters
      * @return resource 可读 CSV 流；不是文件路径或公开下载链接。
      */
     public function export(array $filters, AdminActionContext $actor): mixed
@@ -356,6 +360,8 @@ final class PayOrderQueryService extends BaseService
                     '业务单号',
                     '外部订单号',
                     '支付单号',
+                    '渠道订单号',
+                    '渠道交易号',
                     '订单名称',
                     '订单状态',
                     '支付状态',
@@ -387,6 +393,8 @@ final class PayOrderQueryService extends BaseService
                             $row['biz_no'],
                             $row['merchant_order_no'],
                             $row['pay_no'] ?? '',
+                            $row['channel_order_no'] ?? '',
+                            $row['channel_trade_no'] ?? '',
                             $row['subject'],
                             $row['display_status_label'],
                             $row['status_label'],
@@ -584,6 +592,7 @@ final class PayOrderQueryService extends BaseService
                 $pay === null ? null : $pay['confirmation_source'],
             ),
             'channel_id' => $pay === null ? null : $pay['channel_id'],
+            'channel_order_no' => $pay === null ? null : $pay['channel_order_no'],
             'channel_trade_no' => $pay === null ? null : $pay['channel_trade_no'],
             'receipt_scope_key' => $pay === null ? null : $pay['receipt_scope_key'],
             'notification_first_ack_at' => $notice['first_ack_at'] ?? null,

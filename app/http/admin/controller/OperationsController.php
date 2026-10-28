@@ -7,7 +7,7 @@ use app\common\base\BaseAdminController;
 use app\http\admin\validation\OperationsQueryValidator;
 use app\service\ops\stat\PaymentStatisticsService;
 use app\service\ops\log\AdminOperationQueryService;
-use app\service\payment\receipt\ReceiptFlowQueryService;
+use app\service\payment\receipt\PaymentCallbackQueryService;
 use app\service\payment\notify\NotifyQueryService;
 use think\Response;
 
@@ -21,40 +21,22 @@ final class OperationsController extends BaseAdminController
         return $this->success($statistics->day($validator->day($this->request->get())));
     }
 
-    public function receipts(
+    public function callbacks(
         OperationsQueryValidator $validator,
-        ReceiptFlowQueryService $records,
+        PaymentCallbackQueryService $records,
     ): Response {
-        $input = $validator->listing('receipts', $this->request->get());
+        $input = $validator->listing('callbacks', $this->request->get());
         $data = $records->listing($input['filters'], $input['page'], $input['limit']);
         return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
     }
 
-    public function receipt(
+    public function callback(
         OperationsQueryValidator $validator,
-        ReceiptFlowQueryService $records,
+        PaymentCallbackQueryService $records,
     ): Response {
         return $this->success(
             $records->detail($validator->identity('id', $this->request->get())['key']),
         );
-    }
-
-    public function receiptHistory(
-        OperationsQueryValidator $validator,
-        ReceiptFlowQueryService $records,
-    ): Response {
-        $input = $validator->identity('id', $this->request->get(), true);
-        $data = $records->history($input['key'], $input['page'], $input['limit']);
-        return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
-    }
-
-    public function ingress(
-        OperationsQueryValidator $validator,
-        ReceiptFlowQueryService $records,
-    ): Response {
-        $input = $validator->listing('ingress', $this->request->get());
-        $data = $records->ingress($input['filters'], $input['page'], $input['limit']);
-        return $this->page($data['items'], $data['total'], $data['page'], $data['limit']);
     }
 
     public function notifications(

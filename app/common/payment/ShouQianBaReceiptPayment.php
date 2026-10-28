@@ -421,9 +421,13 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
                 'status' => 'success',
                 'pay_no' => $pay['pay_no'],
                 'paid_amount' => $meta['original_amount'],
-                'chan_order_no' => $record['trade_no'],
+                'chan_order_no' => $record['trade_no'] ?? $record['event_key'],
                 'chan_trade_no' => $record['trade_no'],
-                'receipt' => $record,
+                'pay_type' => $record['pay_type'],
+                'received_amount' => $record['amount'],
+                'paid_at' => $record['paid_at'] ?? $context['received_at'],
+                'event_key' => $record['event_key'],
+                'raw' => $record['raw'],
             ];
         }
         return $results;
@@ -850,6 +854,7 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             $records[] = [
                 'pay_type' => $type,
                 'event_key' => $row['order_sn'],
+                'raw' => $row,
                 'trade_no' => $row['order_sn'],
                 'amount' => (int) $amount,
                 'paid_at' => $paid->format('Y-m-d H:i:s'),

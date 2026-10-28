@@ -7,17 +7,15 @@ use app\common\constant\TradeConstant;
 use app\model\payment\BizOrder;
 use app\model\payment\NotifyTask;
 use app\model\payment\PayOrder;
-use app\model\payment\ReceiptFlow;
 use RuntimeException;
 use think\db\Query;
 
-/** 工作台聚合读取；按业务、支付、流水和通知各自身份计数，不联表重复累加金额，不负责统计解释。 */
+/** 工作台聚合读取；按业务、支付和通知各自身份计数，不联表重复累加金额，不负责统计解释。 */
 final class PaymentStatisticsRepository
 {
     public function __construct(
         private readonly BizOrder $orders,
         private readonly PayOrder $payments,
-        private readonly ReceiptFlow $flows,
         private readonly NotifyTask $notifications,
     ) {}
 
@@ -25,7 +23,7 @@ final class PaymentStatisticsRepository
      * 金额使用 ORM 的固定聚合字段表达式；ThinkORM 4 sum() 返回 float，此处保留 MySQL DECIMAL 整数文本。
      * SQL 表达式是代码常量，日期通过 where 绑定；不接受外部字段、表达式或排序。
      *
-     * @return array{created:array<int|string,int>,business:array,payments:array,matched_receipts:int,notifications:array<int|string,int>}
+     * @return array{created:array<int|string,int>,business:array,payments:array,confirmed_orders:int,notifications:array<int|string,int>}
      */
     public function day(string $from, string $until, ?string $appId = null): array
     {
@@ -76,24 +74,11 @@ final class PaymentStatisticsRepository
         }
         $notificationQuery = $this->notifications->group('status');
         $this->limitToApp($notificationQuery, $appId);
-        $flowQuery = $this->flows->where('paid_at', '>=', $from)->where('paid_at', '<', $until);
-        // 所有订单和实际到账使用同一统计口径，按需限定应用归属。
-        if ($appId !== null) {
-            $flowQuery->whereExists(static function (Query $payments) use ($appId): void {
-                $payments
-                    ->table('ma_pay_order')
-                    ->alias('stats_pay')
-                    ->join('ma_biz_order stats_biz', 'stats_biz.biz_no=stats_pay.biz_no')
-                    ->whereColumn('stats_pay.pay_no', 'ma_receipt_flow.pay_no')
-                    ->where('stats_biz.app_id', $appId)
-                    ->fieldRaw('1');
-            });
-        }
         return [
             'created' => array_map('intval', $created),
             'business' => $business->getData(),
             'payments' => $payments->getData(),
-            'matched_receipts' => (int) $flowQuery->count(),
+            'confirmed_orders' => (int) $business['records'],
             'notifications' => array_map(
                 'intval',
                 $notificationQuery->column('COUNT(*)', 'status'),

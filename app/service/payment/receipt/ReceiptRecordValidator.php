@@ -5,6 +5,7 @@ namespace app\service\payment\receipt;
 
 use app\common\util\Money;
 use app\common\validation\PaymentTypeCode;
+use JsonException;
 use think\Validate;
 use UnexpectedValueException;
 
@@ -27,7 +28,7 @@ final class ReceiptRecordValidator extends Validate
 
     /**
      * @return array{pay_type:string,event_key:string,amount:int,paid_at:?string,trade_no:?string,remark:?string,
-     *     payload_digest:string}
+     *     payload_digest:string,raw:array|string,extra?:array}
      */
     public function validateRecord(array $record): array
     {
@@ -41,7 +42,10 @@ final class ReceiptRecordValidator extends Validate
                 'remark',
                 'payload_digest',
                 'extra',
+                'raw',
             ]) !== [] ||
+            !array_key_exists('raw', $record) ||
+            (!is_array($record['raw']) && !is_string($record['raw'])) ||
             !(clone $this)->failException(false)->check($record)
         ) {
             throw new UnexpectedValueException('插件流水字段无效');
@@ -78,7 +82,45 @@ final class ReceiptRecordValidator extends Validate
             $value['extra'] = $extra;
             $value['payload_digest'] = hash('sha256', $value['payload_digest'] . ':' . $encoded);
         }
+        // 原文仅随当前批次留在内存，不能进入内容匹配摘要；最终匹配后才保存。
+        $value['raw'] = $record['raw'];
         return $value;
+    }
+
+    /** 原文只接受文本或有界纯 JSON；此处不截断，仓储在最终确认事务内限制保存长度。 */
+    public function rawText(mixed $raw): string
+    {
+        if (!is_string($raw) && !is_array($raw)) {
+            throw new UnexpectedValueException('通知原文必须是字符串或数组');
+        }
+        self::assertRawValue($raw);
+        try {
+            $text = is_string($raw)
+                ? $raw
+                : json_encode(
+                    $raw,
+                    JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                    32,
+                );
+        } catch (JsonException $error) {
+            throw new UnexpectedValueException('通知原文不是有效 JSON', 0, $error);
+        }
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            throw new UnexpectedValueException('通知原文不是有效 UTF-8');
+        }
+        return $text;
+    }
+
+    private static function assertRawValue(mixed $value, int $depth = 0): void
+    {
+        if ($depth > 32 || is_object($value) || is_resource($value)) {
+            throw new UnexpectedValueException('通知原文必须是有界纯 JSON');
+        }
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                self::assertRawValue($item, $depth + 1);
+            }
+        }
     }
 
     protected function integerValue(mixed $value): bool

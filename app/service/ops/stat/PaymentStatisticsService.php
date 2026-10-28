@@ -14,7 +14,7 @@ use app\service\system\runtime\RuntimeStatusService;
  * 工作台金额和成功率的明确统计口径；到账消息数、通知重试数和设备心跳均不折算为业务成交。
  * @phpstan-type DayStatistics array{date:string,timezone:string,created_orders:int,created_successes:int,
  *     created_success_rate:?string,paid_orders:int,business_amount:string,received_amount:string,received_difference:string,
- *     requested_offset:string,matched_receipts:int,notification_counts:list<int>,unknown_state_records:int,
+ *     requested_offset:string,confirmed_orders:int,notification_counts:list<int>,unknown_state_records:int,
  *     observed_at:string,runtime:array,device_status:string}
  */
 final class PaymentStatisticsService extends BaseService
@@ -74,7 +74,7 @@ final class PaymentStatisticsService extends BaseService
                     (string) $payments['sum_difference_cents'],
                 ),
                 'requested_offset' => Money::formatTotal((string) $payments['sum_offset_cents']),
-                'matched_receipts' => $raw['matched_receipts'],
+                'confirmed_orders' => $raw['confirmed_orders'],
                 // 通知计数固定按NotifyConstant::STATUSES 的顺序输出五项，空集与非空集保持同一种 JSON 形状。
                 'notification_counts' => array_replace(
                     array_fill_keys(NotifyConstant::STATUSES, 0),

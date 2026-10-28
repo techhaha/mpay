@@ -14,7 +14,6 @@ final class OperationsQueryValidator extends Validate
     protected $rule = [
         'app_id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
         'id' => ['string', 'regex' => '/^[1-9][0-9]{0,19}$/D'],
-        'scope_key' => ['string', 'max' => 64],
         'plugin_code' => ['string', 'regex' => '/^[a-z][a-z0-9_.-]{0,63}$/D'],
         'pay_no' => ['string', 'regex' => '/^P[A-Za-z0-9]{1,63}$/D'],
         'biz_no' => ['string', 'regex' => '/^B[A-Za-z0-9]{1,63}$/D'],
@@ -25,11 +24,19 @@ final class OperationsQueryValidator extends Validate
         'result_code' => ['string', 'regex' => '/^[a-z][a-z0-9_]{0,63}$/D'],
         'request_id' => ['string', 'regex' => '/^[a-f0-9]{32}$/D'],
         'status' => ['string'],
+        'result_status' => ['string', 'in' => ['1', '2', '3', '4', '5']],
     ];
     protected $scene = [
-        'receipts' => ['id', 'scope_key', 'plugin_code', 'pay_no'],
+        'callbacks' => [
+            'id',
+            'channel_id',
+            'plugin_code',
+            'pay_no',
+            'request_id',
+            'result_status',
+            'result_code',
+        ],
         'notifications' => ['notify_no', 'biz_no', 'pay_no', 'status', 'app_id'],
-        'ingress' => ['channel_id', 'plugin_code', 'result_code', 'request_id'],
         'audit' => ['admin_id', 'action', 'result_code', 'request_id'],
     ];
 
@@ -47,7 +54,7 @@ final class OperationsQueryValidator extends Validate
     public function listing(string $kind, array $input): array
     {
         $fields = $this->scene[$kind] ?? throw new InvalidArgumentException('未知运行记录场景');
-        $supportsAllDates = in_array($kind, ['receipts', 'notifications'], true);
+        $supportsAllDates = in_array($kind, ['callbacks', 'notifications'], true);
         $this->known($input, [
             ...$fields,
             'start_date',
@@ -84,6 +91,9 @@ final class OperationsQueryValidator extends Validate
             $filters['status'] !== 'acknowledged'
         ) {
             $filters['status'] = (int) $filters['status'];
+        }
+        if (isset($filters['result_status'])) {
+            $filters['result_status'] = (int) $filters['result_status'];
         }
         // 待处理入口查询全部日期，防止历史未处理记录被近七天的默认筛选隐藏；分页上限仍生效。
         if ($supportsAllDates && ($input['all_dates'] ?? '0') === '1') {

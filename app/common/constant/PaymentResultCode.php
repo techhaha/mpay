@@ -6,6 +6,25 @@ namespace app\common\constant;
 /** 支付执行、到账、商户通知和退款日志的诊断编码。流程状态另用 TINYINT；日志保留可扩展原因码便于排障。 */
 final class PaymentResultCode
 {
+    public const CALLBACK_CONFIRMED = 1;
+    public const CALLBACK_REPLAYED = 2;
+    public const CALLBACK_REJECTED = 3;
+    public const CALLBACK_FAULT = 4;
+    public const CALLBACK_IGNORED = 5;
+    public const CHANNEL_IGNORED = 'channel_ignored';
+
+    public static function callbackLabel(int $status): string
+    {
+        return match ($status) {
+            self::CALLBACK_CONFIRMED => '确认成功',
+            self::CALLBACK_REPLAYED => '重复通知',
+            self::CALLBACK_REJECTED => '处理拒绝',
+            self::CALLBACK_FAULT => '处理异常',
+            self::CALLBACK_IGNORED => '忽略',
+            default => '未知结果',
+        };
+    }
+
     public const EXECUTION_CLAIMED = 'execution_claimed';
     public const STALE_EXECUTION_RESULT = 'stale_execution_result';
     public const EXECUTION_RESULT_NOT_APPLICABLE = 'execution_result_not_applicable';
@@ -15,7 +34,6 @@ final class PaymentResultCode
     public const EXECUTION_REJECTED = 'execution_rejected';
     public const RECEIPT_CONFIRMED = 'receipt_confirmed';
     public const CONFIRMATION_REPLAYED = 'confirmation_replayed';
-    public const CHANNEL_ACCEPTED = 'channel_accepted';
     public const CHANNEL_REJECTED = 'channel_rejected';
     public const CHANNEL_FAULT = 'channel_fault';
     public const MANUAL_EVIDENCE_SUPPLEMENTED = 'manual_evidence_supplemented';
@@ -50,6 +68,7 @@ final class PaymentResultCode
     public static function label(?string $code): string
     {
         return match ($code) {
+            self::CHANNEL_IGNORED => '通知无需入账',
             null => '暂无处理结果',
             self::EXECUTION_CLAIMED => '已认领支付执行',
             self::STALE_EXECUTION_RESULT => '执行身份已变化，忽略迟到结果',
@@ -60,7 +79,6 @@ final class PaymentResultCode
             self::EXECUTION_REJECTED => '平台明确拒绝',
             self::RECEIPT_CONFIRMED => '到账已核实，订单已确认成功',
             self::CONFIRMATION_REPLAYED => '重复确认已处理，不计为新增收款',
-            self::CHANNEL_ACCEPTED => '通知已接收',
             self::CHANNEL_REJECTED => '通知未通过校验或订单匹配，请按请求编号核对',
             self::CHANNEL_FAULT => '通知处理异常，请按请求编号查看技术日志',
             self::MANUAL_EVIDENCE_SUPPLEMENTED => '已补充至人工确认的订单，不计为新增收款',

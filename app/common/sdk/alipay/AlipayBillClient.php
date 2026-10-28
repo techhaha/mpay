@@ -252,6 +252,12 @@ final class AlipayBillClient
                 }
                 $entries[] = [
                     'alipay_order_no' => self::optional($row, 'alipay_order_no', 128),
+                    'raw' => json_decode(
+                        json_encode($row, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+                        true,
+                        32,
+                        JSON_THROW_ON_ERROR | JSON_BIGINT_AS_STRING,
+                    ),
                     'amount_cents' => $amount,
                     'direction' => $direction,
                     'booked_at' => self::text($row->trans_dt ?? null, 64),

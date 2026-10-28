@@ -78,19 +78,14 @@ final class AdminController extends BaseAdminController
         ]);
     }
 
-    public function receipts(AdminSessionService $sessions): Response
+    public function callbacks(AdminSessionService $sessions): Response
     {
-        return $this->records('receipts', '到账流水', $sessions);
+        return $this->records('callbacks', '收款回调', $sessions);
     }
 
     public function notifications(AdminSessionService $sessions): Response
     {
         return $this->records('notifications', '商户通知', $sessions);
-    }
-
-    public function ingress(AdminSessionService $sessions): Response
-    {
-        return $this->records('ingress', '通道回调日志', $sessions);
     }
 
     public function audit(AdminSessionService $sessions): Response
@@ -169,12 +164,9 @@ final class AdminController extends BaseAdminController
         ]);
     }
 
-    /** 四个只读列表共用布局；kind 只由上述固定路由方法给出，不作为任意模板路径或服务类名。 */
-    private function records(
-        string $kind,
-        string $title,
-        AdminSessionService $sessions,
-    ): Response {
+    /** 只读记录列表共用布局；kind 只由上述固定路由方法给出，不作为任意模板路径或服务类名。 */
+    private function records(string $kind, string $title, AdminSessionService $sessions): Response
+    {
         $today = new DateTimeImmutable('today');
         return $this->pageView('admin/records', [
             'title' => $title . ' · MPAY',

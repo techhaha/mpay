@@ -4,109 +4,136 @@ declare(strict_types=1);
 namespace app\repository\payment\trade;
 
 use app\common\base\BaseRepository;
+use app\common\constant\PaymentResultCode as Result;
 use app\model\payment\PayCallbackLog;
 use InvalidArgumentException;
+use think\db\Query;
 
-/**
- * 回调处理的持久审计；与订单/流水处理结论一起提交，不用可降级技术日志替代。
- *
- * @extends BaseRepository<PayCallbackLog>
- */
+/** 所有来源共用的收款回调记录；成功审计与交易一起提交，正文只保留最终匹配项。 */
 final class PayCallbackLogRepository extends BaseRepository
 {
-    /** @return array{items:list<PayCallbackLog>,total:int} 按最终 flow_id 精确关联成功与幂等重报历史，未匹配输入不生成流水。 */
-    public function pageForFlow(string $flowId, int $page, int $limit): array
-    {
-        $query = $this->model->where('summary_json->flow_id', $flowId);
-        return [
-            'total' => (int) (clone $query)->count(),
-            'items' => $query->order('id', 'desc')->page($page, $limit)->select()->all(),
-        ];
-    }
-
-    /** @return array{items:list<PayCallbackLog>,total:int} 回调/执行历史由查询服务脱敏映射，原始 summary 不直接进入后台。 */
-    public function pageForPay(string $payNo, int $page, int $limit): array
-    {
-        return [
-            'items' => $this->model
-                ->where('pay_no', $payNo)
-                ->order('id', 'desc')
-                ->page($page, $limit)
-                ->select()
-                ->all(),
-            'total' => (int) $this->model->where('pay_no', $payNo)->count(),
-        ];
-    }
+    private const LIST_FIELDS = 'id,pay_no,channel_id,plugin_code,request_id,event_key,amount,paid_at,received_at,result_status,result_code,message,payload_truncated,created_at';
 
     public function __construct(PayCallbackLog $model)
     {
         parent::__construct($model);
     }
 
-    /**
-     * @param string|null $payNo 关联支付单编号；到账确认由调用方提供流水最终绑定的 pay_no，审计层不选择订单。
-     * @param array{flow_id:?string,
-     *     config_version?:int,before_status?:int,
-     *     source_reference?:array{plugin_code:string,plugin_version:string,api_config_id:string,config_revision_id:int}
-     * } $summary 只接收脱敏核对标识，来源引用不包含配置正文或秘密。
-     */
-    public function record(
-        ?string $payNo,
-        string $requestId,
-        string $eventKey,
-        string $digest,
-        string $result,
-        array $summary,
-    ): void {
-        if (!preg_match('/^[a-f0-9]{32}$/D', $requestId)) {
-            throw new InvalidArgumentException('回调关联号必须由服务端生成');
+    public function find(string $id): ?PayCallbackLog
+    {
+        return $this->model->find($id);
+    }
+
+    /** @return array{items:list<PayCallbackLog>,total:int} 正文、摘要及扩展仅在详情读取。 */
+    public function adminPage(array $filters, int $page, int $limit): array
+    {
+        $query = $this->query($filters);
+        return [
+            'total' => (int) (clone $query)->count(),
+            'items' => $query
+                ->field(self::LIST_FIELDS)
+                ->order('received_at', 'desc')
+                ->order('id', 'desc')
+                ->page($page, $limit)
+                ->select()
+                ->all(),
+        ];
+    }
+
+    private function query(array $filters): Query
+    {
+        $query = $this->model->where('id', '>', 0);
+        if (isset($filters['from'], $filters['until'])) {
+            $query
+                ->where('received_at', '>=', $filters['from'])
+                ->where('received_at', '<', $filters['until']);
         }
-        $this->insert(
+        foreach (
             [
-                'pay_no' => $payNo,
-                'request_id' => $requestId,
-                'event_key' => $eventKey,
-                'payload_digest' => $digest,
-                'result_code' => $result,
-                'summary_json' => json_encode($summary, JSON_THROW_ON_ERROR),
-            ],
-            ['pay_no', 'request_id', 'event_key', 'payload_digest', 'result_code', 'summary_json'],
-        );
+                'id',
+                'pay_no',
+                'channel_id',
+                'plugin_code',
+                'request_id',
+                'result_status',
+                'result_code',
+            ]
+            as $field
+        ) {
+            if (isset($filters[$field])) {
+                $query->where($field, $filters[$field]);
+            }
+        }
+        return $query;
     }
 
     /**
-     * 执行认领/回写只记固定原因、原状态和 token 摘要；不伪造平台事件键或记录异常正文。
-     * 与执行状态共用事务，旧工作者被拒绝也留下审计，不能仅靠技术日志判断是否已调用插件。
+     * @param array{channel_id:?string,plugin_code:?string,pay_no?:?string,request_id:string,
+     *     received_at:string,result_status:int,result_code:string,message?:?string,event_key?:?string,
+     *     amount?:?int,paid_at?:?string,payload_digest?:?string,payload_text?:?string,summary?:array} $data
+     * 正文仅供查看；截断不影响原始验签、证据摘要及交易核验。失败记录不保存未匹配流水内容。
      */
-    public function recordExecution(
-        string $payNo,
-        string $requestId,
-        string $token,
-        string $reason,
-        int $beforeStatus,
-    ): void {
+    public function record(array $data): string
+    {
+        $this->requireTransaction();
         if (
-            !preg_match('/^[a-f0-9]{32}$/D', $requestId) ||
-            !preg_match('/^[a-f0-9]{32}$/D', $token)
+            !preg_match('/^[a-f0-9]{32}$/D', $data['request_id']) ||
+            !in_array($data['result_status'], [1, 2, 3, 4, 5], true)
         ) {
-            throw new InvalidArgumentException('执行关联号必须由服务端生成');
+            throw new InvalidArgumentException('回调记录身份或结果无效');
         }
-        $this->insert(
+        $successful = in_array(
+            $data['result_status'],
+            [Result::CALLBACK_CONFIRMED, Result::CALLBACK_REPLAYED],
+            true,
+        );
+        $payload = $successful ? $data['payload_text'] ?? null : null;
+        if ($payload !== null) {
+            $payload = mb_scrub($payload, 'UTF-8');
+        }
+        $truncated = $payload !== null && strlen($payload) > 8192;
+        return $this->insert(
             [
-                'pay_no' => $payNo,
-                'request_id' => $requestId,
-                'event_key' => null,
-                'payload_digest' => null,
-                'result_code' => $reason,
-                'summary_json' => json_encode(
-                    [
-                        'execution_token_digest' => hash('sha256', $token),
-                        'before_status' => $beforeStatus,
-                    ],
-                    JSON_THROW_ON_ERROR,
+                'channel_id' => $data['channel_id'],
+                'plugin_code' => $data['plugin_code'],
+                'pay_no' => $data['pay_no'] ?? null,
+                'request_id' => $data['request_id'],
+                'received_at' => $data['received_at'],
+                'event_key' => $data['event_key'] ?? null,
+                'amount' => $successful ? $data['amount'] ?? null : null,
+                'paid_at' => $successful ? $data['paid_at'] ?? null : null,
+                'result_status' => $data['result_status'],
+                'result_code' => $data['result_code'],
+                'message' => mb_strcut(
+                    $data['message'] ?? Result::label($data['result_code']),
+                    0,
+                    512,
+                    'UTF-8',
                 ),
+                'payload_digest' => $data['payload_digest'] ?? null,
+                'payload_text' => $payload === null ? null : mb_strcut($payload, 0, 8192, 'UTF-8'),
+                'payload_truncated' => (int) $truncated,
+                'summary_json' => isset($data['summary'])
+                    ? json_encode($data['summary'], JSON_THROW_ON_ERROR)
+                    : null,
             ],
-            ['pay_no', 'request_id', 'event_key', 'payload_digest', 'result_code', 'summary_json'],
+            [
+                'channel_id',
+                'plugin_code',
+                'pay_no',
+                'request_id',
+                'received_at',
+                'event_key',
+                'amount',
+                'paid_at',
+                'result_status',
+                'result_code',
+                'message',
+                'payload_digest',
+                'payload_text',
+                'payload_truncated',
+                'summary_json',
+            ],
         );
     }
 }

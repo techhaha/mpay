@@ -16,9 +16,9 @@ final readonly class ReceiptEvent
     /**
      * @param string $eventKey 对应插件的事件引用；手机兼容编号包含通知 timestamp，重投需保留原字段才能同键去重。
      * @param int $amount 来源合同定义的真实收款交易金额，整数分且大于零。
-     * @param string|null $paidAt 已验证的上海时区 Y-m-d H:i:s 字符串；缺失为 null，不补接收时间。
+     * @param string $paidAt 已验证的付款时间；来源未提供时由插件使用本次接收时间。
      * @param string|null $platformTradeNo 真实平台交易号；没有时为 null，监听合成编号仅放在 eventKey。
-     * @param string $sourcePayloadDigest 服务按标准流水字段计算的 SHA-256，不保存平台原文或秘密。
+     * @param string $channelOrderNo 稳定业务订单引用；插件可在来源缺失时生成，不能冒充真实交易号。
      * @param string $pluginCode 服务端授权的插件编码，不能由平台正文指定。
      * @param string $pluginVersion 实际解析本次事件的已安装代码版本，供来源审计回溯。
      * @param string $configurationId PaymentPluginConf 的数据库 ID；configVersion 是该配置下的版本号。
@@ -29,10 +29,9 @@ final readonly class ReceiptEvent
         public string $payType,
         public string $eventKey,
         public int $amount,
-        public ?string $paidAt,
+        public string $paidAt,
         public ?string $platformTradeNo,
-        public ?string $remark,
-        public string $sourcePayloadDigest,
+        public string $channelOrderNo,
         public string $pluginCode,
         public string $pluginVersion,
         public string $configurationId,
@@ -57,7 +56,7 @@ final readonly class ReceiptEvent
 
     /**
      * 内容摘要与稳定事件键分开保存；同键不同内容必须形成冲突，不能覆盖首次事实。
-     * 接收时间、认证配置/插件版本引用不参与内容摘要，正常重投/密钥轮换不产生伪造的新到账。
+     * 时间可使用接收时间兜底，原文也可能随重投改变，均不参与消费摘要；首次付款时间仍不可覆盖。
      *
      */
     public function digest(): string
@@ -66,15 +65,13 @@ final readonly class ReceiptEvent
             'sha256',
             json_encode(
                 [
-                    'version' => 3,
+                    'version' => 4,
                     'plugin_code' => $this->pluginCode,
                     'event_key' => $this->eventKey,
                     'pay_type' => $this->payType,
                     'amount' => $this->amount,
-                    'paid_at' => $this->paidAt,
                     'platform_trade_no' => $this->platformTradeNo,
-                    'remark' => $this->remark,
-                    'source_payload_digest' => $this->sourcePayloadDigest,
+                    'channel_order_no' => $this->channelOrderNo,
                 ],
                 JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
             ),

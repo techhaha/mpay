@@ -19,14 +19,13 @@ use app\repository\payment\notify\NotifyAttemptRepository;
 use app\repository\payment\notify\NotifyTaskRepository;
 use app\repository\payment\receipt\ReceiptFlowRepository;
 use app\repository\payment\trade\BizOrderRepository;
-use app\repository\payment\trade\PayCallbackLogRepository;
 use app\repository\payment\trade\PayOrderOperationLogRepository;
 use app\repository\payment\trade\PayOrderRepository;
 use app\repository\payment\trade\RefundOrderRepository;
 use app\repository\system\AdminOperationLogRepository;
 use app\repository\system\AdminUserRepository;
 use app\service\payment\notify\NotifyQueryService;
-use app\service\payment\receipt\ReceiptFlowQueryService;
+use app\service\payment\receipt\PaymentCallbackQueryService;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use RuntimeException;
@@ -45,12 +44,11 @@ final class PayOrderQueryService extends BaseService
         private readonly NotifyAttemptRepository $attempts,
         private readonly ReceiptFlowRepository $flows,
         private readonly PayOrderOperationLogRepository $operations,
-        private readonly PayCallbackLogRepository $callbacks,
         private readonly PayOrderActionResolverService $actions,
         private readonly AdminUserRepository $admins,
         private readonly AdminOperationLogRepository $audit,
         private readonly NotifyQueryService $notificationQuery,
-        private readonly ReceiptFlowQueryService $receiptQuery,
+        private readonly PaymentCallbackQueryService $callbackQuery,
         private readonly RefundOrderRepository $refunds,
         private readonly PaymentCatalogRepository $catalog,
     ) {}
@@ -75,7 +73,7 @@ final class PayOrderQueryService extends BaseService
      * @return array{order:array<string,mixed>,notification:?array,refunds:list<array>,
      *     refund_summary:array{paid_amount:?string,refunded_amount:string,pending_amount:string,
      *         available_amount:string,has_unresolved:bool,status_label:string,request_no:string},
-     *     receipt:?array,actions:array<string,bool|string|null>}
+     *     actions:array<string,bool|string|null>}
      */
     public function detail(string $bizNo): array
     {
@@ -101,13 +99,6 @@ final class PayOrderQueryService extends BaseService
                     $receipt['pay_no'] !== $pay['pay_no'])
             ) {
                 throw new RuntimeException('支付关联流水与原范围不一致');
-            }
-            $receiptView = null;
-            if ($receipt !== null) {
-                $receiptView = $this->receiptQuery->summary($receipt, $pay) + [
-                    'receipt_scope_key' => $receipt['receipt_scope_key'],
-                    'remark' => $receipt['remark'],
-                ];
             }
             // 只取原单保存的产品/动作标识，不读取活动插件推测，也不公开其他展示参数。
             $presentation = $pay === null ? [] : $pay['ext_json']['presentation'] ?? [];
@@ -168,7 +159,6 @@ final class PayOrderQueryService extends BaseService
                     // 每次打开详情产生一次申请号；同一表单提交和读取结果始终沿用它。
                     'request_no' => bin2hex(random_bytes(16)),
                 ],
-                'receipt' => $receiptView,
                 'actions' => $this->actions->resolve(
                     $biz,
                     $pay,
@@ -209,10 +199,13 @@ final class PayOrderQueryService extends BaseService
                     'created_at',
                 ];
             } elseif ($kind === 'callbacks') {
-                if ($number !== null) {
-                    $records = $this->callbacks->pageForPay($number, $page, $limit);
-                }
-                $fields = ['id', 'request_id', 'result_code', 'created_at'];
+                return $number === null
+                    ? ['items' => [], 'total' => 0, 'page' => $page, 'limit' => $limit]
+                    : $this->callbackQuery->listingInTransaction(
+                        ['pay_no' => $number],
+                        $page,
+                        $limit,
+                    );
             } elseif ($kind === 'notifications') {
                 $task =
                     $number === null
@@ -248,16 +241,17 @@ final class PayOrderQueryService extends BaseService
                         $item[$field] = $record[$field];
                     }
                 }
-                if ($kind === 'callbacks') {
-                    $item['result_label'] = $this->receiptQuery->reasonLabel(
-                        $item['result_code'] ?? null,
-                    );
-                } elseif ($kind === 'notifications') {
+                if ($kind === 'notifications') {
                     $item['result_label'] = $this->notificationQuery->reasonLabel(
                         $item['result_code'] ?? null,
                     );
                 }
                 if ($kind === 'operations') {
+                    $item['actor_label'] = $item['admin_user_id'] === null ? '系统' : '管理员';
+                    $item['action_label'] =
+                        $item['admin_user_id'] === null
+                            ? PaymentResultCode::label($item['action'])
+                            : $item['action'];
                     // 审计证据也逐字段映射，不能把后续新增内部字段自动暴露给浏览器。
                     $proof = $number === null ? $record['summary_json'] : $record['evidence_json'];
                     if ($number === null && is_array($proof)) {

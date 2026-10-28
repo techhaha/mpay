@@ -10,6 +10,7 @@ use app\common\sdk\epay\EpayV1Client;
 use app\common\sdk\epay\EpayV1Signer;
 use app\common\util\HttpTargetPolicy;
 use app\common\util\Money;
+use app\common\util\Clock;
 use app\exception\BusinessException;
 use app\exception\PaymentDefinitiveException;
 use app\exception\PaymentUncertainException;
@@ -27,7 +28,8 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
         'name' => '易支付 V1',
         'version' => '1.0.0',
         'pay_types' => ['alipay', 'wxpay'],
-        'description' => '填写第三方易支付 V1 平台的网关、商户 PID 和 KEY。默认使用 submit.php 页面支付，也可选择 mapi.php 接口下单。平台须能访问本系统回调地址。退款需先在第三方商户后台开启接口退款。',
+        'description' =>
+            '填写第三方易支付 V1 平台的网关、商户 PID 和 KEY。默认使用 submit.php 页面支付，也可选择 mapi.php 接口下单。平台须能访问本系统回调地址。退款需先在第三方商户后台开启接口退款。',
         'config_schema' => [
             [
                 'type' => 'input',
@@ -35,7 +37,8 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
                 'title' => '第三方网关地址',
                 'validate' => [0 => 'require', 1 => 'url', 'max' => 2048],
                 'placeholder' => 'https://pay.example.com/',
-                'help' => '填写站点根地址或安装子目录，不填写 submit.php、mapi.php、api.php 或查询参数。',
+                'help' =>
+                    '填写站点根地址或安装子目录，不填写 submit.php、mapi.php、api.php 或查询参数。',
             ],
             [
                 'type' => 'input',
@@ -60,7 +63,8 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
                 ],
                 'validate' => [0 => 'require', 'in' => ['submit', 'mapi']],
                 'value' => 'submit',
-                'help' => '默认进入第三方收银台付款；选择 mapi 时，由本站请求第三方接口取得付款信息。',
+                'help' =>
+                    '默认进入第三方收银台付款；选择 mapi 时，由本站请求第三方接口取得付款信息。',
             ],
         ],
     ];
@@ -68,6 +72,7 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
     public function __construct(
         private readonly EpayV1Client $client,
         private readonly EpayV1Signer $signer,
+        private readonly Clock $clock,
     ) {}
 
     public function pay(array $order): array
@@ -91,8 +96,10 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
         if ($method === 'submit') {
             $parameters['sign'] = $this->signer->sign($parameters, $this->configuration['key']);
             // 只生成原单的浏览器链接；没有上游受理号时不使用本地号占位。
-            $url = EpayV1Client::gateway($this->configuration['gateway']) . 'submit.php?'
-                . http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
+            $url =
+                EpayV1Client::gateway($this->configuration['gateway']) .
+                'submit.php?' .
+                http_build_query($parameters, '', '&', PHP_QUERY_RFC3986);
             return $this->pendingResult($order, 'submit', null, [
                 'pay_page' => 'jump',
                 'pay_params' => ['url' => $url],
@@ -135,7 +142,11 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
                 } elseif (
                     strlen($value) > 16384 ||
                     preg_match('/[\x00-\x20\x7f]/', $value) ||
-                    !in_array(parse_url($value, PHP_URL_SCHEME), ['alipay', 'alipays', 'weixin'], true)
+                    !in_array(
+                        parse_url($value, PHP_URL_SCHEME),
+                        ['alipay', 'alipays', 'weixin'],
+                        true,
+                    )
                 ) {
                     throw new InvalidArgumentException('唤起地址无效');
                 }
@@ -176,12 +187,17 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
     /** 按本地支付号查原平台订单；查询失败只表示状态未知，不作为付款被拒绝的证据。 */
     public function query(array $order): array
     {
-        $data = $this->client->request($this->configuration['gateway'], 'api.php', [
-            'act' => 'order',
-            'pid' => $this->configuration['pid'],
-            'key' => $this->configuration['key'],
-            'out_trade_no' => $order['pay_no'],
-        ], true);
+        $data = $this->client->request(
+            $this->configuration['gateway'],
+            'api.php',
+            [
+                'act' => 'order',
+                'pid' => $this->configuration['pid'],
+                'key' => $this->configuration['key'],
+                'out_trade_no' => $order['pay_no'],
+            ],
+            true,
+        );
         if ($data['code'] !== 1) {
             throw new PaymentUncertainException($this->responseError($data));
         }
@@ -192,15 +208,24 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
         ) {
             throw new PaymentUncertainException('第三方查询响应的订单身份或状态无效');
         }
-        $result = $this->paymentResult($data);
-        if ($result['pay_type'] !== $order['pay_type_code'] || $result['paid_amount'] !== $order['amount']) {
+        $result = $this->paymentResult($data, $this->clock->now()->format('Y-m-d H:i:s'));
+        if (
+            $result['pay_type'] !== $order['pay_type_code'] ||
+            $result['paid_amount'] !== $order['amount']
+        ) {
             throw new PaymentUncertainException('第三方查询响应与原订单金额或方式不一致');
         }
         if ((int) $data['status'] === 0) {
             $result['status'] = 'pending';
             $result['paid_amount'] = null;
+            $result['received_amount'] = null;
+            $result['paid_at'] = null;
         } elseif (isset($data['endtime']) && $data['endtime'] !== '') {
-            if (!(new Validate())->rule(['endtime' => ['require', 'dateFormat' => 'Y-m-d H:i:s']])->check($data)) {
+            if (
+                !(new Validate())
+                    ->rule(['endtime' => ['require', 'dateFormat' => 'Y-m-d H:i:s']])
+                    ->check($data)
+            ) {
                 throw new PaymentUncertainException('第三方查询响应的付款时间无效');
             }
             $result['paid_at'] = $data['endtime'];
@@ -238,7 +263,7 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
     /** GET 使用实际 URL 的 query，避开伪静态注入参数；POST 只读表单，不合并两种输入。 */
     public function notify(Request|array $payload, array $context): array
     {
-        if (!$payload instanceof Request) {
+        if (!($payload instanceof Request)) {
             throw new UnsupportedPaymentOperationException();
         }
         $request = $payload;
@@ -251,7 +276,10 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
         }
         foreach ($parameters as $value) {
             if (!is_string($value)) {
-                throw new BusinessException('第三方通知参数格式无效', ApiResponseConstant::BAD_REQUEST);
+                throw new BusinessException(
+                    '第三方通知参数格式无效',
+                    ApiResponseConstant::BAD_REQUEST,
+                );
             }
         }
         if (!$this->signer->verify($parameters, $this->configuration['key'])) {
@@ -260,11 +288,15 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
         if (
             ($parameters['pid'] ?? null) !== $this->configuration['pid'] ||
             ($parameters['trade_status'] ?? null) !== 'TRADE_SUCCESS' ||
-            (isset($context['pay_no']) && ($parameters['out_trade_no'] ?? null) !== $context['pay_no'])
+            (isset($context['pay_no']) &&
+                ($parameters['out_trade_no'] ?? null) !== $context['pay_no'])
         ) {
-            throw new BusinessException('第三方通知的商户、订单或支付状态不一致', ApiResponseConstant::FORBIDDEN);
+            throw new BusinessException(
+                '第三方通知的商户、订单或支付状态不一致',
+                ApiResponseConstant::FORBIDDEN,
+            );
         }
-        return [$this->paymentResult($parameters)];
+        return [$this->paymentResult($parameters, $context['received_at'])];
     }
 
     /** 平台要求原样纯文本，避免 Accept: application/json 把 success 编码为带引号的 JSON。 */
@@ -279,18 +311,20 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
     }
 
     /**
-     * 平台 trade_no 是受理订单号；不复制到监听防重字段，不伪造流水或平台付款时间。
-     * notify 无付款时间，paid_at=null 由生命周期只在首次确认时记录接收时间。
+     * 平台 trade_no 是受理订单号，不复制为真实流水号；原参数原样供回调记录使用。
+     * 标准 notify 无付款时间，使用服务提供的本次接收时间；生命周期保留首次确认时间。
      *
      * @return array<string,mixed>
      */
-    private function paymentResult(array $data): array
+    private function paymentResult(array $data, string $receivedAt): array
     {
-        $valid = (new Validate())->rule([
-            'out_trade_no' => ['require', 'string', 'regex' => '/^P[0-9]{19}$/D'],
-            'type' => ['require', 'string', 'in' => $this->getEnabledPayTypes()],
-            'money' => ['require', 'string'],
-        ])->check($data);
+        $valid = (new Validate())
+            ->rule([
+                'out_trade_no' => ['require', 'string', 'regex' => '/^P[0-9]{19}$/D'],
+                'type' => ['require', 'string', 'in' => $this->getEnabledPayTypes()],
+                'money' => ['require', 'string'],
+            ])
+            ->check($data);
         if (!$valid || !$this->reference($data['trade_no'] ?? null)) {
             throw new BusinessException('第三方订单字段无效', ApiResponseConstant::BAD_REQUEST);
         }
@@ -300,23 +334,32 @@ final class EpayV1Payment extends BasePayment implements PaymentInterface
             throw new BusinessException('第三方订单金额格式无效', ApiResponseConstant::BAD_REQUEST);
         }
         if ($amount < 1) {
-            throw new BusinessException('第三方订单金额必须大于零', ApiResponseConstant::BAD_REQUEST);
+            throw new BusinessException(
+                '第三方订单金额必须大于零',
+                ApiResponseConstant::BAD_REQUEST,
+            );
         }
         return [
             'status' => 'success',
             'pay_no' => $data['out_trade_no'],
             'paid_amount' => $amount,
+            'received_amount' => $amount,
             'pay_type' => $data['type'],
             'chan_order_no' => $data['trade_no'],
             'chan_trade_no' => null,
-            'paid_at' => null,
+            'paid_at' => $receivedAt,
+            'event_key' => null,
+            'raw' => $data,
         ];
     }
 
     private function reference(mixed $value): bool
     {
-        return is_string($value) && $value !== '' && strlen($value) <= 128
-            && mb_check_encoding($value, 'UTF-8') && !preg_match('/[\x00-\x20\x7f]/', $value);
+        return is_string($value) &&
+            $value !== '' &&
+            strlen($value) <= 128 &&
+            mb_check_encoding($value, 'UTF-8') &&
+            !preg_match('/[\x00-\x20\x7f]/', $value);
     }
 
     /** 下单 code=1，退款 code=0；动作被明确拒绝时抛出确定失败，不用于查询结果。 */

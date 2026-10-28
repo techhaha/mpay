@@ -35,20 +35,29 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
         'name' => '中国银行银行卡收款',
         'version' => '1.0.0',
         'pay_types' => ['bank'],
-        'description' => '通过 wxtool 转发中国银行微银行的完整入账消息确认收款。请按应付金额精确转账；不支持备注识别。请为同一张卡使用一个收款通道，多应用可共用该通道。',
+        'description' =>
+            '通过 wxtool 转发中国银行微银行的完整入账消息确认收款。请按应付金额精确转账；不支持备注识别。请为同一张卡使用一个收款通道，多应用可共用该通道。',
         'config_schema' => [
             [
                 'type' => 'input',
                 'field' => 'account_name',
                 'title' => '收款户名',
-                'validate' => [0 => 'require', 1 => 'string', 'regex' => '/^[^\x00-\x1f\x7f]{1,100}$/uD'],
+                'validate' => [
+                    0 => 'require',
+                    1 => 'string',
+                    'regex' => '/^[^\x00-\x1f\x7f]{1,100}$/uD',
+                ],
                 'help' => '收银台向付款人展示的收款户名，请与银行卡实际开户信息一致。',
             ],
             [
                 'type' => 'input',
                 'field' => 'card_number',
                 'title' => '收款银行卡号',
-                'validate' => [0 => 'require', 1 => 'string', 'regex' => '/^[0-9](?:[ -]?[0-9]){11,18}$/D'],
+                'validate' => [
+                    0 => 'require',
+                    1 => 'string',
+                    'regex' => '/^[0-9](?:[ -]?[0-9]){11,18}$/D',
+                ],
                 'help' => '12～19 位卡号，可使用空格或短横线分组；收银台会向付款人展示完整卡号。',
             ],
             [
@@ -65,7 +74,8 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
                 'title' => '金额偏移上限（分）',
                 'validate' => [0 => 'require', 'between' => [0, 99]],
                 'value' => 99,
-                'help' => '用于区分本通道内的待付订单；0 表示不增加金额，请严格按页面应付金额转账。',
+                'help' =>
+                    '用于区分本通道内的待付订单；0 表示不增加金额，请严格按页面应付金额转账。',
             ],
             [
                 'type' => 'input',
@@ -81,7 +91,8 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
                 'title' => '通知时间容差（秒）',
                 'validate' => [0 => 'require', 'between' => [5, 30]],
                 'value' => 30,
-                'help' => '通知请求时间与服务器接收时间的允许偏差；不改变银行交易时间或付款有效期。',
+                'help' =>
+                    '通知请求时间与服务器接收时间的允许偏差；不改变银行交易时间或付款有效期。',
             ],
         ],
     ];
@@ -143,18 +154,25 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
             $now = $this->clock->now();
             $time = $now->format('Y-m-d H:i:s');
             if (
-                !in_array((int) $pay['status'], [
-                    TradeConstant::ORDER_STATUS_CREATED,
-                    TradeConstant::ORDER_STATUS_PAYING,
-                ], true) ||
+                !in_array(
+                    (int) $pay['status'],
+                    [TradeConstant::ORDER_STATUS_CREATED, TradeConstant::ORDER_STATUS_PAYING],
+                    true,
+                ) ||
                 $pay['expire_at'] <= $time
             ) {
-                throw new BusinessException('支付单不能继续准备收款', ApiResponseConstant::CONFLICT);
+                throw new BusinessException(
+                    '支付单不能继续准备收款',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
             $original = (int) $biz['order_amount'];
             Money::assertRange($original);
             if ($original < 1) {
-                throw new BusinessException('付款金额必须大于零', ApiResponseConstant::VALIDATION_FAILED);
+                throw new BusinessException(
+                    '付款金额必须大于零',
+                    ApiResponseConstant::VALIDATION_FAILED,
+                );
             }
             $used = [];
             foreach ($this->orders->channelPending($channelId, $payNo, $time) as $other) {
@@ -169,11 +187,16 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
                 $amount++;
             }
             if ($amount > $upper) {
-                throw new BusinessException('当前通道识别金额已用尽', ApiResponseConstant::SERVICE_UNAVAILABLE);
+                throw new BusinessException(
+                    '当前通道识别金额已用尽',
+                    ApiResponseConstant::SERVICE_UNAVAILABLE,
+                );
             }
             $expiresAt = min(
                 $pay['expire_at'],
-                $now->modify('+' . $this->getConfig('receipt_valid_seconds') . ' seconds')->format('Y-m-d H:i:s'),
+                $now
+                    ->modify('+' . $this->getConfig('receipt_valid_seconds') . ' seconds')
+                    ->format('Y-m-d H:i:s'),
             );
             $extension = $pay['ext_json'] ?? [];
             // 只补充识别字段，保留建单时冻结的配置/插件版本及测试身份。
@@ -195,14 +218,22 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
         if (!is_array($meta)) {
             throw new RuntimeException('银行卡识别快照无效');
         }
-        if (array_intersect(['original_amount', 'receipt_amount', 'match_mode', 'remark'], array_keys($meta)) === []) {
+        if (
+            array_intersect(
+                ['original_amount', 'receipt_amount', 'match_mode', 'remark'],
+                array_keys($meta),
+            ) === []
+        ) {
             return null;
         }
         if (
-            !is_int($meta['original_amount'] ?? null) || $meta['original_amount'] < 1 ||
-            !is_int($meta['receipt_amount'] ?? null) || $meta['receipt_amount'] < $meta['original_amount'] ||
+            !is_int($meta['original_amount'] ?? null) ||
+            $meta['original_amount'] < 1 ||
+            !is_int($meta['receipt_amount'] ?? null) ||
+            $meta['receipt_amount'] < $meta['original_amount'] ||
             ($meta['match_mode'] ?? null) !== 'amount' ||
-            !array_key_exists('remark', $meta) || $meta['remark'] !== null
+            !array_key_exists('remark', $meta) ||
+            $meta['remark'] !== null
         ) {
             throw new RuntimeException('银行卡识别快照无效');
         }
@@ -222,7 +253,7 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
      */
     public function notify(Request|array $payload, array $context): array
     {
-        if (!$payload instanceof Request) {
+        if (!($payload instanceof Request)) {
             throw new UnsupportedPaymentOperationException();
         }
         $receivedAt = $this->clock->now();
@@ -233,19 +264,36 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
             $receivedAt,
             $this->getConfig('sms_forwarder_time_tolerance'),
         );
-        $message = $this->messages->parse($input['content'], self::OFFICIAL_ACCOUNT, $receivedAt->getTimestamp());
+        $message = $this->messages->parse(
+            $input['content'],
+            self::OFFICIAL_ACCOUNT,
+            $receivedAt->getTimestamp(),
+        );
         if ($message === null) {
             return [];
         }
-        $receipt = $this->parseBankDescription($message['title'], $message['description'], $message['message_time']);
+        $receipt = $this->parseBankDescription(
+            $message['title'],
+            $message['description'],
+            $message['message_time'],
+        );
         if ($receipt === null) {
             return [];
         }
         if (!hash_equals(substr($this->configuredCardNumber(), -4), $receipt['card_tail'])) {
-            throw new BusinessException('银行入账卡尾号与当前通道不一致', ApiResponseConstant::CONFLICT);
+            throw new BusinessException(
+                '银行入账卡尾号与当前通道不一致',
+                ApiResponseConstant::CONFLICT,
+            );
         }
-        if ($message['message_time'] < $receipt['event_at'] || $message['message_time'] - $receipt['event_at'] > 300) {
-            throw new BusinessException('银行交易时间与公众号消息时间不一致', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            $message['message_time'] < $receipt['event_at'] ||
+            $message['message_time'] - $receipt['event_at'] > 300
+        ) {
+            throw new BusinessException(
+                '银行交易时间与公众号消息时间不一致',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $record = [
             'pay_type' => 'bank',
@@ -256,30 +304,45 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
             'remark' => null,
         ];
         // 分钟时间表示该分钟的区间；同时限制微信原消息必须在识别开始后、结束至多 300 秒内。
-        $windowStart = $receivedAt->setTimestamp(max(
-            $receipt['event_at'],
-            $message['message_time'] - 300,
-        ))->format('Y-m-d H:i:s');
-        $windowEnd = $receivedAt->setTimestamp(min(
-            $receipt['event_at'] + $receipt['precision_seconds'] - 1,
-            $message['message_time'],
-        ))->format('Y-m-d H:i:s');
-        $pay = $this->orders->successfulForEvent($context['channel_id'], $this->getCode(), $record['event_key']);
+        $windowStart = $receivedAt
+            ->setTimestamp(max($receipt['event_at'], $message['message_time'] - 300))
+            ->format('Y-m-d H:i:s');
+        $windowEnd = $receivedAt
+            ->setTimestamp(
+                min(
+                    $receipt['event_at'] + $receipt['precision_seconds'] - 1,
+                    $message['message_time'],
+                ),
+            )
+            ->format('Y-m-d H:i:s');
+        $pay = $this->orders->successfulForEvent(
+            $context['channel_id'],
+            $this->getCode(),
+            $record['event_key'],
+        );
         if ($pay !== null) {
             if (!$this->matchesReceipt($pay, $record['amount'], $windowStart, $windowEnd)) {
-                throw new BusinessException('重复银行消息与原订单不一致', ApiResponseConstant::CONFLICT);
+                throw new BusinessException(
+                    '重复银行消息与原订单不一致',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
         } else {
             $matches = [];
-            foreach ($this->orders->receiptCandidates(
-                $context['channel_id'],
-                $this->getCode(),
-                $record['amount'],
-                $windowStart,
-                $receivedAt->format('Y-m-d H:i:s'),
-                $windowEnd,
-            ) as $candidate) {
-                if ($this->matchesReceipt($candidate, $record['amount'], $windowStart, $windowEnd)) {
+            foreach (
+                $this->orders->receiptCandidates(
+                    $context['channel_id'],
+                    $this->getCode(),
+                    $record['amount'],
+                    $windowStart,
+                    $receivedAt->format('Y-m-d H:i:s'),
+                    $windowEnd,
+                )
+                as $candidate
+            ) {
+                if (
+                    $this->matchesReceipt($candidate, $record['amount'], $windowStart, $windowEnd)
+                ) {
                     $matches[] = $candidate;
                     if (count($matches) > 1) {
                         break;
@@ -287,18 +350,27 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
                 }
             }
             if (count($matches) !== 1) {
-                throw new BusinessException('银行入账未匹配到唯一支付单', ApiResponseConstant::CONFLICT);
+                throw new BusinessException(
+                    '银行入账未匹配到唯一支付单',
+                    ApiResponseConstant::CONFLICT,
+                );
             }
             $pay = $matches[0];
         }
-        return [[
-            'status' => 'success',
-            'pay_no' => $pay['pay_no'],
-            'paid_amount' => $pay->originalAmount(),
-            'chan_order_no' => null,
-            'chan_trade_no' => null,
-            'receipt' => $record,
-        ]];
+        return [
+            [
+                'status' => 'success',
+                'pay_no' => $pay['pay_no'],
+                'paid_amount' => $pay->originalAmount(),
+                'chan_order_no' => $pay['channel_order_no'] ?? $record['event_key'],
+                'chan_trade_no' => null,
+                'pay_type' => $record['pay_type'],
+                'received_amount' => $record['amount'],
+                'paid_at' => $record['paid_at'] ?? ($pay['paid_at'] ?? $context['received_at']),
+                'event_key' => $record['event_key'],
+                'raw' => $payload->post(),
+            ],
+        ];
     }
 
     /** 原单窗口与识别金额同时成立才匹配；不按当前通道参数重新计算原单金额或期限。 */
@@ -331,7 +403,11 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
     /** 本地关闭不能使银行账号失去转账能力，状态变更仍由生命周期完成。 */
     public function close(array $order): array
     {
-        return ['status' => 'closed', 'pay_no' => $order['pay_no'], 'close_semantics' => 'local_only'];
+        return [
+            'status' => 'closed',
+            'pay_no' => $order['pay_no'],
+            'close_semantics' => 'local_only',
+        ];
     }
 
     public function refund(array $order): array
@@ -350,8 +426,11 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
     }
 
     /** @return array{amount:int,card_tail:string,event_at:int,precision_seconds:int}|null */
-    private function parseBankDescription(string $title, string $description, int $messageTime): ?array
-    {
+    private function parseBankDescription(
+        string $title,
+        string $description,
+        int $messageTime,
+    ): ?array {
         if ($title !== '交易成功提醒') {
             return null;
         }
@@ -361,10 +440,22 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
         }
         // 仅接受已核实的两种入账类型，共用卡尾提取及后续金额、时间和订单核验。
         if (!preg_match('/^(?:银联入账|网上快捷提现)（尾号([0-9]{4})）$/uD', $type, $tail)) {
-            throw new BusinessException('中国银行交易类型尚未验证为入账', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '中国银行交易类型尚未验证为入账',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
-        if (!preg_match('/^人民币\s*(.+)$/uD', $this->messages->field($description, '交易金额'), $money)) {
-            throw new BusinessException('中国银行入账币种或金额格式无效', ApiResponseConstant::VALIDATION_FAILED);
+        if (
+            !preg_match(
+                '/^人民币\s*(.+)$/uD',
+                $this->messages->field($description, '交易金额'),
+                $money,
+            )
+        ) {
+            throw new BusinessException(
+                '中国银行入账币种或金额格式无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $time = $this->messages->optionalField($description, '交易时间');
         return [
@@ -379,7 +470,10 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
     private function yearlessTime(string $value, int $messageTime): int
     {
         if (!preg_match('/^(\d{1,2})月(\d{1,2})日\s*(\d{1,2}):(\d{2})$/uD', $value, $match)) {
-            throw new BusinessException('中国银行交易时间格式无效', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '中国银行交易时间格式无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $year = (int) date('Y', $messageTime);
         $candidates = [];
@@ -396,10 +490,16 @@ final class BankOfChinaReceiptPayment extends BasePayment implements PaymentInte
             }
         }
         if ($candidates === []) {
-            throw new BusinessException('中国银行交易日期无效', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '中国银行交易日期无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
-        usort($candidates, static fn(int $left, int $right): int =>
-            abs($messageTime - $left) <=> abs($messageTime - $right));
+        usort(
+            $candidates,
+            static fn(int $left, int $right): int => abs($messageTime - $left) <=>
+                abs($messageTime - $right),
+        );
         return $candidates[0];
     }
 }

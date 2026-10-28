@@ -13,7 +13,7 @@ final readonly class ChannelNotifyContext
      * @param string $channelId HTTP 路由或采集原单明确关联的通道。
      * @param string $scopeKey 该通道的业务锁范围，不代表平台账号。
      * @param array<string,mixed> $configuration 通道当前配置或原支付单冻结配置，禁止传给页面。
-     * @param DateTimeImmutable $receivedAt 接收时间；无平台付款时间的订单确认以它记录首次确认时间。
+     * @param DateTimeImmutable $receivedAt 入口统一接收时间，同时传给插件作无来源付款时间时的缺省值。
      * @param string|null $payNo 支付号入口限定的原单；通道通知/采集由插件定位时为 null。
      */
     public function __construct(

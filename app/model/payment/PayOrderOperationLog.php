@@ -6,11 +6,11 @@ namespace app\model\payment;
 use app\common\base\BaseModel;
 
 /**
- * 人工确认、关闭和重新通知等支付操作的专用审计记录。
+ * 系统付款执行及人工确认、关闭和重新通知等订单操作审计。
  * 由动作服务记录操作者、原因和前后状态；模型不会因保存审计而自动执行订单动作。
  *
  * @property string $pay_no
- * @property string $admin_user_id
+ * @property string|null $admin_user_id 系统操作为 null。
  * @property string $reason
  * @property int $before_status TradeConstant 交易状态。
  * @property int $after_status TradeConstant 交易状态。

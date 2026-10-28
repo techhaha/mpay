@@ -161,10 +161,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             $pay = $this->orders->lock($payNo);
             // 同一通道跨应用、跨配置版本使用同一行锁；不反向锁其他订单。
             $this->channels->lock($pay['channel_id']);
-            if (
-                $pay['channel_id'] !== $channelId ||
-                $pay['biz_no'] !== $biz['biz_no']
-            ) {
+            if ($pay['channel_id'] !== $channelId || $pay['biz_no'] !== $biz['biz_no']) {
                 throw new LogicException('插件与支付单通道不一致');
             }
             $ext = $pay['ext_json'] ?? [];
@@ -307,15 +304,24 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
     }
 
     /** @return array<string,mixed> 仅表达插件所选订单与来源证据，不代表订单已在数据库确认。 */
-    private function receiptResult(PayOrder $pay, array $record): array
-    {
+    private function receiptResult(
+        PayOrder $pay,
+        array $record,
+        array $raw,
+        string $receivedAt,
+    ): array {
         return [
             'status' => 'success',
             'pay_no' => $pay['pay_no'],
             'paid_amount' => $pay->originalAmount(),
-            'chan_order_no' => $record['trade_no'],
+            'chan_order_no' =>
+                $record['trade_no'] ?? ($pay['channel_order_no'] ?? $record['event_key']),
             'chan_trade_no' => $record['trade_no'],
-            'receipt' => $record,
+            'pay_type' => $record['pay_type'],
+            'received_amount' => $record['amount'],
+            'paid_at' => $record['paid_at'] ?? ($pay['paid_at'] ?? $receivedAt),
+            'event_key' => $record['event_key'],
+            'raw' => $raw,
         ];
     }
 
@@ -410,11 +416,18 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
 
     public function notify(Request|array $payload, array $context): array
     {
-        if (!$payload instanceof Request) {
+        if (!($payload instanceof Request)) {
             throw new UnsupportedPaymentOperationException();
         }
         $record = $this->receipt($payload, $context['channel_id']);
-        return [$this->receiptResult($this->locateReceipt($record, $context['channel_id']), $record)];
+        return [
+            $this->receiptResult(
+                $this->locateReceipt($record, $context['channel_id']),
+                $record,
+                $payload->post(),
+                $context['received_at'],
+            ),
+        ];
     }
 
     /**
@@ -488,12 +501,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         } catch (InvalidArgumentException) {
             throw new ReceiptMessageException('invalid_message');
         }
-        return $this->record(
-            $reference,
-            $cents,
-            intdiv($message['timestamp'], 1000),
-            $remark,
-        );
+        return $this->record($reference, $cents, intdiv($message['timestamp'], 1000), $remark);
     }
 
     /**
@@ -552,10 +560,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         $timestamp = $message['createTime'];
         if ($account === self::PAY_ACCOUNT) {
             $pattern = '/^二维码赞赏到账(\d+(?:\.\d{1,2})?)元(?:$|[（(])/u';
-            $date = DateTimeImmutable::createFromFormat(
-                '!Y-m-d H:i:s',
-                $fields['到账时间'] ?? '',
-            );
+            $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $fields['到账时间'] ?? '');
             if (!$date || $date->format('Y-m-d H:i:s') !== $fields['到账时间']) {
                 throw new ReceiptMessageException('invalid_message');
             }
@@ -615,15 +620,9 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         ) {
             throw new ReceiptMessageException('invalid_message');
         }
-        $reference =
-            'WX' . substr(hash('sha256', $channelId . '|' . $key), 0, 40);
+        $reference = 'WX' . substr(hash('sha256', $channelId . '|' . $key), 0, 40);
         $remark = $fields['付款方备注'] ?? null;
-        return $this->record(
-            $reference,
-            $cents,
-            $timestamp,
-            $remark === '' ? null : $remark,
-        );
+        return $this->record($reference, $cents, $timestamp, $remark === '' ? null : $remark);
     }
 
     /** @return array<string,mixed> 手机/PC 消息编号只作事件键；未取得微信交易号时明确留空。 */

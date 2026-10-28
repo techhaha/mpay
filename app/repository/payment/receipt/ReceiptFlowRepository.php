@@ -48,44 +48,6 @@ final class ReceiptFlowRepository extends BaseRepository
             ->all();
     }
 
-    /**
-     * @param array{from?:string,until?:string,id?:string,scope_key?:string,plugin_code?:string,pay_no?:string} $filters 按系统接收时间筛选，日期缺省时查询全部。
-     * @return array{items:list<ReceiptFlow>,total:int} 列表只读投影；完整证据由详情读取，服务拥有一致事务。
-     */
-    public function adminPage(array $filters, int $page, int $limit): array
-    {
-        $query = $this->model->where('id', '>', 0);
-        if (isset($filters['from'], $filters['until'])) {
-            $query
-                ->where('received_at', '>=', $filters['from'])
-                ->where('received_at', '<', $filters['until']);
-        }
-        foreach (
-            [
-                'id' => 'id',
-                'scope_key' => 'receipt_scope_key',
-                'plugin_code' => 'plugin_code',
-                'pay_no' => 'pay_no',
-            ]
-            as $key => $column
-        ) {
-            if (isset($filters[$key])) {
-                $query->where($column, $filters[$key]);
-            }
-        }
-        return [
-            'total' => (int) (clone $query)->count(),
-            'items' => $query
-                ->field(
-                    'id,receipt_scope_key,plugin_code,reason_code,amount,paid_at,received_at,platform_trade_no,pay_no',
-                )
-                ->order('id', 'desc')
-                ->page($page, $limit)
-                ->select()
-                ->all(),
-        ];
-    }
-
     /** 调用前已锁对应 ReceiptScope；生命周期还必须先锁业务单及支付单。 */
     public function lock(string $id): ReceiptFlow
     {
@@ -121,7 +83,7 @@ final class ReceiptFlowRepository extends BaseRepository
      *
      * @param array{receipt_scope_key:string,plugin_code:string,
      *     event_key:string,payload_digest:string,platform_trade_no:?string,
-     *     amount:int,remark:?string,paid_at:?string,received_at:string,pay_no:string,
+     *     amount:int,paid_at:string,received_at:string,pay_no:string,
      *     reason_code:?string,evidence_json:string} $data 金额为分，时间为上海时区秒精度。
      */
     public function create(array $data): string
@@ -134,7 +96,6 @@ final class ReceiptFlowRepository extends BaseRepository
             'payload_digest',
             'platform_trade_no',
             'amount',
-            'remark',
             'paid_at',
             'received_at',
             'pay_no',

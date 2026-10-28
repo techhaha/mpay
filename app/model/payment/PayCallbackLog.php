@@ -5,16 +5,7 @@ namespace app\model\payment;
 
 use app\common\base\BaseModel;
 
-/**
- * 支付执行回写及回调的验证、定位和处理摘要；不替代 ReceiptFlow 中的到账事实。
- * 执行认领没有平台事件时 event_key/payload_digest 保持 null，不制造虚构渠道身份。
- * 未能定位支付单时允许 pay_no 为 null，使用 request_id 和摘要关联诊断。
- *
- * @property string|null $pay_no
- * @property string $request_id
- * @property string $result_code
- * @property string|null $payload_digest
- */
+/** 统一收款回调记录；各次投递可重复，最终成功证据及消费唯一约束保留在 ReceiptFlow。 */
 final class PayCallbackLog extends BaseModel
 {
     protected function getOptions(): array
@@ -24,6 +15,15 @@ final class PayCallbackLog extends BaseModel
             'schema' => [
                 'id' => 'string',
                 'pay_no' => 'string',
+                'channel_id' => 'string',
+                'plugin_code' => 'string',
+                'received_at' => 'string',
+                'amount' => 'int',
+                'paid_at' => 'string',
+                'result_status' => 'int',
+                'message' => 'string',
+                'payload_text' => 'string',
+                'payload_truncated' => 'int',
                 'request_id' => 'string',
                 'event_key' => 'string',
                 'payload_digest' => 'string',

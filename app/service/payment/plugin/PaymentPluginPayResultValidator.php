@@ -19,9 +19,17 @@ final class PaymentPluginPayResultValidator extends Validate
         'chan_trade_no' => ['requireReference'],
     ];
 
+    public function __construct(private readonly PaymentPluginNotifyResultValidator $notifications)
+    {
+        parent::__construct();
+    }
+
     /** @return array<string,mixed> 保留经过检查的标准字段，平台额外原文不会进入订单快照。 */
     public function validateResult(array $result): array
     {
+        if (($result['status'] ?? null) === 'success') {
+            return $this->notifications->validateResult($result);
+        }
         // 只用真实交易号补缺失的渠道订单号；已有订单号不覆盖，也不反向补交易号。
         if (($result['chan_order_no'] ?? '') === '') {
             $result['chan_order_no'] = $result['chan_trade_no'] ?? null;
@@ -57,8 +65,6 @@ final class PaymentPluginPayResultValidator extends Validate
                 'pay_product',
                 'pay_action',
                 'presentation',
-                'receipt',
-                'paid_at',
             ]),
         );
     }

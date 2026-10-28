@@ -43,25 +43,6 @@ CREATE TABLE ma_admin_user (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='单管理员账户及登录会话失效版本'
 SQL,
 
-    'ma_channel_notify_log' => <<<'SQL'
-CREATE TABLE ma_channel_notify_log (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键，供系统内部关联',
-  `channel_id` bigint(20) unsigned NOT NULL COMMENT '通知入口所属通道ID，关联ma_payment_channel.id',
-  `request_id` varbinary(64) NOT NULL COMMENT '通知请求关联编号，用于查技术日志',
-  `event_key` varbinary(128) DEFAULT NULL COMMENT '插件解析出的来源事件标识；无法解析时为NULL',
-  `plugin_code` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '处理通知的插件编码',
-  `result_code` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '入口处理诊断码，见PaymentResultCode；接收成功不等于支付成功',
-  `payload_digest` char(64) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '标准事实摘要；未形成有效标准结果时为NULL',
-  `summary_json` json DEFAULT NULL COMMENT '脱敏接收摘要JSON；NULL无摘要，不存认证秘密或完整报文',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间，上海时区',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录最后更新时间，上海时区',
-  PRIMARY KEY (`id`),
-  KEY `idx_channel_ingress_created` (`created_at`,`id`),
-  KEY `idx_channel_notify_created` (`channel_id`,`created_at`),
-  KEY `idx_channel_ingress_request` (`request_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='通道通知入口的接收与校验日志，包含未能确认订单的请求'
-SQL,
-
     'ma_file_asset' => <<<'SQL'
 CREATE TABLE ma_file_asset (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键，供系统内部关联',
@@ -82,28 +63,40 @@ SQL,
 
     'ma_pay_callback_log' => <<<'SQL'
 CREATE TABLE ma_pay_callback_log (
-  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键，供系统内部关联',
-  `pay_no` varbinary(64) DEFAULT NULL COMMENT '关联支付单号ma_pay_order.pay_no；未定位订单时可为NULL',
-  `request_id` varbinary(64) NOT NULL COMMENT '请求或内部执行关联编号，用于串联技术日志',
-  `event_key` varbinary(128) DEFAULT NULL COMMENT '来源事件标识；无事件或校验前可为NULL',
-  `payload_digest` char(64) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '标准收款事实SHA-256摘要；未形成标准事实时为NULL',
-  `result_code` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '支付处理诊断码，见PaymentResultCode；不是订单状态',
-  `summary_json` json DEFAULT NULL COMMENT '允许留存的脱敏处理摘要JSON；NULL无摘要，不存完整平台报文',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间，上海时区',
-  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录最后更新时间，上海时区',
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '回调记录主键',
+  `channel_id` bigint(20) unsigned DEFAULT NULL COMMENT '服务定位的通道；入口无法定位时为NULL',
+  `plugin_code` varchar(64) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '处理通知的插件；装配前失败可为NULL',
+  `pay_no` varbinary(64) DEFAULT NULL COMMENT '可信关联支付单；无法定位时为NULL',
+  `request_id` varbinary(64) NOT NULL COMMENT '请求或采集批次关联编号，同批多笔共用',
+  `received_at` datetime NOT NULL COMMENT '系统接收本次通知的时间，上海时区',
+  `event_key` varbinary(128) DEFAULT NULL COMMENT '来源事件编号，可重复；真正消费约束在成功流水表',
+  `amount` int(10) unsigned DEFAULT NULL COMMENT '核验后的用户实际支付金额，整数分；未匹配为NULL',
+  `paid_at` datetime DEFAULT NULL COMMENT '核验后的付款时间；未匹配为NULL',
+  `result_status` tinyint(3) unsigned NOT NULL COMMENT '回调处理结果：1确认成功，2重复通知，3拒绝，4异常，5忽略',
+  `result_code` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '固定原因码，见PaymentResultCode',
+  `message` varchar(512) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '受限业务说明，不保存堆栈或SQL',
+  `payload_digest` char(64) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '截断前通知内容摘要，不参与交易防重',
+  `payload_text` text COLLATE utf8mb4_bin COMMENT '仅保存匹配项的通知内容，最多8192 UTF-8字节',
+  `payload_truncated` tinyint(3) unsigned NOT NULL DEFAULT '0' COMMENT '通知内容是否截断',
+  `summary_json` json DEFAULT NULL COMMENT '必要处理摘要，不存配置、候选订单或完整采集批次',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录写入时间，上海时区',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录更新时间，上海时区',
   PRIMARY KEY (`id`),
-  KEY `idx_callback_pay_created` (`pay_no`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='支付执行和收款确认的处理日志，不等同于最终到账流水'
+  KEY `idx_callback_received` (`received_at`,`id`),
+  KEY `idx_callback_channel` (`channel_id`,`received_at`,`id`),
+  KEY `idx_callback_pay_received` (`pay_no`,`received_at`,`id`),
+  KEY `idx_callback_request` (`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='所有来源的统一收款回调记录，与最终成功流水防重事实分工'
 SQL,
 
     'ma_pay_order_operation_log' => <<<'SQL'
 CREATE TABLE ma_pay_order_operation_log (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键，供系统内部关联',
   `pay_no` varbinary(64) NOT NULL COMMENT '被操作支付单号，关联ma_pay_order.pay_no',
-  `admin_user_id` bigint(20) unsigned NOT NULL COMMENT '操作管理员ID，关联ma_admin_user.id',
-  `request_id` varbinary(64) NOT NULL COMMENT '管理员请求关联编号',
-  `action` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '交易动作编码，如人工确认、关闭或商户通知操作',
-  `reason` varchar(512) COLLATE utf8mb4_bin NOT NULL COMMENT '管理员填写的特殊操作原因',
+  `admin_user_id` bigint(20) unsigned DEFAULT NULL COMMENT '操作管理员ID；系统付款执行为NULL',
+  `request_id` varbinary(64) NOT NULL COMMENT '操作请求关联编号',
+  `action` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '订单动作编码，含系统付款执行及人工操作',
+  `reason` varchar(512) COLLATE utf8mb4_bin NOT NULL COMMENT '管理员特殊操作原因；系统动作留空',
   `evidence_json` json DEFAULT NULL COMMENT '脱敏核对依据和操作参数JSON；NULL无附加依据',
   `before_status` tinyint(3) unsigned NOT NULL COMMENT '操作前交易状态（TradeConstant）：0待发起支付，1等待付款，2支付成功，3支付失败，4已关闭，5已超时',
   `after_status` tinyint(3) unsigned NOT NULL COMMENT '操作后交易状态（TradeConstant）：0待发起支付，1等待付款，2支付成功，3支付失败，4已关闭，5已超时',
@@ -111,7 +104,7 @@ CREATE TABLE ma_pay_order_operation_log (
   `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录最后更新时间，上海时区',
   PRIMARY KEY (`id`),
   KEY `idx_pay_operation_created` (`pay_no`,`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='管理员对订单执行特殊交易动作的审计记录'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin ROW_FORMAT=DYNAMIC COMMENT='系统及管理员订单操作的事务审计记录'
 SQL,
 
     'ma_payment_app' => <<<'SQL'
@@ -486,12 +479,11 @@ CREATE TABLE ma_receipt_flow (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT COMMENT '自增主键，供系统内部关联',
   `receipt_scope_key` varbinary(64) NOT NULL COMMENT '收款匹配范围键，关联ma_receipt_scope.receipt_scope_key',
   `plugin_code` varchar(64) COLLATE utf8mb4_bin NOT NULL COMMENT '识别到账事实的插件编码',
-  `event_key` varbinary(128) NOT NULL COMMENT '插件来源事件标识，与范围及插件共同防重复消费',
-  `payload_digest` char(64) COLLATE utf8mb4_bin NOT NULL COMMENT '归一化收款事实的SHA-256摘要，用于同事件一致性核对',
-  `platform_trade_no` varbinary(128) DEFAULT NULL COMMENT '插件提供的交易编号，可为监听合成编号；NULL表示无编号，同插件内防重复消费',
+  `event_key` varbinary(128) NOT NULL COMMENT '稳定来源事件标识，与插件编码共同防重复消费',
+  `payload_digest` char(64) COLLATE utf8mb4_bin NOT NULL COMMENT '稳定交易事实的SHA-256摘要，不含时间兜底值或原文',
+  `platform_trade_no` varbinary(128) DEFAULT NULL COMMENT '真实第三方流水号；NULL表示来源未提供，不填合成编号',
   `amount` int(10) unsigned NOT NULL COMMENT '本条核实到账金额，单位分，不是业务订单原金额',
-  `remark` varchar(256) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '付款备注；来源未提供时为NULL',
-  `paid_at` datetime DEFAULT NULL COMMENT '来源提供并用于匹配的付款时间，上海时区；无来源时间时可为NULL',
+  `paid_at` datetime NOT NULL COMMENT '首次确认的付款时间，上海时区；来源缺失时使用接收时间',
   `received_at` datetime NOT NULL COMMENT '系统接收该到账事实的时间，上海时区，区别于实际付款时间',
   `reason_code` varchar(64) COLLATE utf8mb4_bin DEFAULT NULL COMMENT '到账确认或依据补充的诊断原因码；NULL无附加原因',
   `pay_no` varbinary(64) NOT NULL COMMENT '最终匹配支付单号，关联ma_pay_order.pay_no，唯一且不得换绑',

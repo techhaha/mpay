@@ -100,15 +100,18 @@ final class CashierService extends BaseService
                 : ($state['can_pay']
                     ? $pay->receiptAmount()
                     : null);
+        $methods = $state['can_select']
+            ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount'])
+            : [];
         return $state + [
             'subject' => $biz['subject'],
             'amount' => $amount === null ? null : Money::format($amount),
             'pay_type' => $type,
             'presentation' => $presentation,
-            'payment_methods' => $state['can_select']
-                ? $this->paymentMethods($biz['app_id'], (int) $biz['order_amount'])
-                : [],
-            'payment_brands' => $this->management->brands(),
+            'payment_methods' => $methods,
+            'payment_brands' => $this->management->brands(
+                $type === null ? array_column($methods, 'code') : [$type],
+            ),
             'test_mode' =>
                 ($pay['ext_json']['personal_receipt']['test_only'] ?? false) === true ||
                 $this->config->get('mpay.environment') === 'testing',

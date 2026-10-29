@@ -39,7 +39,7 @@ final class PayOrderRepository extends BaseRepository
     /**
      * 分页只控制订单取数，不拆分插件的账号查询；通道版本由采集服务合并 ID 后一次批读。
      * 停用通道不取消原订单责任，到期/本地关闭在给定补查范围内仍返回。
-     * @return list<PayOrder>
+     * @return list<PayOrder> 仅供采集输入映射，ext_json 完整交给插件解释，不用于交易写入。
      */
     public function collectionPage(
         string $plugin,
@@ -51,6 +51,9 @@ final class PayOrderRepository extends BaseRepository
         return $this->collectionQuery($since, $upper)
             ->where('plugin_code', $plugin)
             ->where('id', '>', $after)
+            ->field(
+                'id,pay_no,channel_id,channel_revision_id,pay_amount,ext_json,request_at,expire_at,created_at',
+            )
             ->order('id')
             ->limit($limit)
             ->select()

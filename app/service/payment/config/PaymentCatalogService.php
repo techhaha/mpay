@@ -32,11 +32,14 @@ final class PaymentCatalogService extends BaseService
         private readonly PaymentPollGroupRepository $groups,
     ) {}
 
-    /** @return list<array<string,mixed>> 图片读取已保存资产引用；未配置时统一使用通用图标。 */
-    public function types(bool $withReferences = true): array
+    /** @return list<array<string,mixed>> 编码过滤先于图片解析；null 表示完整列表，未配置图片时使用通用图标。 */
+    public function types(bool $withReferences = true, ?array $onlyCodes = null): array
     {
         $items = [];
         foreach ($this->types->all() as $row) {
+            if ($onlyCodes !== null && !in_array($row['code'], $onlyCodes, true)) {
+                continue;
+            }
             $items[] = [
                 'id' => $row['id'],
                 'code' => $row['code'],
@@ -47,11 +50,9 @@ final class PaymentCatalogService extends BaseService
                 'icon_asset_id' => $row['icon_asset_id'],
                 'logo_asset_id' => $row['logo_asset_id'],
                 'icon' =>
-                    $this->files->publicImagePath($row['icon_asset_id']) ??
-                    self::FALLBACK_IMAGE,
+                    $this->files->publicImagePath($row['icon_asset_id']) ?? self::FALLBACK_IMAGE,
                 'logo' =>
-                    $this->files->publicImagePath($row['logo_asset_id']) ??
-                    self::FALLBACK_IMAGE,
+                    $this->files->publicImagePath($row['logo_asset_id']) ?? self::FALLBACK_IMAGE,
                 'referenced' => $withReferences
                     ? $this->types->referenced($row['id'], $row['default_poll_group_id'])
                     : false,
@@ -60,15 +61,18 @@ final class PaymentCatalogService extends BaseService
         return $items;
     }
 
-    /** 收银台仅获得公开品牌字段，不返回管理版本、图片资产 ID 或引用信息。 */
-    public function brands(): array
+    /** @param list<string> $codes 本页实际使用的方式；不解析无关图片或返回管理字段。 */
+    public function brands(array $codes): array
     {
+        if ($codes === []) {
+            return [];
+        }
         return array_map(
             static fn(array $row): array => array_intersect_key(
                 $row,
                 array_flip(['code', 'name', 'icon', 'logo']),
             ),
-            $this->types(false),
+            $this->types(false, $codes),
         );
     }
 
@@ -104,9 +108,7 @@ final class PaymentCatalogService extends BaseService
                     'updated_at' => $row['updated_at'] ?? null,
                     'installed' => $present,
                     'synchronized' =>
-                        $row !== null &&
-                        (!$present ||
-                            $this->definitionMatches($row, $definition)),
+                        $row !== null && (!$present || $this->definitionMatches($row, $definition)),
                     'enabled' => $row !== null && (int) $row['enabled'] === 1,
                     'revision' => $row === null ? 0 : (int) $row['revision'],
                 ] + ($withCounts ? ['channel_count' => $counts[$code] ?? 0] : []);
@@ -236,11 +238,7 @@ final class PaymentCatalogService extends BaseService
             if ((int) $plugin['revision'] !== $input['revision']) {
                 throw new BusinessException('插件状态已变化，请刷新', Code::STALE_VERSION);
             }
-            $this->records->setEnabled(
-                $plugin,
-                $input['enabled'],
-                date('Y-m-d H:i:s'),
-            );
+            $this->records->setEnabled($plugin, $input['enabled'], date('Y-m-d H:i:s'));
             $this->audit->record(
                 $actor,
                 'plugin.enabled',

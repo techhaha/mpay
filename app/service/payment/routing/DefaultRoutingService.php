@@ -110,7 +110,11 @@ final class DefaultRoutingService extends BaseService
                 in_array((string) $group['id'], $defaults, true) &&
                 (string) $group['id'] !== $target
             ) {
-                $this->groups->removeChannel((string) $group['id'], $channelId, date('Y-m-d H:i:s'));
+                $this->groups->removeChannel(
+                    (string) $group['id'],
+                    $channelId,
+                    date('Y-m-d H:i:s'),
+                );
             }
         }
         $this->groups->includeChannel($target, $channelId, $participates, date('Y-m-d H:i:s'));
@@ -147,12 +151,7 @@ final class DefaultRoutingService extends BaseService
         if ($type === null || $type['default_poll_group_id'] === null) {
             return false;
         }
-        foreach ($this->groups->members($type['default_poll_group_id']) as $member) {
-            if ($member['channel_id'] === $channelId) {
-                return (int) $member['status'] === 1;
-            }
-        }
-        return false;
+        return $this->groups->memberEnabled($type['default_poll_group_id'], $channelId);
     }
 
     /** @return list<PaymentType> 锁序独立于管理员设置的显示顺序。 */

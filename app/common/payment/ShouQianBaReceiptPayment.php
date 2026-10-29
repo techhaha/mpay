@@ -405,16 +405,19 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
                 continue;
             }
             $paid = strtotime($record['paid_at']);
-            usort(
-                $candidates,
-                static fn(array $a, array $b): int => abs(
-                    $prepared[$a['pay_no']]['requested_at'] - $paid,
-                ) <=> abs($prepared[$b['pay_no']]['requested_at'] - $paid) ?:
-                strcmp($a['created_at'], $b['created_at']) ?:
-                strlen($a['id']) <=> strlen($b['id']) ?:
-                strcmp($a['id'], $b['id']),
-            );
             $pay = $candidates[0];
+            // 只需最优候选，不对整组排序；同距时仍按创建时间和完整 ID 决定。
+            foreach ($candidates as $candidate) {
+                $comparison =
+                    abs($prepared[$candidate['pay_no']]['requested_at'] - $paid) <=>
+                    abs($prepared[$pay['pay_no']]['requested_at'] - $paid) ?:
+                    strcmp($candidate['created_at'], $pay['created_at']) ?:
+                    strlen($candidate['id']) <=> strlen($pay['id']) ?:
+                    strcmp($candidate['id'], $pay['id']);
+                if ($comparison < 0) {
+                    $pay = $candidate;
+                }
+            }
             $meta = $prepared[$pay['pay_no']]['meta'];
             $used[$pay['pay_no']] = true;
             $results[] = [

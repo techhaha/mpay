@@ -43,17 +43,7 @@ final class PluginConfigValidator
         foreach ($fields as $name => $field) {
             $titles[$name] = $field['title'];
             $declared = $field['validate'];
-            $condition = $field['visible_when'] ?? null;
-            if (
-                $condition !== null &&
-                !in_array(
-                    $values[$condition['field']] ?? null,
-                    array_key_exists('value', $condition)
-                        ? [$condition['value']]
-                        : $condition['in'],
-                    true,
-                )
-            ) {
+            if (!self::isVisible($field, $values)) {
                 // 隐藏只取消必填；保留原值与其余原生规则，不裁剪配置。
                 $declared = array_filter(
                     $declared,
@@ -115,6 +105,18 @@ final class PluginConfigValidator
             );
         }
         return $values;
+    }
+
+    /** 已核验 schema 的字段条件；保存校验和上传材料解析共用，不删除隐藏字段的值。 */
+    public static function isVisible(array $field, array $values): bool
+    {
+        $condition = $field['visible_when'] ?? null;
+        return $condition === null ||
+            in_array(
+                $values[$condition['field']] ?? null,
+                array_key_exists('value', $condition) ? [$condition['value']] : $condition['in'],
+                true,
+            );
     }
 
     /** schema 默认值与提交值共用的 JSON 类型约定；缺失由必填规则处理，不把 null 转成空字符串。 */

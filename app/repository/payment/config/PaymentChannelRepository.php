@@ -145,23 +145,7 @@ final class PaymentChannelRepository extends BaseRepository
     }
 
     /**
-     * 配置管理先锁配置，再按主键锁全部关联通道；单商户锁在更外层，避免与并发建单争用顺序不同。
-     *
-     * @return list<PaymentChannel>
-     */
-    public function lockForConfiguration(string $configurationId): array
-    {
-        $this->requireTransaction();
-        return $this->model
-            ->where('api_config_id', $configurationId)
-            ->order('id')
-            ->lock(true)
-            ->select()
-            ->all();
-    }
-
-    /**
-     * 保存已由服务校验的完整规则，并停止新单直到显式启用；不更改账号归属或旧快照正文。
+     * 保存已由服务校验的完整规则，保持原启停状态；不更改账号归属或旧快照正文。
      *
      * @param array<string,int|string|null> $rules PaymentChannelInput 的白名单记录。
      */
@@ -183,7 +167,7 @@ final class PaymentChannelRepository extends BaseRepository
         ) {
             throw new InvalidArgumentException('通道规则包含未知字段');
         }
-        $this->model->where('id', $id)->update($rules + ['enabled' => 0, 'updated_at' => $now]);
+        $this->model->where('id', $id)->update($rules + ['updated_at' => $now]);
     }
 
     /** 调用方已核对待付款订单、轮询组及目标配置；切换引用不改写旧订单的快照。 */

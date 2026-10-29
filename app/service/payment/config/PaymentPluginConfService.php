@@ -200,11 +200,15 @@ final class PaymentPluginConfService extends BaseService
         }
     }
 
-    /** 图片只允许引用已登记资产；字段名称和是否存在由插件 schema 决定。 */
+    /** 当前条件下使用的上传项须引用已登记资产；隐藏项保留配置值，不读取文件。 */
     private function validateAssets(PluginDefinition $definition, array $settings): void
     {
         foreach ($definition->configSchema as $field) {
-            if ($field['type'] === 'upload' && ($settings[$field['field']] ?? '') !== '') {
+            if (
+                $field['type'] === 'upload' &&
+                PluginConfigValidator::isVisible($field, $settings) &&
+                ($settings[$field['field']] ?? '') !== ''
+            ) {
                 $this->files->publicImagePath($settings[$field['field']]);
             }
         }

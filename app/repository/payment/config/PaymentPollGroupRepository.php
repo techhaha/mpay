@@ -51,6 +51,15 @@ final class PaymentPollGroupRepository extends BaseRepository
         return $query->select()->all();
     }
 
+    /** 按组和通道的唯一关联读取参与开关；不存在即未参与。 */
+    public function memberEnabled(string $groupId, string $channelId): bool
+    {
+        return (int) $this->members
+            ->where('poll_group_id', $groupId)
+            ->where('channel_id', $channelId)
+            ->value('status') === 1;
+    }
+
     /** @return array<string,list<PaymentPollGroupChannel>> 列表一次读取关联成员；不替代正式选路或编辑的持锁读取。 */
     public function membersForGroups(array $ids): array
     {

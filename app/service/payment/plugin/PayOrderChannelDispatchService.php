@@ -8,6 +8,7 @@ use app\common\constant\TradeConstant;
 use app\common\util\Clock;
 use app\common\util\Money;
 use app\common\util\SafeLogger;
+use app\common\validation\PluginConfigValidator;
 use app\exception\PaymentDefinitiveException;
 use app\exception\PaymentUncertainException;
 use app\model\payment\PayOrder;
@@ -81,15 +82,20 @@ final class PayOrderChannelDispatchService
         if (!in_array($context->payType, $definition->payTypes, true)) {
             throw new RuntimeException('插件实现与原订单来源合同不一致');
         }
-        // 上传材料只派生为动作参数，不修改保存配置；回调和退款不依赖图片文件。
+        // 只解析当前条件下使用的上传材料，不修改保存配置；回调和退款不依赖图片文件。
         $assets = [];
         foreach ($definition->configSchema as $field) {
-            if ($field['type'] === 'upload') {
+            if (
+                $field['type'] === 'upload' &&
+                PluginConfigValidator::isVisible($field, $context->configuration)
+            ) {
                 $asset = $context->configuration[$field['field']] ?? '';
                 if (!is_string($asset)) {
                     throw new RuntimeException('插件上传材料字段必须为字符串');
                 }
-                $assets[$field['field']] = $this->files->publicImagePath($asset === '' ? null : $asset);
+                $assets[$field['field']] = $this->files->publicImagePath(
+                    $asset === '' ? null : $asset,
+                );
             }
         }
         $plugin = $this->plugins->initialize($pay['plugin_code'], $context->configuration);
@@ -103,22 +109,24 @@ final class PayOrderChannelDispatchService
             throw new RuntimeException('原订单缺少有效提交来源');
         }
         // 通用对接参数由服务从原业务单生成；插件不需要为取商品名或回跳凭证查询业务表。
-        $notifyUrl = (string) url('/api/pay/' . $payNo . '/notify')->suffix(false)->domain(true)->root('');
+        $notifyUrl = (string) url('/api/pay/' . $payNo . '/notify')
+            ->suffix(false)
+            ->domain(true)
+            ->root('');
         // 本站身份在路径中，第三方追加的协议 query 不覆盖业务号或访问凭证。
         $returnUrl = (string) url('cashier.pay', [
             'biz_no' => $biz['biz_no'],
             'token' => $biz['ext_json']['cashier_token'],
-        ])->suffix(false)->domain(true)->root('');
+        ])
+            ->suffix(false)
+            ->domain(true)
+            ->root('');
         $lease = $this->config->get('payment.execution_lease_seconds', 30);
         if (!is_int($lease)) {
             throw new RuntimeException('执行认领期限必须为整数秒');
         }
         // 保留执行认领，串行化普通请求；中断后仍使用原支付单、配置及付款窗口重新准备。
-        $claim = $this->lifecycle->beginExecution(
-            $payNo,
-            $lease,
-            $requestId,
-        );
+        $claim = $this->lifecycle->beginExecution($payNo, $lease, $requestId);
         if (!$claim['execute']) {
             return $claim['pay'];
         }
@@ -158,14 +166,20 @@ final class PayOrderChannelDispatchService
         } catch (PaymentDefinitiveException | PaymentUncertainException $exception) {
             $rejected = $exception instanceof PaymentDefinitiveException;
             // 插件/SDK 先脱敏，日志复用既有截断；这里只记录本次调用诊断，最终状态仍由生命周期核对。
-            $this->logger->record('payment.execution_error', [
-                'pay_no' => $payNo,
-                'channel_id' => $pay['channel_id'],
-                'plugin_code' => $pay['plugin_code'],
-                'trace_no' => $requestId,
-                'reason_code' => $rejected ? Result::EXECUTION_REJECTED : Result::EXECUTION_UNCERTAIN,
-                'error_message' => $exception->getMessage(),
-            ], 'warning');
+            $this->logger->record(
+                'payment.execution_error',
+                [
+                    'pay_no' => $payNo,
+                    'channel_id' => $pay['channel_id'],
+                    'plugin_code' => $pay['plugin_code'],
+                    'trace_no' => $requestId,
+                    'reason_code' => $rejected
+                        ? Result::EXECUTION_REJECTED
+                        : Result::EXECUTION_UNCERTAIN,
+                    'error_message' => $exception->getMessage(),
+                ],
+                'warning',
+            );
             return $this->lifecycle->finishExecution(
                 $payNo,
                 $token,

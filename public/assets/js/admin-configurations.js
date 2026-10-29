@@ -652,11 +652,13 @@ MpayAdmin.ready(function () {
                 handle.close();
                 await load();
                 UI.message(
-                    result.data.enabled
-                        ? data.participates_default_route
-                            ? '通道已启用，已加入默认收款'
-                            : '通道已启用，可配置自定义路由'
-                        : '通道已保存，尚未启用',
+                    detail
+                        ? '通道已保存'
+                        : result.data.enabled
+                          ? data.participates_default_route
+                              ? '通道已启用，已加入默认收款'
+                              : '通道已启用，可配置自定义路由'
+                          : '通道已保存，尚未启用',
                 );
             },
             onClose() {

@@ -18,7 +18,8 @@ use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\audit\ConfigurationAuditService;
 
 /**
- * 正式通道管理：完整规则、配置授权、冻结快照与审计一起提交；新通道和修改后的通道保持停用。
+ * 正式通道管理：完整规则、配置授权、冻结快照与审计一起提交；普通编辑保持启停状态。
+ * 新通道默认停用，切换插件或支付方式由 Editor 停用后再保存。
  * 启用只开放新单；停用不关闭静态二维码，也不停止原账号的历史到账采集。
  * 仅由 Editor 在已授权的外层事务内调用；这里核对配置及通道版本，不重复查询管理员。
  *
@@ -53,10 +54,7 @@ final class PaymentChannelService extends BaseService
         $configuration = $this->configurations->lock($configurationId);
         $this->assertVersion($configuration, $expectedConfigurationVersion);
         if ($this->channels->usedByOtherChannel($configurationId, $id)) {
-            throw new BusinessException(
-                '插件配置已经属于其他通道',
-                ApiResponseConstant::CONFLICT,
-            );
+            throw new BusinessException('插件配置已经属于其他通道', ApiResponseConstant::CONFLICT);
         }
         if ($id !== null) {
             $channel = $this->channels->lock($id);
@@ -98,20 +96,18 @@ final class PaymentChannelService extends BaseService
                 'receipt_scope_key' => $input->scopeKey,
             ]);
         }
-        $this->channels->saveRules(
-            $id,
-            $input->record(),
-            date('Y-m-d H:i:s'),
-        );
-        $revision = $this->revisions->freezeLocked($configuration, $this->channels->lock($id));
+        $this->channels->saveRules($id, $input->record(), date('Y-m-d H:i:s'));
+        $savedChannel = $this->channels->lock($id);
+        $revision = $this->revisions->freezeLocked($configuration, $savedChannel);
+        $enabled = (int) $savedChannel['enabled'] === 1;
         $this->defaults->syncChannel($id, $input->payType, $input->participatesDefaultRoute);
         $this->audit->record($actor, 'channel.save', 'payment_channel', $id, $result, [
             'plugin_code' => $configuration['plugin_code'],
             'plugin_version' => $definition->version,
             'new_version' => $expectedConfigurationVersion,
-            'enabled' => false,
+            'enabled' => $enabled,
         ]);
-        return ['id' => $id, 'revision_id' => $revision, 'enabled' => false];
+        return ['id' => $id, 'revision_id' => $revision, 'enabled' => $enabled];
     }
 
     /** Editor 已完成授权、锁和版本核对；启用时核对冻结规则及范围，停用不阻断历史采集。 */

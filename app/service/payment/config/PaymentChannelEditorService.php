@@ -197,17 +197,12 @@ final class PaymentChannelEditorService extends BaseService
     /** 从当前配置已登记的支付方式关联取得业务锁范围。 */
     private function scopeForType(string $id, string $type): string
     {
-        $keys = [];
-        foreach ($this->scopes->configurationScopes($id, false) as $scope) {
-            $key = $scope['receipt_scope_key'];
-            if ($this->catalog->typeCode($scope['pay_type_id']) === $type) {
-                $keys[] = $key;
-            }
-        }
-        if (count($keys) !== 1) {
+        $payType = $this->catalog->findCode($type);
+        $scope = $payType === null ? null : $this->scopes->forConfiguration($id, $payType['id']);
+        if ($scope === null) {
             throw new BusinessException('插件配置缺少唯一的支付方式关联', Code::CONFLICT);
         }
-        return $keys[0];
+        return $scope['receipt_scope_key'];
     }
 
     /**
@@ -227,7 +222,6 @@ final class PaymentChannelEditorService extends BaseService
                 array_unique([...$observed['pay_types'], ...$definition->payTypes]),
             );
             $configuration = $this->configurations->lock($observed['api_config_id']);
-            $this->channels->lockForConfiguration($configuration['id']);
             $channel = $this->channels->lock($input['id']);
             $this->assertCurrent($configuration, $channel, $input);
             $saved = $this->configurationService->saveInTransaction(
@@ -238,7 +232,7 @@ final class PaymentChannelEditorService extends BaseService
             );
             if ($saved['config_version'] !== $input['expected_configuration_version']) {
                 $updated = $this->configurations->lock($configuration['id']);
-                $this->revisions->freezeLocked($updated, $this->channels->lock($channel['id']));
+                $this->revisions->freezeLocked($updated, $channel);
             }
             return $saved;
         });

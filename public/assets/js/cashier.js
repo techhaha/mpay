@@ -71,11 +71,11 @@ layui.use('layer', function () {
     }
     function showConfirmation() {
         showResult('paid', {
-            label: '已支付',
+            label: '支付成功',
             icon: 'ok-circle',
-            title: '已支付，等待商户确认',
-            message: '付款已完成，请勿重复付款。',
-            detail: '商户确认后将自动显示支付结果或返回商户页面。',
+            title: '支付成功',
+            message: '付款已成功，正在等待商户确认，请勿重复付款。',
+            detail: '收到商户确认后，将自动显示完成结果或返回商户页面。',
         });
     }
     function disposePage() {
@@ -90,13 +90,13 @@ layui.use('layer', function () {
         pending = null;
         generation++;
         showResult('paid', {
-            label: '已支付',
+            label: '支付成功',
             icon: 'ok-circle',
-            title: '已支付，商户尚未确认',
-            message: '付款已完成，请勿重复付款。',
-            detail: '暂未收到商户确认，请重新检查通知或联系商户。',
+            title: '支付成功',
+            message: '付款已成功，商户确认暂未完成，请勿重复付款。',
+            detail: '请稍后查询商户确认结果，或联系商户核对订单。',
         });
-        find('refresh').textContent = '重新检查通知';
+        find('refresh').textContent = '检查商户确认';
     }
     function enterConfirmation() {
         if (phase !== 'notification') {
@@ -231,9 +231,9 @@ layui.use('layer', function () {
             clearTimeout(timer);
             disposePage();
             showResult('paid', {
-                label: '已支付',
+                label: '支付成功',
                 icon: 'ok-circle',
-                title: '支付已完成',
+                title: '支付成功',
                 message: '付款已完成，请勿重复付款。',
                 detail:
                     data.action === 'return'
@@ -247,19 +247,16 @@ layui.use('layer', function () {
             phase = 'attention';
             deadline = null;
             showResult('paid', {
-                label: '已支付',
+                label: '支付成功',
                 icon: 'ok-circle',
-                title:
-                    data.notification_status === 'held'
-                        ? '已支付，商户确认暂缓'
-                        : '已支付，商户尚未确认',
-                message: '付款已完成，请勿重复付款。',
+                title: '支付成功',
+                message: '付款已成功，商户确认暂未完成，请勿重复付款。',
                 detail:
                     data.notification_status === 'held'
                         ? '商户通知暂缓处理，请联系商户。'
-                        : '请重新检查通知，或联系商户核对。',
+                        : '请稍后查询商户确认结果，或联系商户核对订单。',
             });
-            find('refresh').textContent = '重新检查通知';
+            find('refresh').textContent = '检查商户确认';
             return;
         }
         if (data.action !== 'wait') throw new Error('商户确认状态异常');

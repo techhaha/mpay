@@ -62,14 +62,25 @@ final class ReceiptWatcherService
             throw new UnexpectedValueException('监听批次上限无效');
         }
         $counts = ['queried' => 0, 'verified' => 0, 'matched' => 0, 'failed' => 0];
-        $codes = $this->plugins->codes();
+        $upper = $this->orders->collectionUpperId();
+        $since = $this->clock
+            ->now()
+            ->modify('-' . (int) $this->config->get('receipt.late_check_seconds', 300) . ' seconds')
+            ->format('Y-m-d H:i:s');
+        // 只处理原单和启用通道涉及的插件；实例化留在下方逐插件异常隔离内。
+        $codes = array_values(
+            array_unique([
+                ...$this->orders->collectionPlugins($since, $upper),
+                ...$this->channels->preloginPlugins(),
+            ]),
+        );
+        sort($codes, SORT_STRING);
         $store = $this->cache->store('receipt');
         $last = $store->get('watch.plugin_rotation');
         $offset = is_string($last) ? array_search($last, $codes, true) : false;
         if ($offset !== false) {
             $codes = [...array_slice($codes, $offset + 1), ...array_slice($codes, 0, $offset + 1)];
         }
-        $upper = $this->orders->collectionUpperId();
         $next = $last;
         try {
             foreach ($codes as $code) {
@@ -92,7 +103,7 @@ final class ReceiptWatcherService
                     $prelogin = $plugin->isPreloginEnabled();
                     $next = $code;
                     // 保活需要没有待付订单的启用通道；未声明时只读取原单依赖的版本。
-                    [$orders, $channels] = $this->input($code, $upper, $prelogin);
+                    [$orders, $channels] = $this->input($code, $since, $upper, $prelogin);
                     $deadline = $this->clock
                         ->now()
                         ->modify(
@@ -222,12 +233,8 @@ final class ReceiptWatcherService
      * 数据库分页只为控制读取体积；全部候选装配完才调用插件，避免同账号按页重复查询。
      * @return array{0:array<string,array>,1:array<string,array>}
      */
-    private function input(string $code, string $upper, bool $prelogin): array
+    private function input(string $code, string $since, string $upper, bool $prelogin): array
     {
-        $since = $this->clock
-            ->now()
-            ->modify('-' . (int) $this->config->get('receipt.late_check_seconds', 300) . ' seconds')
-            ->format('Y-m-d H:i:s');
         $size = (int) $this->config->get('receipt.order_page_size', 500);
         $maximum = (int) $this->config->get('receipt.max_orders_per_plugin', 10000);
         $orders = [];

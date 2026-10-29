@@ -211,7 +211,7 @@ final class PaymentChannelEditorService extends BaseService
     }
 
     /**
-     * 插件参数独立保存；仅当前通道生成新快照并停用，已有订单继续引用原快照。
+     * 插件参数独立保存；当前通道生成新快照并保持启停状态，已有订单继续引用原快照。
      * 不通过额外调用“编辑通道”来完成配置更新，版本检查及快照刷新在同一事务中结束。
      * @param array<string,mixed> $input plugin-save 场景，配置正文不得记录到日志。
      */
@@ -303,10 +303,7 @@ final class PaymentChannelEditorService extends BaseService
                 );
             }
             $this->defaults->removeChannel($channel['id']);
-            $this->channels->markDeleted(
-                $channel['id'],
-                date('Y-m-d H:i:s'),
-            );
+            $this->channels->markDeleted($channel['id'], date('Y-m-d H:i:s'));
             $this->audit->record(
                 $actor,
                 'channel.delete',

@@ -22,6 +22,9 @@ final class PaymentPluginFactoryService
     /** @var array<class-string<PaymentInterface>,PluginDefinition> 代码定义只核验一次；不缓存带通道配置的执行实例。 */
     private array $definitions = [];
 
+    /** @var array<string,PluginDefinition> 本次应用执行已核对的编码映射；不缓存通道配置，部署代码后重启常驻进程。 */
+    private array $resolved = [];
+
     public function __construct(
         private readonly App $app,
         private readonly Config $config,
@@ -42,6 +45,9 @@ final class PaymentPluginFactoryService
     /** 单项核对本地代码与同步编码；元信息按类复用，不缓存通道配置或执行实例。 */
     public function definition(string $code): PluginDefinition
     {
+        if (isset($this->resolved[$code])) {
+            return $this->resolved[$code];
+        }
         // 已全量发现的入口复用注册结果；普通单项读取不触发目录扫描。
         $class = $this->installed[$code] ?? null;
         if ($class === null && $this->isolated()) {
@@ -50,15 +56,22 @@ final class PaymentPluginFactoryService
         if ($class === null) {
             $row = $this->records->find($code);
             if ($row === null || !$this->hasClass($row['class_name'])) {
-                throw new BusinessException('插件未安装，请刷新插件目录', ApiResponseConstant::SERVICE_UNAVAILABLE);
+                throw new BusinessException(
+                    '插件未安装，请刷新插件目录',
+                    ApiResponseConstant::SERVICE_UNAVAILABLE,
+                );
             }
             $class = $row['class_name'];
         }
-        $definition = $this->definitions[$class] ?? $this->describe($this->app->make($class, [], true));
+        $definition =
+            $this->definitions[$class] ?? $this->describe($this->app->make($class, [], true));
         if ($definition->code !== $code) {
-            throw new BusinessException('插件编码与同步目录不一致，请刷新插件目录', ApiResponseConstant::CONFLICT);
+            throw new BusinessException(
+                '插件编码与同步目录不一致，请刷新插件目录',
+                ApiResponseConstant::CONFLICT,
+            );
         }
-        return $definition;
+        return $this->resolved[$code] = $definition;
     }
 
     /** 数据库映射只能指向固定目录的具体支付插件，不能作为任意类名或文件加载入口。 */
@@ -156,9 +169,9 @@ final class PaymentPluginFactoryService
     private function isolated(): bool
     {
         return (PHP_SAPI === 'cli' ||
-                (PHP_SAPI === 'cli-server' &&
-                    defined('MPAY_ISOLATED_HTTP') &&
-                    MPAY_ISOLATED_HTTP === true)) &&
+            (PHP_SAPI === 'cli-server' &&
+                defined('MPAY_ISOLATED_HTTP') &&
+                MPAY_ISOLATED_HTTP === true)) &&
             defined('MPAY_ISOLATED_TEST') &&
             MPAY_ISOLATED_TEST === true &&
             $this->config->get('mpay.environment') === 'testing';

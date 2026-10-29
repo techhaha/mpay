@@ -22,7 +22,7 @@ use RuntimeException;
 
 /**
  * 应用支付方式绑定的轮询组选路：核对已安装插件、冻结规则和账号归属；本地可选不代表平台在线。
- * 共用建单外层事务，只在支付尝试建立之前选择，不替已有支付单换通道。
+ * 新尝试共用建单外层事务；预览只读当前可用性，不占用通道或替已有支付单换通道。
  */
 final class PaymentRouteService
 {
@@ -41,9 +41,9 @@ final class PaymentRouteService
 
     /**
      * 只在尝试尚不存在时选路；先筛有效组成员，再按组策略选择，不在范围锁后切换通道。
-     * 外层持应用/业务单锁；本层依次锁支付方式、绑定、组和配置/通道。
+     * 新尝试的外层持应用/业务单锁，本层依次锁支付方式、绑定、组和配置/通道；预览不加锁。
      *
-     * @param bool $advance 仅新支付尝试为 true；预览为 false，仍在短事务内取一致的配置。
+     * @param bool $advance 新尝试加锁并推进游标；false 为只读预览，实际下单必须重新核验。
      * @return array{channel:PaymentChannel,pay_type_id:string,config_version:int,plugin_version:string,poll_group_id:string,route_mode:int}
      */
     public function selectFor(
@@ -52,18 +52,21 @@ final class PaymentRouteService
         string $payType,
         bool $advance = true,
     ): array {
-        $type = $this->catalog->lockType($payType);
+        $type = $advance ? $this->catalog->lockType($payType) : $this->catalog->findCode($payType);
         if ($type === null || (int) $type['enabled'] !== 1) {
             throw new BusinessException('支付方式不可用', ApiResponseConstant::SERVICE_UNAVAILABLE);
         }
-        $binding = $this->groups->binding($appId, $type['id'], true);
+        $binding = $this->groups->binding($appId, $type['id'], $advance);
         if ($binding === null || (int) $binding['status'] !== 1) {
             throw new BusinessException(
                 '应用尚未启用该支付方式的轮询组',
                 ApiResponseConstant::SERVICE_UNAVAILABLE,
             );
         }
-        $group = $this->groups->lock($binding['poll_group_id']);
+        $group = $advance
+            ? $this->groups->lock($binding['poll_group_id'])
+            : $this->groups->find($binding['poll_group_id']) ??
+                throw new RuntimeException('轮询组不存在');
         if ((int) $group['status'] !== 1 || $group['pay_type_id'] !== $type['id']) {
             throw new BusinessException(
                 '轮询组已停用或方式不一致',
@@ -71,7 +74,7 @@ final class PaymentRouteService
             );
         }
         $members = [];
-        foreach ($this->groups->members($group['id'], true) as $member) {
+        foreach ($this->groups->members($group['id'], $advance) as $member) {
             if ((int) $member['status'] !== 1) {
                 continue;
             }
@@ -86,11 +89,14 @@ final class PaymentRouteService
             (int) $a['id'] <=> (int) $b['id'],
         );
         $eligible = [];
-        // 插件行已锁定后，本次选路复用同编码的准入结果和定义；不跨事务缓存。
+        // 本次复用同编码的准入结果和定义；新尝试仍先锁插件行，不跨事务缓存。
         $definitions = [];
         foreach ($candidates as $candidate) {
-            $configuration = $this->configurations->lock($candidate['api_config_id']);
-            $channel = $this->channels->lock($candidate['id']);
+            $configuration = $advance
+                ? $this->configurations->lock($candidate['api_config_id'])
+                : $this->configurations->find($candidate['api_config_id']) ??
+                    throw new RuntimeException('收款配置不存在');
+            $channel = $advance ? $this->channels->lock($candidate['id']) : $candidate;
             if (
                 $channel['api_config_id'] !== $configuration['id'] ||
                 (int) $configuration['enabled'] !== 1 ||
@@ -107,11 +113,11 @@ final class PaymentRouteService
                 $this->configurations->revision(
                     $configuration['id'],
                     (int) $configuration['config_version'],
-                    true,
+                    $advance,
                 ) ?? throw new RuntimeException('当前收款配置版本缺失');
             $code = $channel['plugin_code'];
             if (!array_key_exists($code, $definitions)) {
-                $definitions[$code] = $this->management->allowsNew($code, true)
+                $definitions[$code] = $this->management->allowsNew($code, $advance)
                     ? $this->plugins->definition($code)
                     : null;
             }
@@ -126,7 +132,7 @@ final class PaymentRouteService
             $snapshot = $this->revisions->snapshot(
                 $channel['id'],
                 $channel['current_revision_id'],
-                true,
+                $advance,
             );
             if (
                 $snapshot['config_version'] !== (int) $configuration['config_version'] ||
@@ -146,7 +152,7 @@ final class PaymentRouteService
                 'plugin_version' => $definition->version,
             ];
         }
-        // 等待全部候选锁后统一读取时间；日额度只统计本轮真正可用且启用限制的通道。
+        // 新尝试等待全部候选锁后再读时间；预览复用同一额度规则但不预留额度。
         $evaluatedAt = $this->clock->now();
         $limitedIds = [];
         foreach ($eligible as $index => $row) {

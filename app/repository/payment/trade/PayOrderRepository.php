@@ -30,6 +30,12 @@ final class PayOrderRepository extends BaseRepository
         return (string) ($this->model->max('id') ?? '0');
     }
 
+    /** @return list<string> 本轮待核对订单引用的插件；不依赖当前通道或插件开关。 */
+    public function collectionPlugins(string $since, string $upper): array
+    {
+        return $this->collectionQuery($since, $upper)->distinct(true)->column('plugin_code');
+    }
+
     /**
      * 分页只控制订单取数，不拆分插件的账号查询；通道版本由采集服务合并 ID 后一次批读。
      * 停用通道不取消原订单责任，到期/本地关闭在给定补查范围内仍返回。
@@ -42,8 +48,19 @@ final class PayOrderRepository extends BaseRepository
         string $upper,
         int $limit,
     ): array {
-        return $this->model
+        return $this->collectionQuery($since, $upper)
             ->where('plugin_code', $plugin)
+            ->where('id', '>', $after)
+            ->order('id')
+            ->limit($limit)
+            ->select()
+            ->all();
+    }
+
+    /** 插件发现与订单分页共用状态、补查窗口及本轮上界，避免漏掉停用通道的原单。 */
+    private function collectionQuery(string $since, string $upper): Query
+    {
+        return $this->model
             ->whereIn('status', [
                 TradeConstant::ORDER_STATUS_CREATED,
                 TradeConstant::ORDER_STATUS_PAYING,
@@ -52,12 +69,7 @@ final class PayOrderRepository extends BaseRepository
             ])
             ->whereNotNull('request_at')
             ->where('expire_at', '>=', $since)
-            ->where('id', '>', $after)
-            ->where('id', '<=', $upper)
-            ->order('id')
-            ->limit($limit)
-            ->select()
-            ->all();
+            ->where('id', '<=', $upper);
     }
 
     /**
@@ -132,7 +144,7 @@ final class PayOrderRepository extends BaseRepository
      * 不锁已有业务单/支付单，避免和支付准备、状态推进反向取锁；查询不写入或提交主事务。
      * 仅启用日限制时调用，失败/关闭/已超时单不占用；到账偏移不计入通道限额。
      *
-     * @param list<string> $channelIds 仅包含启用了日限制且仍可用的已锁通道。
+     * @param list<string> $channelIds 启用了日限制的候选通道；正式选路已持通道锁，预览只读取额度。
      * @return array<string,array{amount:int,count:int}> 无占用的通道没有分组行，由调用方按零处理。
      */
     public function channelDailyUsages(

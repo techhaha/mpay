@@ -330,7 +330,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
      *
      * @param array{amount:int,paid_at:?string,trade_no:?string,remark:?string,pay_type:string,event_key:string} $record
      */
-    private function locateReceipt(array $record, string $channelId): PayOrder
+    private function locateReceipt(array $record, string $channelId, string $receivedAt): PayOrder
     {
         if ($channelId === '') {
             throw new LogicException('服务未注入通道');
@@ -349,8 +349,8 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
                 $channelId,
                 $this->getCode(),
                 $record['amount'],
-                $record['paid_at'],
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                $record['paid_at'] ?? $receivedAt,
+                $receivedAt,
             )
             as $pay
         ) {
@@ -422,7 +422,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         $record = $this->receipt($payload, $context['channel_id']);
         return [
             $this->receiptResult(
-                $this->locateReceipt($record, $context['channel_id']),
+                $this->locateReceipt($record, $context['channel_id'], $context['received_at']),
                 $record,
                 $payload->post(),
                 $context['received_at'],
@@ -479,7 +479,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         )
             ? $code[1]
             : null;
-        // 沿用 V2 手机合同：通知时间参与监听编号及订单窗口，不称其为微信官方交易时间/交易号。
+        // 通知发送时间参与认证和稳定事件键；手机消息没有付款时间，notify 使用服务接收时间。
         $reference =
             'SF' .
             substr(
@@ -501,7 +501,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         } catch (InvalidArgumentException) {
             throw new ReceiptMessageException('invalid_message');
         }
-        return $this->record($reference, $cents, intdiv($message['timestamp'], 1000), $remark);
+        return $this->record($reference, $cents, null, $remark);
     }
 
     /**
@@ -626,14 +626,14 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
     }
 
     /** @return array<string,mixed> 手机/PC 消息编号只作事件键；未取得微信交易号时明确留空。 */
-    private function record(string $reference, int $amount, int $timestamp, ?string $remark): array
+    private function record(string $reference, int $amount, ?int $timestamp, ?string $remark): array
     {
         return [
             'pay_type' => 'wxpay',
             'event_key' => $reference,
             'trade_no' => null,
             'amount' => $amount,
-            'paid_at' => date('Y-m-d H:i:s', $timestamp),
+            'paid_at' => $timestamp === null ? null : date('Y-m-d H:i:s', $timestamp),
             'remark' => $remark,
         ];
     }

@@ -435,22 +435,13 @@ final class CashierService extends BaseService
      */
     private function paymentMethods(string $appId, int $amount): array
     {
-        $app = $this->apps->lock($appId);
+        $app = $this->apps->find($appId) ?? throw new RuntimeException('应用不存在');
         if ((int) $app['status'] !== 1) {
             return [];
         }
         $methods = [];
         $types = $this->catalog->enabledTypes();
-        // 多方式预览在同一事务内，锁序不跟随可编辑的显示顺序。
-        usort(
-            $types,
-            static fn($a, $b): int => strlen($a['id']) <=> strlen($b['id']) ?:
-            strcmp($a['id'], $b['id']),
-        );
-        // 先锁齐各方式，再接触可能跨方式复用的插件配置，避免预览反向等待通道编辑。
-        foreach ($types as $type) {
-            $this->catalog->find($type['id'], true);
-        }
+        // 仅展示当前可申请的方式；用户真正选择时再在建单事务内加锁选路。
         foreach ($types as $type) {
             try {
                 $this->routes->selectFor($appId, $amount, $type['code'], false);

@@ -10,6 +10,7 @@ use app\model\payment\PaymentChannelRevision;
 use app\model\payment\PayOrder;
 use InvalidArgumentException;
 use RuntimeException;
+use think\db\Query;
 
 /**
  * 通道规则和历史快照的持久化；快照生成及账号归属检查由 PaymentChannelRevisionService 完成。
@@ -29,19 +30,30 @@ final class PaymentChannelRepository extends BaseRepository
     /** @return list<PaymentChannel> 仅新增保活来源，存量订单由独立订单查询装配，不依赖当前开关。 */
     public function preloginChannels(string $plugin): array
     {
-        return $this->model
-            ->alias('ch')
-            ->join('ma_payment_plugin p', 'p.code=ch.plugin_code')
-            ->join('ma_payment_plugin_conf c', 'c.id=ch.api_config_id')
+        return $this->preloginQuery()
             ->where('ch.plugin_code', $plugin)
-            ->where('ch.enabled', 1)
-            ->where('c.enabled', 1)
-            ->where('p.enabled', 1)
-            ->whereNull('ch.deleted_at')
             ->field('ch.*')
             ->order('ch.id')
             ->select()
             ->all();
+    }
+
+    /** @return list<string> 启用通道涉及的插件；是否采集及保活仍由插件接口和元信息决定。 */
+    public function preloginPlugins(): array
+    {
+        return $this->preloginQuery()->distinct(true)->column('ch.plugin_code');
+    }
+
+    private function preloginQuery(): Query
+    {
+        return $this->model
+            ->alias('ch')
+            ->join('ma_payment_plugin p', 'p.code=ch.plugin_code')
+            ->join('ma_payment_plugin_conf c', 'c.id=ch.api_config_id')
+            ->where('ch.enabled', 1)
+            ->where('c.enabled', 1)
+            ->where('p.enabled', 1)
+            ->whereNull('ch.deleted_at');
     }
 
     /** @return array<string,PaymentChannelRevision> 服务只读装配，秘密快照不直接返回前端。 */
@@ -148,15 +160,6 @@ final class PaymentChannelRepository extends BaseRepository
             ->all();
     }
 
-    /** 活动配置变更使新单准入失效；保留原快照指针供后台重冻结，历史支付单引用不动。 */
-    public function disableForConfiguration(string $configurationId, string $now): void
-    {
-        $this->requireTransaction();
-        $this->model
-            ->where('api_config_id', $configurationId)
-            ->update(['enabled' => 0, 'updated_at' => $now]);
-    }
-
     /**
      * 保存已由服务校验的完整规则，并停止新单直到显式启用；不更改账号归属或旧快照正文。
      *
@@ -261,13 +264,7 @@ final class PaymentChannelRepository extends BaseRepository
                 'config_version' => $configVersion,
                 'snapshot_json' => $value,
             ],
-            [
-                'channel_id',
-                'revision',
-                'api_config_id',
-                'config_version',
-                'snapshot_json',
-            ],
+            ['channel_id', 'revision', 'api_config_id', 'config_version', 'snapshot_json'],
             model: $this->revisions,
         );
         // 插入快照和更新当前指针必须在同一事务内完成，避免指向未提交或不存在的版本。

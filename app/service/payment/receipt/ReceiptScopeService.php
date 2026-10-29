@@ -36,7 +36,7 @@ final class ReceiptScopeService extends BaseService
     }
 
     /**
-     * 调用方已锁定配置；lock=true 时，须先取配置用例需要的通道及目录锁。
+     * lock=true 时调用方已锁定配置，并须先取配置用例需要的通道及目录锁。
      * lock=false 只供候选/展示读取，不能替代建单最终范围锁内复核。
      *
      * @return array<string,ReceiptScope> 配置对应的业务范围，按键排序；缺失关联直接失败。

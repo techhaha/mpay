@@ -323,7 +323,7 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
      *
      * @param array{amount:int,paid_at:?string,trade_no:?string,remark:?string,pay_type:string,event_key:string} $record
      */
-    private function locateReceipt(array $record, string $channelId): PayOrder
+    private function locateReceipt(array $record, string $channelId, string $receivedAt): PayOrder
     {
         if ($channelId === '') {
             throw new LogicException('服务未注入通道');
@@ -342,8 +342,8 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
                 $channelId,
                 $this->getCode(),
                 $record['amount'],
-                $record['paid_at'],
-                $this->clock->now()->format('Y-m-d H:i:s'),
+                $record['paid_at'] ?? $receivedAt,
+                $receivedAt,
             )
             as $pay
         ) {
@@ -415,7 +415,7 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
         $record = $this->receipt($payload, $context['channel_id']);
         return [
             $this->receiptResult(
-                $this->locateReceipt($record, $context['channel_id']),
+                $this->locateReceipt($record, $context['channel_id'], $context['received_at']),
                 $record,
                 $payload->post(),
                 $context['received_at'],
@@ -424,10 +424,10 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
     }
 
     /**
-     * 保持 V2 的标题/正文选择、通知时间和 SF 监听编号语义；编号并非支付宝官方交易号。
+     * 保持标题/正文选择和 SF 监听编号；通知发送时间仅用于认证和事件键，不当作平台付款时间。
      * SmsForwarder HMAC 不覆盖正文，平台验收仍需核对发送工具和所用通知模板。
      *
-     * @return array<string,mixed> 金额为整数分，paid_at 使用应用上海时区。
+     * @return array<string,mixed> 金额为整数分；手机消息没有付款时间，由 notify 统一使用接收时间。
      * @throws ReceiptMessageException 来源、格式或金额无效；原始参数错误只在金额解析处归类。
      */
     private function receipt(Request $request, string $channelId): array
@@ -492,7 +492,7 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
             // 手机消息没有支付宝交易号；合成编号仅用于事件去重。
             'trade_no' => null,
             'amount' => $cents,
-            'paid_at' => date('Y-m-d H:i:s', intdiv($message['timestamp'], 1000)),
+            'paid_at' => null,
             'remark' => $remark,
         ];
     }

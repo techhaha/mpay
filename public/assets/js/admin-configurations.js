@@ -713,7 +713,7 @@ MpayAdmin.ready(function () {
                     handle.clean();
                     handle.close();
                     await load();
-                    UI.message('插件配置已保存，请核对后启用此通道');
+                    UI.message('插件配置已保存，通道启停状态保持不变');
                 },
                 onClose() {
                     fields?.dispose();

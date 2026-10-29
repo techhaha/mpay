@@ -348,7 +348,8 @@ final class PayOrderCallbackService extends BaseService
     /**
      * 把插件标准数组转换为核心内部证据，并核对服务端授权；插件不构造 ReceiptEvent。
      *
-     * @param array<string,mixed> $result 已解析的平台结果；服务在此复核，不信任插件声称的订单归属。
+     * @internal 仅供付款派发提交已通过 PaymentPluginPayResultValidator 的成功结果。
+     * @param array<string,mixed> $result 标准字段和内部 payload_text 已验证，金额、归属及交易状态仍在此核对。
      * @return array{flow_id:?string,pay_no:?string,matched:bool,reason:string}
      */
     public function acceptPluginResult(
@@ -356,19 +357,6 @@ final class PayOrderCallbackService extends BaseService
         ChannelNotifyContext $context,
         string $requestId,
     ): array {
-        $notification = [
-            'channel_id' => $context->channelId,
-            'plugin_code' => $context->pluginCode,
-            'pay_no' => $context->payNo,
-            'request_id' => $requestId,
-            'received_at' => $context->receivedAt->format('Y-m-d H:i:s'),
-        ];
-        try {
-            $result = $this->results->validateResult($result);
-        } catch (Throwable $error) {
-            $this->recordFailure($notification, $error);
-            throw $error;
-        }
         return $this->confirmResult(
             $result,
             $context,
@@ -573,13 +561,13 @@ final class PayOrderCallbackService extends BaseService
         });
     }
 
-    /** 只编码插件选择的对应原文，不从标准字段重建报文，也不读取整个 HTTP/采集批次代替它。 */
+    /** 复用结果校验时编码的匹配项原文；不重建报文，也不读取整个 HTTP/采集批次代替它。 */
     private function notification(
         ChannelNotifyContext $context,
         string $requestId,
         array $result,
     ): array {
-        $text = $this->records->rawText($result['raw']);
+        $text = $result['payload_text'];
         return [
             'channel_id' => $context->channelId,
             'plugin_code' => $context->pluginCode,

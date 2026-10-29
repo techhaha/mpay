@@ -90,14 +90,14 @@ final class EpayV1MessageService
 
     /**
      * query 已合并进签名参数；保留原 URI 的其他部分，不再解析随后会被替换的旧 query。
-     * 本入口核验实际输出的 query 与完整长度，认领端不重复检查；HTTP 层仍独立核验网络目标。
+     * 本入口直接编码已校验的冻结参数并检查完整长度；HTTP 层仍独立核验网络目标。
      * @param array<string|int,string> $signedParameters 已合并目标 query 的完整冻结参数。
      */
     public function targetUrl(string $target, array $signedParameters): string
     {
         $uri = HttpTargetPolicy::uri($target);
         $query = http_build_query($signedParameters, '', '&', PHP_QUERY_RFC3986);
-        UrlEncodedForm::parseQuery($query, 256);
+        // 参数在合并签名时已校验；原生编码不会新增重复字段，不再反向解析自己生成的 query。
         $url = (string) $uri->withQuery($query);
         // 原 URI 已核验，原生编码和 withQuery 只替换参数；这里只补核验变化后的总长度。
         if (mb_strlen($url, 'UTF-8') > HttpTargetPolicy::MAX_REQUEST_URL_LENGTH) {
@@ -129,10 +129,7 @@ final class EpayV1MessageService
         }
         $type = $pay === null ? '' : $pay['ext_json']['payment_context']['pay_type'] ?? null;
         $param = $biz['ext_json']['param'] ?? '';
-        if (
-            !is_string($param) ||
-            ($pay !== null && !PaymentTypeCode::valid($type))
-        ) {
+        if (!is_string($param) || ($pay !== null && !PaymentTypeCode::valid($type))) {
             throw new RuntimeException('查询的原始协议上下文无效');
         }
         return [

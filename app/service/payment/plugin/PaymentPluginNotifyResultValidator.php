@@ -76,7 +76,7 @@ final class PaymentPluginNotifyResultValidator extends Validate
         return $results;
     }
 
-    /** @return array<string,mixed> 只接受新版平级合同；原文校验和编码不会改变用于验签、匹配的输入。 */
+    /** @return array<string,mixed> 公共十字段校验后附加内部 payload_text；raw 保持原样供采集来源核对，不扩展插件合同。 */
     public function validateResult(array $result): array
     {
         $fields = [
@@ -104,7 +104,7 @@ final class PaymentPluginNotifyResultValidator extends Validate
         if (!(clone $this)->failException(false)->check($result)) {
             throw new UnexpectedValueException('插件通知结果不符合标准字段');
         }
-        $this->records->rawText($result['raw']);
+        $result['payload_text'] = $this->records->rawText($result['raw']);
         return $result;
     }
 

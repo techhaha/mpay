@@ -7,7 +7,6 @@ use app\common\base\BaseAdminController;
 use app\http\admin\validation\SystemSettingsValidator;
 use app\service\system\audit\ConfigurationActionContext;
 use app\service\system\config\SystemConfigService;
-use think\Config;
 use think\Response;
 
 /** 系统公开设置的认证 HTTP 边界；只返回允许编辑的组与当前站点来源，不暴露部署文件或任意 Config 内容。 */
@@ -25,12 +24,10 @@ final class SystemSettingsController extends BaseAdminController
     public function index(
         SystemSettingsValidator $validator,
         SystemConfigService $settings,
-        Config $config,
     ): Response {
         $validator->emptyQuery($this->request->get());
         return $this->success([
             'groups' => $settings->all(),
-            'notification_ports' => $config->get('http.allowed_ports', [80, 443]),
         ]);
     }
 

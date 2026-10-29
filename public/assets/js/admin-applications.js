@@ -179,16 +179,16 @@ MpayAdmin.ready(async function () {
                       )
                     : '') +
                 UI.field(
-                    '允许的通知及回跳域名',
+                    '允许的通知及回跳域名/IP',
                     UI.textarea(
                         'allowed_hosts',
                         (app?.allowed_hosts || []).join('\n'),
-                        'placeholder="每行一个域名，如 shop.example.com"',
+                        'placeholder="每行一个域名或 IP，如 shop.example.com"',
                     ),
                     {
                         full: true,
-                        hint: '每行一个域名；留空或填写 * 表示不限制域名。',
-                        help: '填写完整域名，不带协议、端口或路径，不支持 *.example.com。已有订单保留创建时的回调目标和凭证。',
+                        hint: '每行一个域名或 IP；留空或填写 * 表示不限制主机。',
+                        help: '支持域名、IPv4 和 IPv6；不填协议、端口或路径，不支持 *.example.com。IPv6 可直接填写地址，实际 URL 使用 [IPv6地址]:端口。允许主机的合法端口均可使用；已有订单保留原回调目标和凭证。',
                     },
                 ) +
                 '</div>',
@@ -322,10 +322,10 @@ MpayAdmin.ready(async function () {
                                     '应用名称': app.name,
                                     'PID': app.pid,
                                     '接入状态': app.enabled ? '启用' : '停用',
-                                    '允许的回调域名':
+                                    '允许的回调域名/IP':
                                         !app.allowed_hosts?.length ||
                                         app.allowed_hosts.includes('*')
-                                            ? '不限域名'
+                                            ? '不限主机'
                                             : app.allowed_hosts.join('\n'),
                                     'KEY 版本': app.key_version ?? '未设置',
                                 }) +

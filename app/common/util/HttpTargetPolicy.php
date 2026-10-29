@@ -11,7 +11,7 @@ use Psr\Http\Message\UriInterface;
 use think\Config;
 
 /**
- * 商户通知/回跳共用地址格式与可选域名限制；服务器出站限制只用于通知。
+ * 商户通知/回跳共用地址格式与可选主机限制；服务器出站限制只用于通知。
  * DNS 结果须由 HTTP 客户端绑定连接，浏览器回跳不解析 DNS 或限制目标网段。
  */
 class HttpTargetPolicy
@@ -32,10 +32,8 @@ class HttpTargetPolicy
      *
      * @throws BusinessException 输入不符合项目的地址合同，错误不回显 URL。
      */
-    public static function uri(
-        string $url,
-        int $maximum = self::MAX_URL_LENGTH,
-    ): UriInterface {
+    public static function uri(string $url, int $maximum = self::MAX_URL_LENGTH): UriInterface
+    {
         if ($maximum < 1 || $maximum > self::MAX_REQUEST_URL_LENGTH) {
             throw new InvalidArgumentException('URL 长度上限无效');
         }
@@ -59,13 +57,20 @@ class HttpTargetPolicy
                 ApiResponseConstant::VALIDATION_FAILED,
             );
         }
-        $host = trim($uri->getHost(), '[]');
+        $host = $uri->getHost();
+        $address = trim($host, '[]');
+        // IPv6 在 URL 中必须使用方括号；域名和 IPv4 不使用方括号。
+        $validHost =
+            filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false
+                ? $host === '[' . $address . ']'
+                : filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false ||
+                    filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) !== false;
         if (
             !in_array($uri->getScheme(), ['http', 'https'], true) ||
             $uri->getUserInfo() !== '' ||
+            $uri->getPort() === 0 ||
             $host === '' ||
-            (filter_var($host, FILTER_VALIDATE_IP) === false &&
-                filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME) === false)
+            !$validHost
         ) {
             throw new BusinessException(
                 '目标必须是无用户信息的标准 HTTP(S) 地址',
@@ -75,10 +80,19 @@ class HttpTargetPolicy
         return $uri;
     }
 
+    /** 已校验主机的授权比较值；IPv6 去方括号并规范化，不改写参与签名或实际发送的 URL。 */
+    public static function normalizeHost(string $host): string
+    {
+        $ip = trim($host, '[]');
+        return filter_var($ip, FILTER_VALIDATE_IP) !== false
+            ? inet_ntop(inet_pton($ip))
+            : strtolower($host);
+    }
+
     /**
      * 新订单的浏览器回跳只核验格式及应用域名，不解析 DNS 或限制目标网段。
      *
-     * @param list<string> $allowedHosts 当前应用的允许域名；空列表或 * 表示不限域名。
+     * @param list<string> $allowedHosts 当前应用的允许域名/IP；空列表或 * 表示不限主机。
      */
     public function validate(string $url, array $allowedHosts = []): UriInterface
     {
@@ -89,22 +103,21 @@ class HttpTargetPolicy
     }
 
     /**
-     * 新通知目标额外核验端口和字面地址；事务内不查询 DNS。
+     * 新通知目标额外核验字面地址；合法端口均可使用，事务内不查询 DNS。
      *
-     * @param list<string> $allowedHosts 当前应用的允许域名，不保存在共享对象中。
+     * @param list<string> $allowedHosts 当前应用的允许域名/IP，不保存在共享对象中。
      */
     public function validateNotification(string $url, array $allowedHosts = []): UriInterface
     {
         $target = self::uri($url);
         $development = $this->developmentAllowed($target);
         $this->assertAllowedHost($target, $allowedHosts, $development);
-        $this->assertNotificationPort($target, $development);
         $this->addresses->literalAddress(trim($target->getHost(), '[]'), $development);
         return $target;
     }
 
     /**
-     * 发送冻结通知前一次核验完整 URI、端口和 DNS/IP；不重新应用当前应用域名列表。
+     * 发送冻结通知前一次核验完整 URI 和 DNS/IP；不重新应用当前应用主机列表。
      * 开发例外在本次流程只判定一次，字面 IP 也只由解析器核验一次。
      *
      * @return array{uri:UriInterface,addresses:list<string>} 客户端须绑定这些地址并禁止重定向。
@@ -113,7 +126,6 @@ class HttpTargetPolicy
     {
         $target = self::uri($url, self::MAX_REQUEST_URL_LENGTH);
         $development = $this->developmentAllowed($target);
-        $this->assertNotificationPort($target, $development);
         return [
             'uri' => $target,
             'addresses' => $this->addresses->resolve(trim($target->getHost(), '[]'), $development),
@@ -121,39 +133,25 @@ class HttpTargetPolicy
     }
 
     /** @param list<string> $allowedHosts 仅新订单调用，开发例外仍须匹配既有环境/主机/端口。 */
-    private function assertAllowedHost(UriInterface $target, array $allowedHosts, bool $development): void
-    {
+    private function assertAllowedHost(
+        UriInterface $target,
+        array $allowedHosts,
+        bool $development,
+    ): void {
         if (
             $allowedHosts !== [] &&
             !in_array('*', $allowedHosts, true) &&
             !$development &&
-            !in_array(trim($target->getHost(), '[]'), array_map('strtolower', $allowedHosts), true)
+            !in_array(
+                self::normalizeHost($target->getHost()),
+                array_map([self::class, 'normalizeHost'], $allowedHosts),
+                true,
+            )
         ) {
             throw new BusinessException(
-                '目标域名未在应用允许列表中',
+                '目标域名或 IP 未在应用允许列表中',
                 ApiResponseConstant::VALIDATION_FAILED,
             );
-        }
-    }
-
-    /** 只检查通知端口，不在内部重算开发例外或重复解析 URL。 */
-    private function assertNotificationPort(UriInterface $target, bool $development): void
-    {
-        $ports = $this->config->get('http.allowed_ports', [80, 443]);
-        if (!$development) {
-            if (
-                !is_array($ports) ||
-                !in_array(
-                    $target->getPort() ?? ($target->getScheme() === 'https' ? 443 : 80),
-                    $ports,
-                    true,
-                )
-            ) {
-                throw new BusinessException(
-                    '目标端口未在允许列表中',
-                    ApiResponseConstant::VALIDATION_FAILED,
-                );
-            }
         }
     }
 
@@ -162,8 +160,11 @@ class HttpTargetPolicy
     {
         return in_array($this->config->get('mpay.environment'), ['development', 'testing'], true) &&
             in_array(
-                trim($target->getHost(), '[]'),
-                $this->config->get('http.development_hosts', []),
+                self::normalizeHost($target->getHost()),
+                array_map(
+                    [self::class, 'normalizeHost'],
+                    $this->config->get('http.development_hosts', []),
+                ),
                 true,
             ) &&
             in_array(

@@ -46,7 +46,7 @@ class HttpClient
         $started = hrtime(true);
         $this->assertDeadline($deadline, $started);
         try {
-            // 旧责任沿冻结目标发送；格式、端口、开发例外和 DNS/IP 在同一入口处理。
+            // 旧责任沿冻结目标发送；URL 格式、开发例外和 DNS/IP 在同一入口处理。
             ['uri' => $uri, 'addresses' => $addresses] = $this->targets->resolveNotification($url);
         } catch (BusinessException $exception) {
             throw $this->targetFailure($exception, $started);

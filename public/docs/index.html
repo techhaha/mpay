@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="description" content="MPAY 本地易支付 V1 接口文档：页面下单、API 下单、通知验签、查单和退款。">
-    <meta name="mpay-doc-source-sha256" content="1e17cf80aac94aebf671e72873ecf236a594f203e8605ede744d571574137602">
+    <meta name="mpay-doc-source-sha256" content="415183fcf555e027baad1dcd1b5ecdebec7b78cf2595a326c67b4b033f12ec80">
     <title>易支付 V1 接口文档 · MPAY</title>
     <link rel="icon" href="/favicon.ico">
     <link rel="stylesheet" href="/assets/layui/css/layui.css">
@@ -239,7 +239,8 @@
 </tr>
 </tbody></table>
 </div><p>submit/mapi 使用原始参数验签，商品名仅在保存时截断。mapi 的 <code>device</code> 缺省或空串使用 pc，非法枚举值拒绝；mapi 请求通常来自业务服务器，不通过该请求的 UA 推断付款设备。device 只控制呈现方式，不证明真实身份；支付插件的内部动作参数不是商户接入字段。</p>
-<p>通知及返回地址须为合法 HTTP(S) URL，最多 2048 个字符。应用允许域名留空或包含 <code>*</code> 时不限制域名；填写具体名单时按完整域名精确匹配，每行一个，不支持子域通配。通知由 MPAY 服务器发送，默认允许端口为 80 和 443，正式通知目标须通过公网地址检查。返回地址由浏览器打开，不限制其标准 URL 中的端口或 IP 网段，也不由 MPAY 服务器查询 DNS。成功回跳仍须满足订单访问凭证、付款成功及商户确认条件，并使用原订单冻结的目标和签名凭证。</p>
+<p>通知及返回地址须为合法 HTTP(S) URL，最多 2048 个字符，支持域名、IPv4、IPv6及 1～65535 端口，未指定端口采用协议默认值；IPv6 URL 必须使用方括号。应用允许域名/IP 留空或包含 <code>*</code> 时不限制主机；具体名单每行一个域名或 IP，不填写协议、端口、路径，不支持子域通配。域名按大小写无关精确匹配，IPv6 规范化后比较；白名单只限制主机，不限制端口。主机规范化仅用于授权比较，不改写原始签名参数或冻结的通知 URL。</p>
+<p>通知由 MPAY 服务器发送，仍须通过现有公网地址检查、DNS/IP 核验和 TLS 校验；原开发内网例外保持。DNS 支持 A/AAAA，连接绑定与实际 IP 核验同时支持 IPv4/IPv6。返回地址由浏览器打开，不执行服务器端 DNS 查询或出站网段限制。成功回跳仍须满足订单访问凭证、付款成功及商户确认条件，并使用原订单冻结的目标和签名凭证。submit、mapi 和实际通知发送遵循相同地址规则；不在保存时额外探测网络。</p>
 <h2 id="页面下单" tabindex="-1">页面下单</h2>
 <p><strong>地址：</strong> <code>https://pay.example.com/submit.php</code> · <strong>方法：</strong> GET / POST · <strong>结果：</strong> 跳转收银台。</p>
 <p>使用<a href="#%E4%B8%8B%E5%8D%95%E5%8F%82%E6%95%B0">下单参数表</a>。推荐由业务服务器计算签名，输出表单交给付款浏览器提交。KEY 不能放进 HTML、前端 JavaScript 或表单隐藏字段。下面是完整的 PHP 页面示例，需与下载的 <code>epay-sign.php</code> 放在一起，且在输出任何内容之前读取服务器配置：</p>

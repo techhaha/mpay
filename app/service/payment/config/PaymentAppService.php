@@ -51,7 +51,7 @@ final class PaymentAppService extends BaseService
     /**
      * 新 KEY 不随普通创建响应返回，管理员可另行受控查看。
      *
-     * @param list<string> $hosts 接入应用允许使用的通知及回跳域名。
+     * @param list<string> $hosts 接入应用允许使用的通知及回跳域名/IP。
      * @return array{id:string} 新应用身份。
      */
     public function create(
@@ -102,14 +102,7 @@ final class PaymentAppService extends BaseService
                 );
             }
             $this->assertPidAvailable($pid, $id);
-            $this->apps->update(
-                $app,
-                $pid,
-                $name,
-                $enabled,
-                $hosts,
-                date('Y-m-d H:i:s'),
-            );
+            $this->apps->update($app, $pid, $name, $enabled, $hosts, date('Y-m-d H:i:s'));
             $this->audit->record($actor, 'application.save', 'payment_app', $id, 'updated', [
                 'enabled' => $enabled,
             ]);
@@ -178,21 +171,24 @@ final class PaymentAppService extends BaseService
     }
 
     /**
-     * 可选域名限制：空列表或单独的 * 表示不限域名，其余条目精确匹配，不接受子域通配或路径。
+     * 可选主机限制：空列表或单独的 * 表示不限主机，其余条目精确匹配，不接受子域通配或路径。
      *
      * @param list<string> $hosts 管理员输入。
-     * @return list<string> 小写、去重后的域名；存在 * 时统一保存为 ['*']。
+     * @return list<string> 小写域名或规范化 IP，去重；存在 * 时统一保存为 ['*']。
      */
     private function hosts(array $hosts): array
     {
         if (!array_is_list($hosts) || count($hosts) > 100) {
-            throw new BusinessException('回调域名数量无效', ApiResponseConstant::VALIDATION_FAILED);
+            throw new BusinessException(
+                '回调域名/IP 数量无效',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $normalized = [];
         foreach ($hosts as $host) {
             if (!is_string($host) || $host === '' || trim($host) !== $host) {
                 throw new BusinessException(
-                    '回调域名格式无效',
+                    '回调域名或 IP 格式无效',
                     ApiResponseConstant::VALIDATION_FAILED,
                 );
             }
@@ -200,12 +196,17 @@ final class PaymentAppService extends BaseService
                 $normalized[] = '*';
                 continue;
             }
+            // 裸 IPv6 含冒号但不是“域名:端口”；先用原生 IP 校验，统一保存其标准表示。
+            if (filter_var($host, FILTER_VALIDATE_IP) !== false) {
+                $normalized[] = HttpTargetPolicy::normalizeHost($host);
+                continue;
+            }
             $host = strtolower($host);
             try {
                 $uri = HttpTargetPolicy::uri('https://' . $host);
             } catch (BusinessException) {
                 throw new BusinessException(
-                    '每行填写一个完整域名，不带协议、端口或路径；不限域名请留空或填写 *',
+                    '每行填写一个域名或 IP，不带协议、端口或路径；不限制请留空或填写 *',
                     ApiResponseConstant::VALIDATION_FAILED,
                 );
             }
@@ -217,11 +218,11 @@ final class PaymentAppService extends BaseService
                 $uri->getFragment() !== ''
             ) {
                 throw new BusinessException(
-                    '只填写域名，不带协议、端口或路径',
+                    '只填写域名或 IP，不带协议、端口或路径',
                     ApiResponseConstant::VALIDATION_FAILED,
                 );
             }
-            $normalized[] = $host;
+            $normalized[] = HttpTargetPolicy::normalizeHost($host);
         }
         return in_array('*', $normalized, true) ? ['*'] : array_values(array_unique($normalized));
     }
@@ -277,11 +278,7 @@ final class PaymentAppService extends BaseService
                 $this->defaults->applyToApp($id);
             }
             if ((int) $app['use_default_route'] !== (int) $useDefault) {
-                $this->apps->setDefaultRoute(
-                    $app,
-                    $useDefault,
-                    date('Y-m-d H:i:s'),
-                );
+                $this->apps->setDefaultRoute($app, $useDefault, date('Y-m-d H:i:s'));
             }
             $this->audit->record($actor, 'application.routing', 'payment_app', $id, 'updated', [
                 'use_default_route' => $useDefault,

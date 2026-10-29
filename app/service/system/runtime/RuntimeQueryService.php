@@ -13,8 +13,11 @@ use app\exception\BusinessException;
 use app\repository\system\RuntimeDiagnosticRepository;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use Composer\InstalledVersions;
+use PDOException;
 use think\Cache;
 use think\Config;
+use think\db\exception\DbException;
+use Throwable;
 
 /** 运行维护的白名单读视图，组合进程心跳、采集缓存摘要与通知计数；不触发采集、清理、迁移或平台登录。 */
 final class RuntimeQueryService extends BaseService
@@ -155,15 +158,25 @@ final class RuntimeQueryService extends BaseService
             $configurationIds,
         );
         $store = $this->cache->store('receipt');
-        $installed = array_fill_keys($this->plugins->codes(), true);
+        // 只读取当前行涉及的插件定义，不扫描目录，也不为能力展示另建执行实例。
         $collectors = [];
         $items = [];
         foreach ($rows as $row) {
             $code = $row['plugin_code'];
             if (!array_key_exists($code, $collectors)) {
-                $collectors[$code] =
-                    isset($installed[$code]) &&
-                    $this->plugins->make($code) instanceof ReceiptCollectorInterface;
+                try {
+                    $definition = $this->plugins->definition($code);
+                    $collectors[$code] = is_a(
+                        $definition->className,
+                        ReceiptCollectorInterface::class,
+                        true,
+                    );
+                } catch (DbException | PDOException $error) {
+                    throw $error;
+                } catch (Throwable) {
+                    // 单个插件缺失或加载失败只标记未知，不能阻断其他通道的运行诊断。
+                    $collectors[$code] = null;
+                }
             }
             $state = $store->get('collection.summary.' . $row['id'], []);
             if (
@@ -177,7 +190,7 @@ final class RuntimeQueryService extends BaseService
             if (!isset(self::STATUSES[$status])) {
                 $status = 'unknown';
             }
-            if (!isset($installed[$code])) {
+            if ($collectors[$code] === null) {
                 $status = 'unknown';
             } elseif (!$collectors[$code]) {
                 $status = ReceiptRuntimeConstant::PUSH;
@@ -225,13 +238,16 @@ final class RuntimeQueryService extends BaseService
                 'configuration_version' => (int) $row['config_version'],
                 'status' => $status,
                 'status_label' => $label,
-                'collector' => $collectors[$code],
+                'collector' => $collectors[$code] === true,
                 'last_error' => $diagnostic,
                 'recovered_at' => $state['recovered_at'] ?? null,
                 'pending_count' => $count,
-                'reason_label' => isset($state['reason_code'])
-                    ? self::REASONS[$state['reason_code']] ?? '请核对技术日志'
-                    : null,
+                'reason_label' =>
+                    $collectors[$code] === null
+                        ? '插件缺失或无法加载，请刷新插件目录检查'
+                        : (isset($state['reason_code'])
+                            ? self::REASONS[$state['reason_code']] ?? '请核对技术日志'
+                            : null),
                 'last_success_at' => $state['last_success_at'] ?? null,
                 'last_verified_at' => $state['last_verified_at'] ?? null,
                 'last_duration_ms' => $state['last_duration_ms'] ?? null,

@@ -134,8 +134,8 @@ final class PaymentConfigurationQueryService extends BaseService
                 throw new RuntimeException('通道必须有一个明确支付方式');
             }
             // 详情只读取展示和编辑需要的数据；快照/范围一致性由保存及支付执行入口核对。
-            $plugin = $this->plugins->make($configuration['plugin_code']);
-            $polling = $plugin instanceof ReceiptCollectorInterface;
+            $definition = $this->plugins->definition($configuration['plugin_code']);
+            $polling = is_a($definition->className, ReceiptCollectorInterface::class, true);
             return [
                 'id' => $id,
                 'plugin_code' => $channel['plugin_code'],

@@ -51,6 +51,26 @@ final class PaymentPollGroupRepository extends BaseRepository
         return $query->select()->all();
     }
 
+    /** @return array<string,list<PaymentPollGroupChannel>> 列表一次读取关联成员；不替代正式选路或编辑的持锁读取。 */
+    public function membersForGroups(array $ids): array
+    {
+        if ($ids === []) {
+            return [];
+        }
+        $result = [];
+        foreach (
+            $this->members
+                ->whereIn('poll_group_id', array_values(array_unique($ids)))
+                ->field('poll_group_id,channel_id,sort_no,weight,is_default,status')
+                ->order('poll_group_id,sort_no,id')
+                ->select()
+            as $member
+        ) {
+            $result[$member['poll_group_id']][] = $member;
+        }
+        return $result;
+    }
+
     /** @return list<PaymentPollGroupBind> */
     public function bindings(?string $appId = null): array
     {

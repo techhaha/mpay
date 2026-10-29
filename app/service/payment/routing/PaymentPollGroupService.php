@@ -30,10 +30,15 @@ final class PaymentPollGroupService extends BaseService
     public function listing(): array
     {
         return $this->transaction(function (): array {
+            $groups = $this->groups->all();
+            $groupMembers = $this->groups->membersForGroups(
+                array_map(static fn($group): string => $group['id'], $groups),
+            );
+            $defaultGroupIds = $this->catalog->defaultGroupIds();
             $items = [];
-            foreach ($this->groups->all() as $group) {
+            foreach ($groups as $group) {
                 $members = [];
-                foreach ($this->groups->members($group['id']) as $member) {
+                foreach ($groupMembers[$group['id']] ?? [] as $member) {
                     $members[] = [
                         'channel_id' => $member['channel_id'],
                         'sort_no' => (int) $member['sort_no'],
@@ -46,7 +51,7 @@ final class PaymentPollGroupService extends BaseService
                     'id' => $group['id'],
                     'name' => $group['name'],
                     'pay_type_id' => $group['pay_type_id'],
-                    'is_default' => in_array($group['id'], $this->catalog->defaultGroupIds(), true),
+                    'is_default' => in_array($group['id'], $defaultGroupIds, true),
                     'route_mode' => $group['route_mode'],
                     'enabled' => (int) $group['status'] === 1,
                     'revision' => (int) $group['revision'],

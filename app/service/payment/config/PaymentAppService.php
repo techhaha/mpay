@@ -13,6 +13,7 @@ use app\model\payment\PaymentApp;
 use app\repository\payment\config\PaymentAppRepository;
 use app\service\payment\epay\EpayV1Signer;
 use app\service\system\access\AdminAuthService;
+use RuntimeException;
 
 /** 应用管理用例；写操作与审计共用事务，秘密展示/重置先复核密码，常规列表不携带 KEY。 */
 final class PaymentAppService extends BaseService
@@ -30,8 +31,11 @@ final class PaymentAppService extends BaseService
     public function listing(): array
     {
         return $this->transaction(function (): array {
-            return array_map(function (PaymentApp $app): array {
-                $key = $this->credentials->active($app);
+            return array_map(static function (PaymentApp $app): array {
+                $version = $app['key_version'];
+                if ($app['active_key_id'] !== null && $version === null) {
+                    throw new RuntimeException('应用活动凭证缺失');
+                }
                 return [
                     'id' => $app['id'],
                     'pid' => $app['pid'],
@@ -41,10 +45,10 @@ final class PaymentAppService extends BaseService
                     'revision' => (int) $app['revision'],
                     'allowed_hosts' => $app['allowed_hosts'],
                     'active_key_id' => $app['active_key_id'],
-                    'key_version' => $key === null ? null : (int) $key['version'],
+                    'key_version' => $version === null ? null : (int) $version,
                     'created_at' => $app['created_at'],
                 ];
-            }, $this->apps->all());
+            }, $this->apps->withKeyVersions());
         });
     }
 

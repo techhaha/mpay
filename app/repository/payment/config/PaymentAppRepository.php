@@ -41,6 +41,18 @@ final class PaymentAppRepository extends BaseRepository
         return $this->model->order('id', 'desc')->select()->all();
     }
 
+    /** @return list<PaymentApp> 管理列表一次取得活动版本号，不读取 KEY 或指纹；关联同时限定应用归属。 */
+    public function withKeyVersions(): array
+    {
+        return $this->model
+            ->alias('a')
+            ->leftJoin('ma_payment_app_key k', 'k.id=a.active_key_id AND k.app_id=a.id')
+            ->field('a.*,k.version AS key_version')
+            ->order('a.id', 'desc')
+            ->select()
+            ->all();
+    }
+
     /** @param list<string> $hosts 已由服务规范化的目标域名，不包含 URL 或端口。 */
     public function create(string $pid, string $name, array $hosts): string
     {

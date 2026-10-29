@@ -28,8 +28,8 @@ final class ReceiptFlowRepository extends BaseRepository
 
     /**
      * 本批先查询已有消费，避免成功订单不在待付集合后，旧流水被匹配到另一订单。
-     * 此读取仅供插件排除，最终确认仍由唯一键和锁内复核保证。
-     * @return list<ReceiptFlow>
+     * 本预查仅取身份字段供插件排除，最终确认仍由唯一键和锁内复核保证。
+     * @return list<ReceiptFlow> 仅含 event_key、platform_trade_no、pay_no，不用于交易写入。
      */
     public function consumed(string $plugin, array $events, array $trades): array
     {
@@ -44,6 +44,7 @@ final class ReceiptFlowRepository extends BaseRepository
                     $query->whereOr('platform_trade_no', 'in', $trades);
                 }
             })
+            ->field('event_key,platform_trade_no,pay_no')
             ->select()
             ->all();
     }

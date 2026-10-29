@@ -93,9 +93,15 @@ final class PayOrderCallbackService extends BaseService
                     throw new BusinessException('来源支付单不存在', ApiResponseConstant::NOT_FOUND)
                 : null;
             $channelId = $pay === null ? $identifier : $pay['channel_id'];
+            // 支付号回调使用原单冻结配置，只有通道 ID 入口读取当前通道。
             $channel =
-                $this->channels->find($channelId) ??
-                throw new BusinessException('来源通道不存在', ApiResponseConstant::NOT_FOUND);
+                $pay === null
+                    ? $this->channels->find($channelId) ??
+                        throw new BusinessException(
+                            '来源通道不存在',
+                            ApiResponseConstant::NOT_FOUND,
+                        )
+                    : null;
             $notification['channel_id'] = $channelId;
             $notification['plugin_code'] =
                 $pay === null ? $channel['plugin_code'] : $pay['plugin_code'];
@@ -190,6 +196,9 @@ final class PayOrderCallbackService extends BaseService
         try {
             if (!array_is_list($records) || count($records) > 200) {
                 throw new UnexpectedValueException('采集批次数量无效');
+            }
+            if ($records === []) {
+                return 0;
             }
             $evidence = [];
             $trades = [];

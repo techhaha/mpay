@@ -45,7 +45,7 @@ final class IcbcReceiptPayment extends BasePayment implements PaymentInterface
                 'validate' => [
                     0 => 'require',
                     1 => 'string',
-                    'regex' => '/^[^\x00-\x1f\x7f]{1,100}$/uD',
+                    'regex' => '/^(?![ ]*$)[^\x00-\x1f\x7f]{1,100}$/uD',
                 ],
                 'help' => '收银台向付款人展示的收款户名，请与银行卡实际开户信息一致。',
             ],
@@ -111,9 +111,6 @@ final class IcbcReceiptPayment extends BasePayment implements PaymentInterface
     {
         $accountName = trim($this->getConfig('account_name'));
         $cardNumber = $this->configuredCardNumber();
-        if ($accountName === '' || mb_strlen($accountName) > 100) {
-            throw new BusinessException('收款户名配置无效', ApiResponseConstant::VALIDATION_FAILED);
-        }
         $this->prepareReceipt($order['pay_no'], $order['channel_id']);
         return [
             'status' => 'pending',

@@ -27,12 +27,12 @@ final class PaymentChannelRepository extends BaseRepository
         parent::__construct($model);
     }
 
-    /** @return list<PaymentChannel> 仅新增保活来源，存量订单由独立订单查询装配，不依赖当前开关。 */
+    /** @return list<PaymentChannel> 只取 id/current_revision_id 装配保活版本；不用于交易写入或存量订单筛选。 */
     public function preloginChannels(string $plugin): array
     {
         return $this->preloginQuery()
             ->where('ch.plugin_code', $plugin)
-            ->field('ch.*')
+            ->field('ch.id,ch.current_revision_id')
             ->order('ch.id')
             ->select()
             ->all();

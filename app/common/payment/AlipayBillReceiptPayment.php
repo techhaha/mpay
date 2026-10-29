@@ -102,7 +102,7 @@ final class AlipayBillReceiptPayment extends BasePayment implements ReceiptColle
                 'type' => 'input',
                 'field' => 'bill_user_id',
                 'title' => '账单用户 ID',
-                'validate' => [0 => 'require', 1 => 'string', 'length' => [16, 32]],
+                'validate' => [0 => 'require', 1 => 'string', 'regex' => '/^[0-9]{16,32}$/D'],
             ],
             [
                 'type' => 'textarea',
@@ -180,12 +180,6 @@ final class AlipayBillReceiptPayment extends BasePayment implements ReceiptColle
     private function transferParams(int $cents, string $remark): array
     {
         $user = (string) $this->getConfig('bill_user_id');
-        if (!preg_match('/^[0-9]{16,32}$/D', $user)) {
-            throw new BusinessException(
-                '自动备注付款需要有效的支付宝用户 ID',
-                ApiResponseConstant::VALIDATION_FAILED,
-            );
-        }
         $amount = Money::format($cents);
         $qr =
             'alipays://platformapi/startapp?' .

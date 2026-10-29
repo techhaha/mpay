@@ -67,7 +67,7 @@ final class ReceiptWatcherService
             ->now()
             ->modify('-' . (int) $this->config->get('receipt.late_check_seconds', 300) . ' seconds')
             ->format('Y-m-d H:i:s');
-        // 只处理原单和启用通道涉及的插件；实例化留在下方逐插件异常隔离内。
+        // 只处理原单和启用通道涉及的插件；接口判断和执行实例创建留在逐插件异常隔离内。
         $codes = array_values(
             array_unique([
                 ...$this->orders->collectionPlugins($since, $upper),
@@ -96,10 +96,12 @@ final class ReceiptWatcherService
                     $heartbeat();
                 }
                 try {
-                    $plugin = $this->plugins->make($code);
-                    if (!($plugin instanceof ReceiptCollectorInterface)) {
+                    $definition = $this->plugins->definition($code);
+                    if (!is_a($definition->className, ReceiptCollectorInterface::class, true)) {
                         continue;
                     }
+                    /** @var ReceiptCollectorInterface $plugin */
+                    $plugin = $this->plugins->make($code);
                     $prelogin = $plugin->isPreloginEnabled();
                     $next = $code;
                     // 保活需要没有待付订单的启用通道；未声明时只读取原单依赖的版本。

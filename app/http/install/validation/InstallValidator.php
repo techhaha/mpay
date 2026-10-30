@@ -39,15 +39,33 @@ final class InstallValidator extends Validate
         return $input;
     }
 
-    /** @return array{database:array,administrator:array} 嵌套 JSON 必须为对象，不接受列表或额外安装开关。 */
+    /** @return array{database:array,administrator:array,overwrite:bool} 覆盖确认必须与本次目标库名完全相同。 */
     public function installation(array $input): array
     {
         if (
-            count($input) !== 2 ||
+            count($input) !== 4 ||
+            array_diff(array_keys($input), [
+                'database',
+                'administrator',
+                'overwrite',
+                'confirmation',
+            ]) !== [] ||
             !(($input['database'] ?? null) instanceof stdClass) ||
-            !(($input['administrator'] ?? null) instanceof stdClass)
+            !(($input['administrator'] ?? null) instanceof stdClass) ||
+            !is_bool($input['overwrite'] ?? null) ||
+            !is_string($input['confirmation'] ?? null)
         ) {
             $this->invalid();
+        }
+        $database = $this->database(get_object_vars($input['database']));
+        if (
+            ($input['overwrite'] && !hash_equals($database['name'], $input['confirmation'])) ||
+            (!$input['overwrite'] && $input['confirmation'] !== '')
+        ) {
+            throw new BusinessException(
+                '请输入完整数据库名，确认覆盖并重新安装',
+                ApiResponseConstant::VALIDATION_FAILED,
+            );
         }
         $administrator = get_object_vars($input['administrator']);
         if (
@@ -61,8 +79,9 @@ final class InstallValidator extends Validate
         }
         $administrator['app_name'] = '默认应用';
         return [
-            'database' => $this->database(get_object_vars($input['database'])),
+            'database' => $database,
             'administrator' => (new InitializationValidator())->validateInput($administrator),
+            'overwrite' => $input['overwrite'],
         ];
     }
 

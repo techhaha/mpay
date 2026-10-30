@@ -20,20 +20,22 @@
         <div class="install-actions"><button type="button" id="install-recheck" class="layui-btn layui-btn-primary">重新检查</button><button type="button" id="install-next" class="layui-btn" disabled>下一步</button></div>
     </section>
     <form data-step="1" id="install-database" class="layui-form" lay-filter="install-database" hidden>
-        <h2 tabindex="-1">连接数据库</h2><p class="mpay-help">请填写已创建的空数据库信息，支持 MySQL 5.7.9 及以上版本。</p>
+        <h2 tabindex="-1">连接数据库</h2><p class="mpay-help">请填写 MPAY 专用数据库信息，支持 MySQL 5.7.9 及以上版本。</p>
         <fieldset>
             <div class="mpay-form-grid install-database-grid">
                 <div class="mpay-field is-required"><label for="install-host">数据库地址</label><input id="install-host" class="layui-input" name="host" value="127.0.0.1" maxlength="253" autocomplete="off" placeholder="服务器 IP 或主机名" required></div>
                 <div class="mpay-field is-required"><label for="install-port">端口</label><input id="install-port" class="layui-input" name="port" type="number" value="3306" min="1" max="65535" step="1" required></div>
-                <div class="mpay-field is-required full"><label for="install-name">数据库名</label><input id="install-name" class="layui-input" name="name" maxlength="64" pattern="[A-Za-z0-9_-]+" autocomplete="off" required aria-describedby="install-name-help"><p class="mpay-hint" id="install-name-help">使用专为 MPAY 创建的空数据库，安装时将建立所需数据表。</p></div>
+                <div class="mpay-field is-required full"><label for="install-name">数据库名</label><input id="install-name" class="layui-input" name="name" maxlength="64" pattern="[A-Za-z0-9_-]+" autocomplete="off" required aria-describedby="install-name-help"><p class="mpay-hint" id="install-name-help">空库直接安装；已有 MPAY 数据时，可明确选择覆盖并重新安装。</p></div>
                 <div class="mpay-field is-required"><label for="install-user">数据库用户名</label><input id="install-user" class="layui-input" name="user" maxlength="128" autocomplete="off" required></div>
                 <div class="mpay-field"><label for="install-pass">数据库密码</label><div class="layui-input-wrap"><input id="install-pass" class="layui-input" name="pass" type="password" lay-affix="eye" maxlength="1024" autocomplete="off"></div></div>
             </div>
+            <div id="install-overwrite-choice" hidden><p class="mpay-help">覆盖安装会删除原管理员、应用、通道配置、订单及通知记录。请先备份数据，停止业务访问和两个后台任务。</p><input type="checkbox" id="install-overwrite" lay-skin="primary" title="覆盖并重新安装（删除原有 MPAY 数据）"></div>
             <div class="install-actions"><button type="button" class="layui-btn layui-btn-primary" data-back="0">上一步</button><button type="submit" class="layui-btn">检查连接并继续</button></div>
         </fieldset>
     </form>
     <form data-step="2" id="install-administrator" class="layui-form" lay-filter="install-administrator" hidden>
         <h2 tabindex="-1">设置管理员</h2><p class="mpay-help">安装后将自动创建默认应用与收款路由。</p>
+        <p id="install-overwrite-summary" class="mpay-help" hidden></p>
         <fieldset>
             <div class="mpay-form-grid">
                 <div class="mpay-field is-required full"><label for="install-username">管理员账号</label><input id="install-username" class="layui-input" name="username" maxlength="64" autocomplete="username" required></div>
@@ -41,7 +43,7 @@
                 <div class="mpay-field is-required"><label for="install-confirmation">确认密码</label><div class="layui-input-wrap"><input id="install-confirmation" class="layui-input" name="password_confirmation" type="password" lay-affix="eye" minlength="12" maxlength="72" autocomplete="new-password" required></div></div>
             </div>
             <p class="mpay-help">安装完成后，可在后台“应用管理”中查看 PID 和 KEY，并配置收款通道。</p>
-            <div class="install-actions"><button type="button" class="layui-btn layui-btn-primary" data-back="1">上一步</button><button type="submit" class="layui-btn">立即安装</button></div>
+            <div class="install-actions"><button type="button" class="layui-btn layui-btn-primary" data-back="1">上一步</button><button type="submit" class="layui-btn" id="install-submit">立即安装</button></div>
         </fieldset>
     </form>
     <section data-step="3" class="install-complete" hidden>
@@ -53,4 +55,4 @@
     <noscript><p class="install-feedback">请启用 JavaScript 后完成安装。</p></noscript>
 </section>
 {/block}
-{block name="scripts"}<script src="/assets/js/install.js?v=20261028frontend"></script>{/block}
+{block name="scripts"}<script src="/assets/js/install.js?v=20261030reinstall"></script>{/block}

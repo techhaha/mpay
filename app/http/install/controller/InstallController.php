@@ -10,6 +10,7 @@ use app\http\install\validation\InstallValidator;
 use app\service\system\access\AdminSessionService;
 use app\service\system\install\WebInstallService;
 use think\Response;
+use think\Session;
 
 /** 安装页面及同源 JSON 入口；模板不接收数据库密码，核心建表/初始化交给服务。 */
 final class InstallController extends BaseController
@@ -32,13 +33,21 @@ final class InstallController extends BaseController
         return $this->success($service->check($validator->database($this->body())));
     }
 
-    public function install(InstallValidator $validator, WebInstallService $service): Response
-    {
+    public function install(
+        InstallValidator $validator,
+        WebInstallService $service,
+        Session $session,
+    ): Response {
         // 浏览器超时只停止等待，不能回滚 MySQL DDL；重入由迁移账本与安装目标检查负责。
         if (function_exists('set_time_limit')) {
             @set_time_limit(120);
         }
-        return $this->success($service->install($validator->installation($this->body())));
+        $input = $validator->installation($this->body());
+        if ($input['overwrite']) {
+            // 文件会话清理后当前请求仍会保存内存数据；先移除管理员，保留安装表单的 CSRF。
+            $session->delete('admin');
+        }
+        return $this->success($service->install($input));
     }
 
     /** @return array<string,mixed> 正文大小与同源/CSRF 已由路由中间件限制，嵌套对象留给验证器。 */

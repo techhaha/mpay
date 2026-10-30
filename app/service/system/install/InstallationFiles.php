@@ -6,6 +6,8 @@ namespace app\service\system\install;
 use app\common\constant\ApiResponseConstant;
 use app\common\util\PrivateFilePath;
 use app\exception\BusinessException;
+use LogicException;
+use RuntimeException;
 use think\App;
 
 /** 安装专用文件边界：串行锁、重入目标和环境文件；不执行数据库或业务初始化。 */
@@ -16,7 +18,7 @@ final class InstallationFiles
         private readonly PrivateFilePath $paths,
     ) {}
 
-    /** 安装锁保存在 private runtime；删除它仍不能绕过初始化服务的非空数据库检查。 */
+    /** 安装锁保存在 private runtime；解除锁后仍需显式确认覆盖，不能直接覆盖初始化。 */
     public function completed(): bool
     {
         return file_exists($this->app->getRuntimePath() . 'install.lock');
@@ -39,7 +41,7 @@ final class InstallationFiles
             umask($previousMask);
         }
         if ($stream === false) {
-            throw new \RuntimeException('安装锁文件无法打开');
+            throw new RuntimeException('安装锁文件无法打开');
         }
         try {
             if (!flock($stream, LOCK_EX | LOCK_NB)) {
@@ -55,10 +57,11 @@ final class InstallationFiles
     }
 
     /**
-     * 首次 DDL 前固定数据库身份；失败后只能对同一个目标继续，密码不保存在进度文件中。
+     * 首次 DDL 前固定数据库及安装模式；失败后只能继续同一目标，密码不进入进度文件。
      * @param array{host:string,port:int,name:string,user:string,pass:string} $database
+     * @return string reset 表示尚未清理完毕；install 表示只准继续建表和初始化。
      */
-    public function begin(array $database): void
+    public function begin(array $database, bool $overwrite = false): string
     {
         $target = hash(
             'sha256',
@@ -68,29 +71,127 @@ final class InstallationFiles
             ),
         );
         $path = $this->path('install-pending.json');
-        if (is_file($path)) {
-            $pending = json_decode((string) file_get_contents($path), true, 8, JSON_THROW_ON_ERROR);
-            if (
-                !is_array($pending) ||
-                !is_string($pending['target'] ?? null) ||
-                !hash_equals($pending['target'], $target)
-            ) {
+        $pending = $this->progress();
+        if ($pending !== null) {
+            if (!hash_equals($pending['target'], $target)) {
                 throw new BusinessException(
                     '已有未完成的安装，请使用原数据库继续',
                     ApiResponseConstant::CONFLICT,
                 );
             }
-            return;
+            if ($pending['overwrite'] !== $overwrite) {
+                throw new BusinessException(
+                    '已有未完成的安装，请使用原安装方式继续',
+                    ApiResponseConstant::CONFLICT,
+                );
+            }
+            return $pending['stage'];
         }
+        $stage = $overwrite ? 'reset' : 'install';
         $this->write(
             $path,
-            json_encode(['target' => $target, 'started_at' => gmdate('c')], JSON_THROW_ON_ERROR),
+            json_encode(
+                [
+                    'target' => $target,
+                    'started_at' => gmdate('c'),
+                    'overwrite' => $overwrite,
+                    'stage' => $stage,
+                ],
+                JSON_THROW_ON_ERROR,
+            ),
         );
+        return $stage;
     }
 
     public function pending(): bool
     {
         return is_file($this->app->getRuntimePath() . 'install-pending.json');
+    }
+
+    /** @return array{target:string,started_at:string,overwrite:bool,stage:string}|null 不含数据库密码。 */
+    public function progress(): ?array
+    {
+        if (!$this->pending()) {
+            return null;
+        }
+        $value = json_decode(
+            (string) file_get_contents($this->path('install-pending.json')),
+            true,
+            8,
+            JSON_THROW_ON_ERROR,
+        );
+        if (
+            !is_array($value) ||
+            !is_string($value['target'] ?? null) ||
+            !preg_match('/^[a-f0-9]{64}$/D', $value['target']) ||
+            !is_string($value['started_at'] ?? null) ||
+            !is_bool($value['overwrite'] ?? null) ||
+            !in_array($value['stage'] ?? null, ['reset', 'install'], true) ||
+            ($value['stage'] === 'reset' && !$value['overwrite'])
+        ) {
+            throw new RuntimeException('安装进度文件无效，请核对原安装状态');
+        }
+        return $value;
+    }
+
+    /** 由持有安装文件锁的用例在清表全部完成后调用；此后重试不得再次清库。 */
+    public function finishReset(): void
+    {
+        $progress = $this->progress();
+        if ($progress === null || !$progress['overwrite'] || $progress['stage'] !== 'reset') {
+            throw new LogicException('覆盖安装尚未进入清理阶段');
+        }
+        $progress['stage'] = 'install';
+        $this->write(
+            $this->path('install-pending.json'),
+            json_encode($progress, JSON_THROW_ON_ERROR),
+        );
+    }
+
+    /** 仅重装期间暂停新业务请求；安装完成后不再读取进度正文。 */
+    public function reinstalling(): bool
+    {
+        return !$this->completed() && ($this->progress()['overwrite'] ?? false);
+    }
+
+    /**
+     * 清除本站固定文件会话，不递归删除运行目录。安装控制器同时移除当前内存中的旧管理员身份。
+     * 使用其他会话驱动或外部目录时先停止，不能清错其他站点的登录态。
+     */
+    public function clearSessions(): void
+    {
+        $session = $this->app->config->get('session');
+        $root = $this->app->getRuntimePath() . 'session';
+        $prefix = $session['prefix'] ?? '';
+        if (
+            ($session['type'] ?? '') !== 'file' ||
+            !empty($session['path']) ||
+            !is_string($prefix) ||
+            !preg_match('/^[A-Za-z0-9_-]*$/D', $prefix) ||
+            is_link(rtrim($this->app->getRuntimePath(), '/\\')) ||
+            is_link($root)
+        ) {
+            throw new RuntimeException('覆盖安装需要本站默认文件会话目录');
+        }
+        $directory = $root . ($prefix === '' ? '' : DIRECTORY_SEPARATOR . $prefix);
+        if (is_link($directory)) {
+            throw new RuntimeException('会话目录不能是链接');
+        }
+        if (
+            file_exists($directory) &&
+            (!is_dir($directory) || !is_readable($directory) || !is_writable($directory))
+        ) {
+            throw new RuntimeException('本站会话目录不可读写，无法清理旧后台会话');
+        }
+        $files = glob($directory . DIRECTORY_SEPARATOR . 'sess_*');
+        if ($files === false) {
+            throw new RuntimeException('无法读取本站会话目录');
+        }
+        foreach ($files as $file) {
+            if (is_link($file) || !is_file($file) || !unlink($this->paths->existing($file))) {
+                throw new RuntimeException('旧后台会话未清理完成');
+            }
+        }
     }
 
     /** 数据初始化提交后才封闭入口；如果响应丢失，后续访问只进入登录，不重新初始化。 */
@@ -101,6 +202,9 @@ final class InstallationFiles
             $this->path('install.lock'),
             json_encode(['installed_at' => gmdate('c')], JSON_THROW_ON_ERROR),
         );
+        if ($this->pending() && !unlink($this->path('install-pending.json'))) {
+            throw new RuntimeException('安装已完成，进度文件清理失败');
+        }
     }
 
     /**
@@ -112,11 +216,11 @@ final class InstallationFiles
     {
         $path = $this->app->getRootPath() . '.env';
         if (is_link($path)) {
-            throw new \RuntimeException('安装不能替换链接形式的环境文件');
+            throw new RuntimeException('安装不能替换链接形式的环境文件');
         }
         $before = is_file($path) ? file_get_contents($this->paths->existing($path)) : '';
         if (!is_string($before)) {
-            throw new \RuntimeException('环境文件不可读取');
+            throw new RuntimeException('环境文件不可读取');
         }
         $lines = [];
         $root = true;
@@ -136,7 +240,7 @@ final class InstallationFiles
         $prefix = "; MPAY 网页安装配置；其他部署设置保留在下方。\n";
         foreach ($values as $key => $value) {
             if (!preg_match('/^[A-Z][A-Z0-9_]+$/D', $key) || strpbrk($value, "\r\n\0") !== false) {
-                throw new \LogicException('安装环境字段无效');
+                throw new LogicException('安装环境字段无效');
             }
             // INI_SCANNER_RAW 保留反斜杠及内部引号；不得再用 PHP/JSON 的反斜杠转义。
             $prefix .= $key . ' = "' . $value . '"' . "\n";
@@ -165,10 +269,10 @@ final class InstallationFiles
     private function directory(string $path): void
     {
         if (is_link(rtrim($path, '/\\'))) {
-            throw new \RuntimeException('安装私有目录不能是链接');
+            throw new RuntimeException('安装私有目录不能是链接');
         }
         if (!is_dir($path) && !mkdir($path, 0700, true) && !is_dir($path)) {
-            throw new \RuntimeException('无法创建安装私有目录');
+            throw new RuntimeException('无法创建安装私有目录');
         }
     }
 
@@ -176,7 +280,7 @@ final class InstallationFiles
     {
         $path = $this->app->getRuntimePath() . $name;
         if (is_link($path)) {
-            throw new \RuntimeException('安装状态文件不能是链接');
+            throw new RuntimeException('安装状态文件不能是链接');
         }
         return is_file($path) ? $this->paths->existing($path) : $this->paths->forCreation($path);
     }
@@ -185,7 +289,7 @@ final class InstallationFiles
     private function write(string $path, string $body): void
     {
         if (is_link($path)) {
-            throw new \RuntimeException('安装文件不能是链接');
+            throw new RuntimeException('安装文件不能是链接');
         }
         $temporary = $this->paths->forCreation($path . '.' . bin2hex(random_bytes(8)) . '.tmp');
         $mask = umask(0077);
@@ -195,18 +299,18 @@ final class InstallationFiles
             umask($mask);
         }
         if ($stream === false) {
-            throw new \RuntimeException('安装文件无法写入');
+            throw new RuntimeException('安装文件无法写入');
         }
         try {
             try {
                 if (fwrite($stream, $body) !== strlen($body) || !fflush($stream)) {
-                    throw new \RuntimeException('安装文件未完整写入');
+                    throw new RuntimeException('安装文件未完整写入');
                 }
             } finally {
                 fclose($stream);
             }
             if (!rename($temporary, $path)) {
-                throw new \RuntimeException('安装文件未完成保存');
+                throw new RuntimeException('安装文件未完成保存');
             }
         } finally {
             if (is_file($temporary)) {

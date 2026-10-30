@@ -14,7 +14,7 @@ use RuntimeException;
  * 执行新装基线中的最终建表定义，保存 pending/complete 并支持中断续跑。
  *
  * 数据库负责执行字段、索引和外键定义；本服务核对步骤摘要、表归属、基本表类型。
- * 只用于空库新装与同一基线续装，不接管历史开发库，也不执行自动修表或回滚。
+ * 普通安装只接受空库或同一基线续装；覆盖安装先显式清理固定表集合，不修补旧结构。
  */
 final class MigrationService
 {
@@ -184,6 +184,64 @@ final class MigrationService
         );
     }
 
+    /**
+     * 覆盖安装先核对固定表名和普通表类型，不读取旧账本或核对旧 SQL 摘要。
+     *
+     * @return array{empty:bool,mpay_only:bool} 陌生表或同名视图均不能由覆盖安装删除。
+     */
+    public function installationTarget(string $directory): array
+    {
+        $allowed = [...$this->managedTables($directory), '_mpay_migration_step'];
+        return $this->locked(function () use ($allowed): array {
+            $tables = $this->tables();
+            return [
+                'empty' => $tables === [],
+                'mpay_only' =>
+                    array_diff(array_keys($tables), $allowed) === [] &&
+                    array_filter(
+                        $tables,
+                        static fn(array $table): bool => $table['TABLE_TYPE'] !== 'BASE TABLE',
+                    ) === [],
+            ];
+        }, 0);
+    }
+
+    /**
+     * 仅由已确认的网页覆盖安装调用；清除当前基线声明的表及账本，不删除数据库。
+     * DDL 不能回滚，失败保留剩余表；调用方只在全部清理成功后推进本地安装阶段。
+     * @internal 确认与进度所有权属于 WebInstallService，不作为普通迁移命令的重置选项。
+     */
+    public function reset(string $directory): void
+    {
+        $steps = $this->loadPlan($directory);
+        $this->locked(function () use ($steps, $directory): void {
+            if (!$this->installationTarget($directory)['mpay_only']) {
+                throw new RuntimeException('数据库含其他程序的数据表或视图，拒绝覆盖安装');
+            }
+            // 先解析当前建表 SQL；即使旧表仍存在，也不能为无效的新定义先删除数据。
+            $this->checkSyntax($steps, []);
+            $external = $this->pdo->query(
+                'SELECT 1 FROM information_schema.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_SCHEMA=DATABASE() AND TABLE_SCHEMA<>DATABASE() LIMIT 1',
+            );
+            if ($external->fetchColumn() !== false) {
+                throw new RuntimeException('其他数据库存在引用本库的外键，拒绝覆盖安装');
+            }
+            $foreignKeys = (int) $this->pdo
+                ->query('SELECT @@SESSION.FOREIGN_KEY_CHECKS')
+                ->fetchColumn();
+            try {
+                $this->pdo->exec('SET SESSION FOREIGN_KEY_CHECKS=0');
+                foreach (array_reverse($steps) as $step) {
+                    // 名称只来自 MigrationStep 校验过的程序内定义，不接受请求提供的表名。
+                    $this->pdo->exec('DROP TABLE IF EXISTS `' . $step->table . '`');
+                }
+                $this->pdo->exec('DROP TABLE IF EXISTS `_mpay_migration_step`');
+            } finally {
+                $this->pdo->exec('SET SESSION FOREIGN_KEY_CHECKS=' . $foreignKeys);
+            }
+        }, 10);
+    }
+
     /** 初始化和迁移共用连接级命名锁；重入时每次取得都对应一次释放。 */
     public static function databaseLockName(string $database): string
     {
@@ -273,14 +331,16 @@ final class MigrationService
             // 不同迁移链不能仅修改摘要冒充本版新装；明确区分版本不符与记录损坏。
             if (!isset($expected[$identity])) {
                 throw new RuntimeException(
-                    '数据库迁移记录不属于当前安装基线，请核对数据库与程序版本；禁止修改摘要或重新安装覆盖',
+                    '数据库迁移记录不属于当前安装基线，无法继续本次安装，请核对数据库与程序版本',
                 );
             }
             if (
                 !preg_match('/^[a-f0-9]{64}$/D', $record['checksum']) ||
                 !in_array($record['state'], ['pending', 'complete'], true)
             ) {
-                throw new RuntimeException('数据库迁移记录的摘要格式或进度状态无效，请核对原始记录');
+                throw new RuntimeException(
+                    '数据库迁移记录的摘要格式或进度状态无效，请核对原始记录',
+                );
             }
             $step = $expected[$identity];
             if (

@@ -1,5 +1,5 @@
 {
-  "format": 1,
+  "format": 2,
   "public_support": [
     "docs/wiki/V1-03-安装与环境要求.md",
     "docs/wiki/V1-18-部署与后台任务.md",
@@ -40,72 +40,92 @@
     {
       "code": "tianque_pretran_receipt",
       "files": [
-        "app/common/payment/TianquePretranReceiptPayment.php",
-        "app/common/sdk/tianquepretran/TianquePretranClient.php"
+        "app/common/payment/TianquePretranReceiptPayment.php"
       ],
       "requires": [
-        "public_support"
+        "public_support",
+        "native_sdk"
       ],
       "extensions": [
-        "openssl"
-      ]
+        "curl",
+        "openssl",
+        "typephp_mpay_premium"
+      ],
+      "private_sdk_source": "premium_sdk/src/tianque/Client.php",
+      "sdk_class": "mpay\\premium\\tianque\\Client"
     },
     {
       "code": "lakala_jfy_receipt",
       "files": [
-        "app/common/payment/LakalaJfyReceiptPayment.php",
-        "app/common/sdk/lakalajfy/LakalaJfyClient.php"
+        "app/common/payment/LakalaJfyReceiptPayment.php"
       ],
       "requires": [
         "public_support",
-        "crypto"
+        "crypto",
+        "native_sdk"
       ],
       "extensions": [
-        "openssl"
-      ]
+        "curl",
+        "openssl",
+        "typephp_mpay_premium"
+      ],
+      "private_sdk_source": "premium_sdk/src/lakala/Client.php",
+      "sdk_class": "mpay\\premium\\lakala\\Client"
     },
     {
       "code": "xingyifu_yhk_receipt",
       "files": [
-        "app/common/payment/XingyifuYhkReceiptPayment.php",
-        "app/common/sdk/xingyifuyhk/XingyifuYhkClient.php"
+        "app/common/payment/XingyifuYhkReceiptPayment.php"
       ],
       "requires": [
         "public_support",
-        "crypto"
+        "crypto",
+        "native_sdk"
       ],
       "extensions": [
+        "curl",
         "openssl",
+        "typephp_mpay_premium",
         "gmp"
-      ]
+      ],
+      "private_sdk_source": "premium_sdk/src/xingyifu/Client.php",
+      "sdk_class": "mpay\\premium\\xingyifu\\Client"
     },
     {
       "code": "fubei_cashier_receipt",
       "files": [
-        "app/common/payment/FubeiCashierReceiptPayment.php",
-        "app/common/sdk/fubeicashier/FubeiCashierClient.php"
+        "app/common/payment/FubeiCashierReceiptPayment.php"
       ],
       "requires": [
-        "public_support"
+        "public_support",
+        "native_sdk"
       ],
       "extensions": [
-        "openssl"
-      ]
+        "curl",
+        "openssl",
+        "typephp_mpay_premium"
+      ],
+      "private_sdk_source": "premium_sdk/src/fubei/Client.php",
+      "sdk_class": "mpay\\premium\\fubei\\Client"
     },
     {
       "code": "yeepay_boss_cashier_receipt",
       "files": [
-        "app/common/payment/YeepayBossCashierReceiptPayment.php",
-        "app/common/sdk/yeepaycashier/YeepayCashierClient.php"
+        "app/common/payment/YeepayBossCashierReceiptPayment.php"
       ],
       "requires": [
         "public_support",
-        "crypto"
+        "crypto",
+        "native_sdk"
       ],
       "extensions": [
+        "curl",
         "openssl",
+        "typephp_mpay_premium",
         "gmp"
-      ]
+      ],
+      "private_sdk_source": "premium_sdk/src/yeepay/Client.php",
+      "sdk_class": "mpay\\premium\\yeepay\\Client"
     }
   ],
   "presentation": {
@@ -117,5 +137,52 @@
     "base_support_required": true
   },
   "base_branch": "v1",
-  "installation": "Install only plugins[].files; public_support and crypto are provided by the V1 base."
+  "installation": "Install the selected plugins[].files plus the shared native_sdk target package. Never distribute premium_sdk/src, build output sources, test fixtures or original platform PHP SDKs. Public_support and crypto remain supplied by the V1 base.",
+  "private_history_paths": [
+    "app/common/payment/TianquePretranReceiptPayment.php",
+    "app/common/sdk/tianquepretran/TianquePretranClient.php",
+    "app/common/payment/LakalaJfyReceiptPayment.php",
+    "app/common/sdk/lakalajfy/LakalaJfyClient.php",
+    "app/common/payment/XingyifuYhkReceiptPayment.php",
+    "app/common/sdk/xingyifuyhk/XingyifuYhkClient.php",
+    "app/common/payment/FubeiCashierReceiptPayment.php",
+    "app/common/sdk/fubeicashier/FubeiCashierClient.php",
+    "app/common/payment/YeepayBossCashierReceiptPayment.php",
+    "app/common/sdk/yeepaycashier/YeepayCashierClient.php"
+  ],
+  "private_roots": [
+    "premium_sdk/",
+    "premium-sdk/"
+  ],
+  "native_sdk": {
+    "module": "typephp_mpay_premium",
+    "file": "mpay_premium.so",
+    "version": "1.2.0",
+    "api_version": 3,
+    "php_min": "8.4",
+    "validated_target": "php84_linux_x86_64_nts",
+    "zend_module_api": 20240924,
+    "shared_files": [
+      "mpay_premium.so",
+      "lib/libphpx.so",
+      "build_info.json",
+      "source_sha256.txt",
+      "SHA256SUMS",
+      "licenses/NOTICE.txt",
+      "licenses/phpx_apache_2_0.txt"
+    ],
+    "private_shared_sources": [
+      "premium_sdk/src/shared/LicenseVerifier.php",
+      "premium_sdk/src/shared/LicenseException.php"
+    ]
+  },
+  "development": {
+    "php_min": "8.4",
+    "composer_file": "composer.json",
+    "psr4": {
+      "mpay\\premium\\": "premium_sdk/src/"
+    },
+    "autoload_command": "composer dump-autoload --no-scripts --no-plugins",
+    "customer_distribution": false
+  }
 }

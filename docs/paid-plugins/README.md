@@ -93,7 +93,7 @@ SDK 直接使用 $meta，不从 order.extra.dynamic_receipt 读取进度；调�
 
 当前 API 3 的参数分离仅做语法与静态检查，没有重新编译或运行上述隔离场景；历史验证不代表当前二进制已生成。固定 mpay_typephp 容器保留，只在明确需要新版扩展时构建。此前 API 1/2 产物不与当前入口混用。
 
-公共文档在 v1 工作树待提交；私有实现留在插件工作树，未提交/推送，也未部署测试站。公共文档提交后再单向合入私有分支，不能用复制公共工作区代替已提交同步。
+公共文档先在 v1 提交，再单向合入本地插件分支；具体提交、部署及验收结果记录在本地维护资料，不以本页用法说明代替服务器实际状态。不能用复制公共工作区代替已提交同步。
 
 ## 源码开发与 IDE
 
@@ -109,6 +109,8 @@ SDK 直接使用 $meta，不从 order.extra.dynamic_receipt 读取进度；调�
 ```
 
 在本地插件工作树准备好项目原有 vendor 后执行 `composer dump-autoload --no-scripts --no-plugins`。ThinkPHP 原有 vendor/autoload.php 即可按映射加载 SDK；无需额外 require、auto_prepend_file 或模式开关。IDE 使用同一根 Composer 声明和工作树源码进行补全与跳转。
+
+若服务器的 CLI 配置阻止 Composer 执行，先保持网站安全设置；可在可信环境按服务器实际生产依赖生成加载文件再部署。必须核对 lock、已安装依赖和 ClassLoader 一致，不能直接用包含额外开发依赖的加载文件覆盖生产环境。
 
 此映射只属于本地插件工作树的开发配置，不新增 require/suggest，不修改依赖版本或 composer.lock。合入公共 v1 时正常合并根 composer.json，保留这条本地映射，公共依赖跟随 v1；不把私有分支反向合入公共版。正式客户使用扩展，不交付 SDK 源码或覆盖客户根 Composer 文件。
 

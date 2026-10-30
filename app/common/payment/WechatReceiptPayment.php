@@ -465,7 +465,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             ) ||
             !is_string($content['msg'] ?? null) ||
             !preg_match(
-                '/(?:到账|收款|收款到账)\s*[¥￥]?\s*(\d+(?:\.\d{1,2})?)\s*(?:元)?/u',
+                '/(?:到账|收款|收款到账|付款)\s*[¥￥]?\s*(\d+(?:\.\d{1,2})?)\s*(?:元)?/u',
                 $content['msg'],
                 $amount,
             )

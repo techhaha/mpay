@@ -83,7 +83,7 @@ final class PaymentWatchCommand extends Command
                 if ($once) {
                     break;
                 }
-                $interval = (int) $this->app->config->get('receipt.scan_interval_seconds', 3);
+                $interval = (int) $this->app->config->get('receipt.scan_interval_seconds', 1);
                 for ($wait = 0; $wait < $interval && !$control->stopping(); $wait++) {
                     $heartbeat();
                     $control->idle();

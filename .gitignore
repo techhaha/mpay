@@ -35,3 +35,5 @@ package.json
 package-lock.json
 # 本地代理协作约定保留在工作区，不发布到远程仓库。
 AGENTS.md
+# 收费 SDK 源码及构建内容只在本地插件分支维护，不随公共版新增。
+/premium_sdk/

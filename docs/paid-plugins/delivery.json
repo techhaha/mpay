@@ -137,22 +137,17 @@
     "base_support_required": true
   },
   "base_branch": "v1",
-  "installation": "Install the selected plugins[].files plus the shared native_sdk target package. Never distribute premium_sdk/src, build output sources, test fixtures or original platform PHP SDKs. Public_support and crypto remain supplied by the V1 base.",
+  "installation": "V1 includes the public PHP entries in plugins[].files and the shared Composer mapping. Install the shared native_sdk target package and configure the license to use paid features. Never publish premium_sdk or distribute its source/build inputs. Public_support and crypto remain supplied by the V1 base.",
   "private_history_paths": [
-    "app/common/payment/TianquePretranReceiptPayment.php",
     "app/common/sdk/tianquepretran/TianquePretranClient.php",
-    "app/common/payment/LakalaJfyReceiptPayment.php",
     "app/common/sdk/lakalajfy/LakalaJfyClient.php",
-    "app/common/payment/XingyifuYhkReceiptPayment.php",
     "app/common/sdk/xingyifuyhk/XingyifuYhkClient.php",
-    "app/common/payment/FubeiCashierReceiptPayment.php",
     "app/common/sdk/fubeicashier/FubeiCashierClient.php",
-    "app/common/payment/YeepayBossCashierReceiptPayment.php",
-    "app/common/sdk/yeepaycashier/YeepayCashierClient.php"
+    "app/common/sdk/yeepaycashier/YeepayCashierClient.php",
+    "premium-sdk/"
   ],
   "private_roots": [
-    "premium_sdk/",
-    "premium-sdk/"
+    "premium_sdk/"
   ],
   "native_sdk": {
     "module": "typephp_mpay_premium",

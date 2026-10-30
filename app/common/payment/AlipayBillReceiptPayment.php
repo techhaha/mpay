@@ -59,6 +59,14 @@ final class AlipayBillReceiptPayment extends BasePayment implements ReceiptColle
             ],
             [
                 'type' => 'number',
+                'field' => 'receipt_watcher_query_interval_seconds',
+                'title' => '账号查询间隔（秒）',
+                'validate' => [0 => 'require', 'between' => [2, 300]],
+                'value' => 3,
+                'help' => '同账号正常查询结束后的等待时间；失败仍按插件退避，不影响付款有效期。',
+            ],
+            [
+                'type' => 'number',
                 'field' => 'amount_offset_max',
                 'title' => '金额偏移上限（分）',
                 'validate' => [0 => 'require', 'between' => [0, 99]],
@@ -625,7 +633,10 @@ final class AlipayBillReceiptPayment extends BasePayment implements ReceiptColle
                     $batch['records'] = $this->normalizeBill($data, ['from' => $from, 'to' => $to]);
                     $batch['limit_reached'] = $data['limit_reached'];
                     $state['failures'] = 0;
-                    $delay = (int) $this->config->get('receipt.query_interval_seconds', 3);
+                    $delay = max(
+                        2,
+                        (int) ($group['settings']['receipt_watcher_query_interval_seconds'] ?? 3),
+                    );
                 } catch (ReceiptCollectionException $error) {
                     $state['failures'] = min(10, (int) ($state['failures'] ?? 0) + 1);
                     $delay =

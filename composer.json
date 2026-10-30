@@ -44,7 +44,8 @@
     },
     "autoload": {
         "psr-4": {
-            "app\\": "app"
+            "app\\": "app/",
+            "mpay\\premium\\": "premium_sdk/src/"
         }
     },
     "config": {

@@ -59,6 +59,14 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
             ],
             [
                 'type' => 'number',
+                'field' => 'receipt_watcher_query_interval_seconds',
+                'title' => '账号查询间隔（秒）',
+                'validate' => [0 => 'require', 'between' => [2, 300]],
+                'value' => 3,
+                'help' => '同账号正常查询结束后的等待时间；失败仍按插件退避，不影响付款有效期。',
+            ],
+            [
+                'type' => 'number',
                 'field' => 'amount_offset_max',
                 'title' => '金额偏移上限（分）',
                 'validate' => [0 => 'require', 'between' => [0, 99]],
@@ -754,7 +762,7 @@ final class ShouQianBaReceiptPayment extends BasePayment implements ReceiptColle
         } finally {
             $state['next_query_at'] =
                 $this->clock->now()->getTimestamp() +
-                (int) $this->config->get('receipt.query_interval_seconds', 3);
+                max(2, (int) ($settings['receipt_watcher_query_interval_seconds'] ?? 3));
             // 最终查询时间、失败等待及范围变化仍逐次持久化，重启不会重置退避。
             if ($state !== $persisted) {
                 $store->set('shouqianba.account.' . $key, $state, 0);

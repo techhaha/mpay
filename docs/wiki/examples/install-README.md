@@ -11,6 +11,8 @@ MPAY 是基于 ThinkPHP 与 Layui 的收款管理程序，提供多应用 PID/KE
 - PHP 扩展：PDO MySQL、cURL、OpenSSL、mbstring、DOM、GD、fileinfo、BCMath、ctype、iconv；libcurl 7.59.0 及以上。
 - Nginx 或 Apache，支持 HTTP 或 HTTPS 站点。无需 Redis、消息队列或 Workerman。
 
+包内另含天阙、拉卡拉、星驿付、付呗和易宝五款免输入插件的 PHP 入口；使用其收费功能需要另装共享 MPAY Premium 扩展并填写授权码，基础包不附收费二进制。当前扩展 1.2.2 / SDK API 3 配套入口 1.3.0，原生包限定 Linux x86-64 / PHP 8.4 NTS，网站和原两个守护任务均需匹配。拉卡拉、星驿付、易宝另配图鉴，后两款还需 PHP GMP。安装、配置、升级与故障处理见[免输入插件完整教程](../V1-34-动态码收款插件.md)，启用插件不需要重新安装数据库。
+
 GMP 按插件需要启用，不影响基础版安装；需要的插件会在配置说明中提示，国密 SDK 已由 V1 基础版提供，不要求客户另外安装国密 Composer 包。Ubuntu/Debian 的宝塔安装 GMP 失败且提示缺少 GMP 库或头文件时，在宝塔左侧“终端”执行 `sudo apt-get install libgmp-dev`，再回 PHP 扩展页面重新安装 GMP。使用这类插件前，分别确认网站及监听 PHP 的扩展加载情况；调整后重启相应 PHP 服务和任务。
 
 ## 安装步骤

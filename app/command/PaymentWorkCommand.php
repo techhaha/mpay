@@ -94,9 +94,9 @@ final class PaymentWorkCommand extends Command
                     $nextRatePrune = $elapsed + 60;
                     try {
                         $this->app->make(RuntimePruneService::class)->pruneAccessCache(20);
-                    } catch (RateLimitStorageException) {
+                    } catch (RateLimitStorageException $error) {
                         // 入站保护存储故障不能终止既有商户通知，按维护周期汇总一次诊断。
-                        $this->app->make(SafeLogger::class)->rateStorageFailure();
+                        $this->app->make(SafeLogger::class)->rateStorageFailure($error);
                     }
                 }
                 // 仅通知暂时空闲时进行小批次文件保留清理；交易/流水/审计不在清理范围。

@@ -7,6 +7,7 @@ use app\common\constant\ApiResponseConstant;
 use app\exception\BusinessException;
 use app\exception\HttpRequestException;
 use app\exception\PaymentUncertainException;
+use app\exception\RateLimitStorageException;
 use app\exception\ReceiptCollectionException;
 use app\exception\ReceiptMessageException;
 use Error;
@@ -100,7 +101,7 @@ final class SafeLogger
      * 入站保护故障通过普通原生缓存约每分钟记录一次，允许并发汇总偏差。
      * runtime 同样不可写时不递归抛错，不能用诊断失败覆盖原拒绝响应或中断商户通知。
      */
-    public function rateStorageFailure(): void
+    public function rateStorageFailure(RateLimitStorageException $error): void
     {
         try {
             // access 可能位于故障的 tmpfs；诊断节流使用原有 runtime 文件缓存。
@@ -116,6 +117,8 @@ final class SafeLogger
                 ],
                 'error',
             );
+            // 沿用同一节流窗口，保留操作位置和前因类型，不记录缓存键、验证码或警告原文。
+            $this->exception($error);
         } catch (Throwable) {
             // 日志只承担诊断；存储故障仍由调用方按入口语义处理。
         }
@@ -263,6 +266,8 @@ final class SafeLogger
                     $data['http_status'] = $error->httpStatus;
                 }
             }
+        } elseif ($error instanceof RateLimitStorageException) {
+            $data['category'] = 'request_protection_storage';
         } elseif ($error instanceof PaymentUncertainException) {
             $data['category'] = 'payment_result_unknown';
         } elseif ($error instanceof BusinessException) {

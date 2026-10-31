@@ -10,6 +10,7 @@ use ErrorException;
 use LogicException;
 use think\Cache;
 use think\Config;
+use think\exception\ErrorException as FrameworkErrorException;
 use think\middleware\throttle\CounterSlider;
 use think\middleware\throttle\RateParser;
 
@@ -44,25 +45,30 @@ final class RequestRateLimiter
             throw new LogicException('限流频率超出允许范围');
         }
         $key = 'request.' . $rule . '.' . hash('sha256', $identity);
-        try {
-            $driver = new CounterSlider();
-            // 防刷允许并发计数偏差，直接使用官方算法及缓存，不额外锁住读改写过程。
-            $wait = $driver->allowRequest(
-                $key,
-                microtime(true),
-                $maximum,
-                $duration,
-                $this->cache->store('access'),
-            )
-                ? 0
-                : max(1, $driver->getWaitSeconds());
-        } catch (ErrorException $error) {
-            throw new RateLimitStorageException($error);
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            try {
+                $driver = new CounterSlider();
+                // 只重试入口计数一次，处理文件在读取期间过期/删除的短暂冲突，不重执行业务。
+                $wait = $driver->allowRequest(
+                    $key,
+                    microtime(true),
+                    $maximum,
+                    $duration,
+                    $this->cache->store('access'),
+                )
+                    ? 0
+                    : max(1, $driver->getWaitSeconds());
+                break;
+            } catch (ErrorException | FrameworkErrorException $error) {
+                if ($attempt === 1) {
+                    throw new RateLimitStorageException($error);
+                }
+            }
         }
         if ($wait > 0) {
             try {
                 $this->recordRejection($rule);
-            } catch (ErrorException | RateLimitStorageException) {
+            } catch (ErrorException | FrameworkErrorException | RateLimitStorageException) {
                 // 计数已明确拒绝，辅助日志缓存失败不能把 429 改成其他响应或放行请求。
             }
             throw new RateLimitException($wait);

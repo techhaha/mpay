@@ -11,6 +11,7 @@ use LogicException;
 use think\Cache;
 use think\captcha\Captcha;
 use think\Config;
+use think\exception\ErrorException as FrameworkErrorException;
 use think\Response;
 use think\Session;
 
@@ -52,7 +53,7 @@ final class LoginCaptchaService
                 throw new RateLimitStorageException();
             }
             return $response->getContent();
-        } catch (ErrorException $error) {
+        } catch (ErrorException | FrameworkErrorException $error) {
             throw new RateLimitStorageException($error);
         } finally {
             // Session 的并发旧快照不能写回已消费验证码；只在本次调用内供官方组件使用。
@@ -60,11 +61,26 @@ final class LoginCaptchaService
         }
     }
 
-    /** 使用官方 pull 取出并删除挑战，再执行官方校验；不承诺并发请求的原子消费。 */
+    /** 原生缓存读取后删除挑战，再执行官方校验；只重试读取，不重复消费或校验。 */
     public function verify(string $code): void
     {
         try {
-            $challenge = $this->cache->store('access')->pull($this->key());
+            $store = $this->cache->store('access');
+            $key = $this->key();
+            for ($attempt = 0; $attempt < 2; $attempt++) {
+                try {
+                    $challenge = $store->get($key);
+                    break;
+                } catch (ErrorException | FrameworkErrorException $error) {
+                    if ($attempt === 1) {
+                        throw new RateLimitStorageException($error);
+                    }
+                }
+            }
+            // 删除失败不能继续登录，也不能重试整个验证过程而再次消费验证码。
+            if ($challenge !== null && !$store->delete($key)) {
+                throw new RateLimitStorageException();
+            }
             if (
                 !is_array($challenge) ||
                 !is_string($challenge['hash'] ?? null) ||
@@ -83,7 +99,7 @@ final class LoginCaptchaService
                     ApiResponseConstant::VALIDATION_FAILED,
                 );
             }
-        } catch (ErrorException $error) {
+        } catch (ErrorException | FrameworkErrorException $error) {
             throw new RateLimitStorageException($error);
         } finally {
             $this->session->delete('captcha');

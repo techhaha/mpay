@@ -8,6 +8,7 @@ use app\service\system\access\RequestRateLimiter;
 use ErrorException;
 use FilesystemIterator;
 use think\App;
+use think\exception\ErrorException as FrameworkErrorException;
 use UnexpectedValueException;
 
 /** 清理旧技术日志、已退出进程心跳及短期访问缓存；交易、流水、通知、审计和密钥不在此范围。 */
@@ -53,17 +54,21 @@ final class RuntimePruneService
                     }
                     $path = $file->getPathname();
                     clearstatcache(true, $path);
-                    if (
-                        is_file($path) &&
-                        filemtime($path) < $before &&
-                        !@unlink($path) &&
-                        is_file($path)
-                    ) {
+                    // 缓存读取会自行删除过期文件；维护看到文件已消失时直接跳过。
+                    $modified = @filemtime($path);
+                    if ($modified === false) {
+                        clearstatcache(true, $path);
+                        if (!is_file($path)) {
+                            continue;
+                        }
+                        throw new RateLimitStorageException();
+                    }
+                    if ($modified < $before && !@unlink($path) && is_file($path)) {
                         throw new RateLimitStorageException();
                     }
                 }
             }
-        } catch (ErrorException | UnexpectedValueException $error) {
+        } catch (ErrorException | FrameworkErrorException | UnexpectedValueException $error) {
             throw new RateLimitStorageException($error);
         }
     }

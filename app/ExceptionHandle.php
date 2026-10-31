@@ -35,7 +35,7 @@ final class ExceptionHandle extends Handle
             return;
         }
         if ($exception instanceof RateLimitStorageException) {
-            $this->app->make(SafeLogger::class)->rateStorageFailure();
+            $this->app->make(SafeLogger::class)->rateStorageFailure($exception);
             return;
         }
         if (

@@ -476,8 +476,9 @@ final class FubeiCashierReceiptPayment extends BasePayment implements ReceiptCol
             } catch (HttpRequestException $exception) {
                 $exhausted = $exception->reasonCode === 'deadline_elapsed';
                 $error = ['reason' => $exhausted ? 'budget_exhausted' : 'network_error', 'retry_after' => 60,
-                    'source' => 'system', 'stage' => '平台请求',
-                    'message' => $exhausted ? '本轮采集账号预算已耗尽' : '平台网络请求未完成'];
+                    'source' => 'system', 'stage' => '平台请求', 'platform_code' => null,
+                    'message' => $exhausted ? '本轮采集账号预算已耗尽' : '平台网络请求未完成',
+                    'http_status' => $exception->httpStatus, 'message_truncated' => false];
                 $state['retry_at'] = time() + 60;
             } finally {
                 $this->saveAccountState($account, $state);

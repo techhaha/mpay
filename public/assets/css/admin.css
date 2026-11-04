@@ -440,7 +440,7 @@
 }
 .admin-app-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 384px), 1fr));
     gap: 20px;
 }
 .admin-app-grid > .admin-empty {
@@ -449,7 +449,7 @@
 .admin-app-card {
     width: 100%;
     min-width: 0;
-    max-width: 480px;
+    max-width: 576px;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--mpay-border);

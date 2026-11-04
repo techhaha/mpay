@@ -239,6 +239,7 @@ MpayAdmin.ready(function () {
             'id',
             'admin_user_id',
             'status_label',
+            'result_status',
             'result_code',
             'retry_count',
             'attempt_no',
@@ -246,21 +247,26 @@ MpayAdmin.ready(function () {
             'target_type',
         ].includes(name);
         const compact = ['notify_no', 'biz_no'].includes(name);
-        const width =
-            name === 'status_label'
-                ? 175
-                : ['retry_count', 'attempt_no', 'http_status', 'admin_user_id', 'id'].includes(name)
-                  ? 105
-                  : name === 'amount'
-                    ? 150
-                    : undefined;
+        const time = name.endsWith('_at'),
+            count = ['retry_count', 'attempt_no', 'admin_user_id', 'id'].includes(name);
+        // 时间和数字按内容保留稳定宽度，其余普通列由 Layui 分配余宽。
+        const size = time
+            ? { width: 200 }
+            : count
+              ? { width: 110 }
+              : {
+                    amount: { width: 150 },
+                    duration_ms: { width: 130 },
+                    http_status: { width: 120 },
+                    status_label: { minWidth: 180 },
+                    channel_id: { minWidth: 180 },
+                    plugin_code: { minWidth: 200 },
+                    message: { minWidth: 240 },
+                }[name] || { minWidth: compact ? 200 : 140 };
         return {
             field: name,
             title,
-            width,
-            minWidth:
-                width ??
-                (compact ? 190 : name.includes('_at') ? 178 : name === 'result_code' ? 210 : 140),
+            ...size,
             align:
                 name === 'amount' || name === 'duration_ms'
                     ? 'right'

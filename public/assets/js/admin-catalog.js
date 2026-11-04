@@ -35,7 +35,7 @@ MpayAdmin.ready(async function () {
                 [
                     {
                         title: '支付方式',
-                        width: 180,
+                        minWidth: 180,
                         unresize: true,
                         align: 'center',
                         templet: (type) =>
@@ -47,14 +47,14 @@ MpayAdmin.ready(async function () {
                             E(type.code) +
                             '</small></div></div>',
                     },
-                    { field: 'sort_order', title: '排序', width: 80, align: 'center' },
+                    { field: 'sort_order', title: '排序', width: 90, align: 'center' },
                     {
                         title: '状态',
-                        width: 100,
+                        width: 120,
                         align: 'center',
                         templet: (type) => enabledLabel(type.enabled),
                     },
-                    // 单一支付方式保持固定宽度，由此列接收余宽，避免表体右侧留白；窄屏沿用官方横向滚动。
+                    // 目录弹窗让普通列共同分配余宽，图文对齐由内部等宽容器保持。
                     {
                         title: '支持插件',
                         minWidth: 120,
@@ -308,7 +308,7 @@ MpayAdmin.ready(async function () {
                 [
                     {
                         title: '插件',
-                        minWidth: 210,
+                        minWidth: 260,
                         templet: (row) =>
                             '<div class="admin-two-line"><strong class="admin-row-title">' +
                             E(row.name) +
@@ -318,26 +318,26 @@ MpayAdmin.ready(async function () {
                     },
                     {
                         title: '版本',
-                        width: 100,
+                        minWidth: 100,
                         align: 'center',
                         templet: (row) => UI.badge(row.version, 'blue'),
                     },
                     {
                         title: '支付方式',
-                        minWidth: 200,
-                        maxWidth: 300,
+                        minWidth: 240,
+                        maxWidth: 420,
                         expandedMode: 'tips',
                         templet: (row) => row.pay_types.map(UI.payment).join(' '),
                     },
                     {
                         title: '配置项',
-                        width: 90,
+                        minWidth: 90,
                         align: 'center',
                         templet: (row) => UI.badge(row.config_schema?.length || 0, 'blue'),
                     },
                     {
                         title: '状态',
-                        width: 140,
+                        minWidth: 110,
                         align: 'center',
                         templet: (row) =>
                             !row.installed
@@ -346,7 +346,7 @@ MpayAdmin.ready(async function () {
                                   ? UI.badge('待刷新', 'orange')
                                   : enabledLabel(row.enabled),
                     },
-                    { field: 'channel_count', title: '关联通道', width: 100, align: 'center' },
+                    { field: 'channel_count', title: '关联通道', minWidth: 100, align: 'center' },
                     {
                         title: '操作',
                         width: 140,

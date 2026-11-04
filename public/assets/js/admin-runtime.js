@@ -108,7 +108,7 @@ MpayAdmin.ready(function () {
                     },
                     {
                         title: '状态',
-                        width: 220,
+                        minWidth: 200,
                         align: 'center',
                         templet: (row) =>
                             UI.badge(row.status_label, collectionTones[row.status] || 'gray'),
@@ -130,7 +130,7 @@ MpayAdmin.ready(function () {
                     {
                         field: 'last_success_at',
                         title: '最近查单成功',
-                        minWidth: 175,
+                        width: 200,
                         templet: (row) => E(row.last_success_at || '暂无记录'),
                     },
                     {
@@ -143,7 +143,7 @@ MpayAdmin.ready(function () {
                     {
                         field: 'consecutive_failures',
                         title: '连续失败批次',
-                        width: 130,
+                        width: 140,
                         align: 'center',
                         templet: (row) => E(row.consecutive_failures ?? '—'),
                     },

@@ -79,12 +79,13 @@ MpayAdmin.ready(async function () {
                 '</span><button type="button" class="admin-link app-copy" aria-label="复制 PID">' +
                 UI.icon('file-b') +
                 '</button></div>' +
-                '<div class="admin-app-payments">' +
+                '<div class="admin-app-status">' +
                 UI.badge(app.enabled ? '已启用' : '已停用', app.enabled ? 'green' : 'gray') +
                 UI.badge(
                     app.use_default_route ? '默认收款' : '自定义路由',
                     app.use_default_route ? 'blue' : 'gray',
                 ) +
+                '</div><div class="admin-app-payments">' +
                 (routing === null
                     ? '<span class="admin-muted">路由信息未读取</span>'
                     : types.length

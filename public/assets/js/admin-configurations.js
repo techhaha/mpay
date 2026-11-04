@@ -73,19 +73,19 @@ MpayAdmin.ready(function () {
                         },
                         {
                             title: '支付方式',
-                            width: 135,
+                            minWidth: 140,
                             unresize: true,
                             align: 'center',
                             templet: (row) => row.pay_types.map(UI.payment).join(' '),
                         },
                         {
                             title: '插件',
-                            minWidth: 190,
+                            minWidth: 220,
                             templet: (row) => E(pluginName(row.plugin_code)),
                         },
                         {
                             title: '状态',
-                            width: 110,
+                            minWidth: 110,
                             align: 'center',
                             templet: (row) =>
                                 UI.badge(

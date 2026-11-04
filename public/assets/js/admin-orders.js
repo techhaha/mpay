@@ -24,10 +24,19 @@ MpayAdmin.ready(async function () {
         manual_notify_replayed: '重复补发请求已处理',
         manual_refund_requested: '申请退款',
     };
-    const col = (field, title, width = 150) => ({
+    const col = (field, title, minWidth = 150) => ({
         field,
         title,
-        minWidth: width,
+        ...(field.endsWith('_at')
+            ? { width: 200 }
+            : {
+                  amount: { width: 150 },
+                  actor_label: { width: 140 },
+                  duration_ms: { width: 130 },
+                  attempt_no: { width: 110 },
+                  http_status: { width: 120 },
+              }[field] || { minWidth }),
+        align: field === 'amount' ? 'right' : 'left',
         templet: (row) =>
             field === 'result_code' && row.result_label
                 ? E(row.result_label) + ' ' + UI.help(row.result_code || '无结果代码')
@@ -156,7 +165,7 @@ MpayAdmin.ready(async function () {
         }
         const columns = [
             [
-                // 文本列仅限制最小宽度，由 table 自动分配余宽；短语义列继续保持固定宽度。
+                // 普通数据列共同分配余宽；金额、时间和操作按内容保留稳定宽度。
                 {
                     field: 'biz_no',
                     title: '订单编号',
@@ -173,7 +182,7 @@ MpayAdmin.ready(async function () {
                 {
                     field: 'app_id',
                     title: '应用 / 商品',
-                    minWidth: 160,
+                    minWidth: 180,
                     templet: (row) =>
                         '<div class="admin-two-line"><span class="admin-row-title" title="' +
                         E(appName(row)) +
@@ -188,7 +197,7 @@ MpayAdmin.ready(async function () {
                 {
                     field: 'pay_type',
                     title: '支付方式',
-                    width: 130,
+                    minWidth: 140,
                     unresize: true,
                     align: 'center',
                     templet: (row) =>
@@ -199,7 +208,7 @@ MpayAdmin.ready(async function () {
                 {
                     field: 'channel_id',
                     title: '收款通道',
-                    minWidth: 155,
+                    minWidth: 160,
                     templet: (row) =>
                         '<span title="' +
                         E(channelName(row)) +
@@ -210,7 +219,7 @@ MpayAdmin.ready(async function () {
                 {
                     field: 'order_amount',
                     title: '金额（元）',
-                    minWidth: 130,
+                    width: 150,
                     align: 'right',
                     templet: (row) =>
                         '<div class="admin-two-line"><span class="admin-money" title="订单金额">' +
@@ -229,14 +238,14 @@ MpayAdmin.ready(async function () {
                 {
                     field: 'notification_status',
                     title: '商户通知',
-                    width: 148,
+                    minWidth: 148,
                     align: 'center',
                     templet: notification,
                 },
                 {
                     field: 'created_at',
                     title: '交易时间',
-                    width: 212,
+                    width: 200,
                     templet: (row) =>
                         '<div class="admin-two-line admin-order-time"><span title="创建时间">' +
                         E(row.created_at) +
@@ -478,7 +487,7 @@ MpayAdmin.ready(async function () {
                 const columns =
                     kind === 'operations'
                         ? [
-                              col('created_at', '时间', 175),
+                              col('created_at', '时间'),
                               {
                                   title: '操作',
                                   templet: (row) => E(row.action_label || row.action),
@@ -488,9 +497,10 @@ MpayAdmin.ready(async function () {
                           ]
                         : kind === 'callbacks'
                           ? [
-                                col('received_at', '接收时间', 175),
+                                col('received_at', '接收时间'),
                                 {
                                     title: '处理结果',
+                                    align: 'center',
                                     templet: (row) =>
                                         UI.badge(
                                             row.result_label,
@@ -503,7 +513,7 @@ MpayAdmin.ready(async function () {
                                             }[row.result_status] || 'gray',
                                         ),
                                 },
-                                col('amount', '实收金额（元）', 135),
+                                col('amount', '实收金额（元）'),
                                 col('message', '处理说明', 220),
                                 {
                                     title: '详情',
@@ -515,10 +525,10 @@ MpayAdmin.ready(async function () {
                                 },
                             ]
                           : [
-                                { ...col('attempt_no', '次数', 80), align: 'center' },
-                                col('started_at', '开始时间', 175),
-                                { ...col('http_status', 'HTTP 状态', 100), align: 'center' },
-                                { ...col('duration_ms', '耗时（毫秒）', 110), align: 'right' },
+                                { ...col('attempt_no', '次数'), align: 'center' },
+                                col('started_at', '开始时间'),
+                                { ...col('http_status', 'HTTP 状态'), align: 'center' },
+                                { ...col('duration_ms', '耗时（毫秒）'), align: 'right' },
                                 col('result_code', '结果'),
                                 UI.responseColumn(),
                             ];

@@ -440,16 +440,26 @@
 }
 .admin-app-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
     gap: 20px;
 }
+.admin-app-grid > .admin-empty {
+    grid-column: 1 / -1;
+}
 .admin-app-card {
+    width: 100%;
+    min-width: 0;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--mpay-border);
     background: var(--mpay-surface);
     border-radius: 8px;
     overflow: hidden;
 }
 .admin-app-main {
+    flex: 1;
+    min-width: 0;
     padding: 22px;
     cursor: pointer;
     outline-offset: -3px;
@@ -485,12 +495,19 @@
     font-size: 12px;
     margin-top: 19px;
 }
+.admin-app-status,
 .admin-app-payments {
     display: flex;
-    gap: 12px;
+    flex-wrap: wrap;
     align-items: center;
-    min-height: 30px;
+    gap: 8px 12px;
+}
+.admin-app-status {
     margin-top: 19px;
+}
+.admin-app-payments {
+    min-height: 24px;
+    margin-top: 12px;
 }
 .admin-app-foot {
     border-top: 1px solid var(--mpay-border);
@@ -668,10 +685,6 @@
     color: var(--mpay-muted);
 }
 @media (max-width: 1300px) {
-    .admin-app-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .admin-filters > label {
         max-width: none;
     }
@@ -702,7 +715,6 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 10px;
     }
-    .admin-app-grid,
     .admin-status-cards,
     .admin-form-grid {
         grid-template-columns: 1fr;
@@ -1123,6 +1135,19 @@ a.admin-reference {
 }
 .admin-member-table td:first-child {
     min-width: 240px;
+}
+.admin-member-table th[data-sort],
+.admin-member-table th[data-weight] {
+    width: 130px;
+}
+.admin-member-table th[data-default] {
+    width: 100px;
+}
+.admin-member-table th.admin-member-state {
+    width: 120px;
+}
+.admin-member-table th.admin-member-actions {
+    width: 90px;
 }
 .admin-member-table [data-member-field] {
     font-size: 13px;

@@ -40,34 +40,34 @@ MpayAdmin.ready(async function () {
                         {
                             field: 'name',
                             title: '轮询组',
-                            minWidth: 180,
+                            minWidth: 200,
                             templet: (row) =>
                                 E(row.name) +
                                 (row.is_default ? ' ' + UI.badge('默认', 'blue') : ''),
                         },
                         {
                             title: '支付方式',
-                            width: 135,
+                            minWidth: 140,
                             unresize: true,
                             align: 'center',
                             templet: (row) => UI.payment(types[row.pay_type_id]),
                         },
                         {
                             title: '策略',
-                            width: 140,
+                            minWidth: 140,
                             align: 'center',
                             templet: (row) =>
                                 UI.badge(modes[row.route_mode] || row.route_mode, 'blue'),
                         },
                         {
                             title: '成员',
-                            width: 90,
+                            minWidth: 90,
                             align: 'center',
                             templet: (row) => row.members.length + ' 个',
                         },
                         {
                             title: '状态',
-                            width: 120,
+                            minWidth: 110,
                             align: 'center',
                             templet: (row) =>
                                 UI.badge(
@@ -160,8 +160,8 @@ MpayAdmin.ready(async function () {
             '</div>' +
             '<div class="admin-section-title group-strategy-help">成员通道 ' +
             UI.help('') +
-            '</div><p class="admin-hint">成员状态仅控制通道是否参与当前组收款，不影响通道自身状态及其他组。</p><div class="admin-table-scroll"><table class="layui-table admin-member-table"><thead><tr><th>通道</th><th data-sort>排序</th><th data-weight>权重</th><th data-default>默认</th><th>成员状态</th>' +
-            (isDefault ? '' : '<th>操作</th>') +
+            '</div><p class="admin-hint">成员状态仅控制通道是否参与当前组收款，不影响通道自身状态及其他组。</p><div class="admin-table-scroll"><table class="layui-table admin-member-table"><thead><tr><th>通道</th><th data-sort>排序</th><th data-weight>权重</th><th data-default>默认</th><th class="admin-member-state">成员状态</th>' +
+            (isDefault ? '' : '<th class="admin-member-actions">操作</th>') +
             '</tr></thead><tbody class="group-members"></tbody></table></div>' +
             (isDefault
                 ? ''

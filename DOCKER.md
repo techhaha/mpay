@@ -37,19 +37,15 @@
 
 ### 1. 准备配置文件
 
-进入项目根目录，从模板复制环境配置文件。
-
-> 💡 **提示**：Docker Compose 默认会自动读取当前目录下的 `.env` 文件。因此**推荐直接复制为 `.env`**（已被 Git 严格忽略，避免泄露密码）；若复制为自定义名称 `docker-compose.env`，在执行 `docker compose` 时需带上 `--env-file` 参数。
+进入项目根目录，从模板复制环境配置文件：
 
 ```bash
-# 推荐做法：直接复制为 .env（Compose 默认自动加载）
-cp docker-compose.env.example .env
-
-# 或者复制为 docker-compose.env（需配合 --env-file 参数使用）
 cp docker-compose.env.example docker-compose.env
 ```
 
-按需修改文件中的密码和端口（如默认 `APP_PORT=8080`，`DB_PASS=你的密码`）。
+按需修改 `docker-compose.env` 中的密码和端口（如默认 `APP_PORT=8080`，`DB_PASS=你的密码`）。
+
+> 💡 **命令规范**：所有 `docker compose` 操作均统一显式指定 `--env-file docker-compose.env` 参数，确保环境变量准确加载。
 
 ---
 
@@ -57,10 +53,6 @@ cp docker-compose.env.example docker-compose.env
 
 1. **启动容器**：
    ```bash
-   # 若配置文件命名为 .env：
-   docker compose up -d
-
-   # 若配置文件命名为 docker-compose.env：
    docker compose --env-file docker-compose.env up -d
    ```
 
@@ -97,7 +89,7 @@ cp docker-compose.env.example docker-compose.env
 
 2. 启动容器：
    ```bash
-   docker compose up -d
+   docker compose --env-file docker-compose.env up -d
    ```
 
 3. 容器首次启动时会自动等待 MySQL 就绪、执行数据表迁移并初始化管理员账号。完成后即可直接登录后台 `http://你的IP:8080/admin`。
@@ -138,7 +130,7 @@ cp docker-compose.env.example docker-compose.env
 3. **仅启动应用容器**：
    ```bash
    # 仅启动 app 服务，不启动自带的 mysql 容器
-   docker compose up -d app
+   docker compose --env-file docker-compose.env up -d app
    ```
 
 ---
@@ -198,7 +190,7 @@ server {
 对于需要容器职责严格单一（Microservices）的生产场景，可使用专用的拆分编排：
 
 ```bash
-docker compose -f docker-compose.split.yml up -d
+docker compose --env-file docker-compose.env -f docker-compose.split.yml up -d
 ```
 
 拆分编排包含四个服务：
@@ -218,7 +210,7 @@ docker compose -f docker-compose.split.yml up -d
 MPAY 内置了生产诊断工具，可以在容器内一键检查 PHP 扩展、目录隔离、MySQL 严格模式及后台工作者心跳：
 
 ```bash
-docker compose exec app php think system:doctor
+docker compose --env-file docker-compose.env exec app php think system:doctor
 ```
 
 输出示例：
@@ -235,12 +227,12 @@ docker compose exec app php think system:doctor
 
 - **查看所有实时日志**：
   ```bash
-  docker compose logs -f app
+  docker compose --env-file docker-compose.env logs -f app
   ```
 - **查看后台任务状态**：
   进入容器查看守护进程：
   ```bash
-  docker compose exec app supervisorctl status
+  docker compose --env-file docker-compose.env exec app supervisorctl status
   ```
   输出示例：
   ```text
@@ -253,7 +245,7 @@ docker compose exec app php think system:doctor
 ### 3. 进入容器命令行
 
 ```bash
-docker compose exec app bash
+docker compose --env-file docker-compose.env exec app bash
 ```
 
 ---
@@ -269,7 +261,7 @@ Docker 部署在默认配置下使用以下三个命名数据卷保存重要数�
 ### 备份命令
 1. **导出数据库 SQL**：
    ```bash
-   docker compose exec mysql mysqldump -uroot -p$MYSQL_ROOT_PASSWORD mpay_v1 > mpay_backup_$(date +%Y%m%d).sql
+   docker compose --env-file docker-compose.env exec mysql mysqldump -uroot -p$MYSQL_ROOT_PASSWORD mpay_v1 > mpay_backup_$(date +%Y%m%d).sql
    ```
 2. **备份上传的图片附件**：
    ```bash
@@ -279,7 +271,7 @@ Docker 部署在默认配置下使用以下三个命名数据卷保存重要数�
 ### 恢复命令
 1. **导入数据库 SQL**：
    ```bash
-   docker compose exec -T mysql mysql -uroot -p$MYSQL_ROOT_PASSWORD mpay_v1 < mpay_backup.sql
+   docker compose --env-file docker-compose.env exec -T mysql mysql -uroot -p$MYSQL_ROOT_PASSWORD mpay_v1 < mpay_backup.sql
    ```
 2. **恢复图片附件**：
    ```bash
@@ -307,14 +299,14 @@ Docker 部署在默认配置下使用以下三个命名数据卷保存重要数�
    ```ini
    extension=/opt/mpay_premium/1.2.2/php84_linux_x86_64_nts/mpay_premium.so
    ```
-4. 执行 `docker compose restart app` 即可生效。
+4. 执行 `docker compose --env-file docker-compose.env restart app` 即可生效。
 
 ---
 
 ## 八、常见问题排查 (FAQ)
 
 ### Q1: 打开网页提示“数据库连接超时”或“Connection refused”？
-- 若使用自带 MySQL 容器：请确认 `DB_HOST=mysql`，且 MySQL 容器已经完成初始化并处于 healthy 状态。可通过 `docker compose ps` 查看状态。
+- 若使用自带 MySQL 容器：请确认 `DB_HOST=mysql`，且 MySQL 容器已经完成初始化并处于 healthy 状态。可通过 `docker compose --env-file docker-compose.env ps` 查看状态。
 - 若连接宿主机已有 MySQL：确保在 `docker-compose.env` 中配置 `DB_HOST=host.docker.internal`，且宿主机 MySQL 监听了 `0.0.0.0` 而非 `127.0.0.1`，同时数据库账号允许来自 `%` 或 `172.%.%.%` 的连接。
 
 ### Q2: 易支付接口或后台通道测试单提示“客户端 IP 为 127.0.0.1”？
@@ -325,10 +317,10 @@ Docker 部署在默认配置下使用以下三个命名数据卷保存重要数�
 1. 拉取最新代码：`git pull`
 2. 重新构建并平滑重启容器：
    ```bash
-   docker compose build --no-cache
-   docker compose up -d
+   docker compose --env-file docker-compose.env build --no-cache
+   docker compose --env-file docker-compose.env up -d
    ```
 3. 检查系统状态：
    ```bash
-   docker compose exec app php think system:doctor
+   docker compose --env-file docker-compose.env exec app php think system:doctor
    ```

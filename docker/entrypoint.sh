@@ -4,8 +4,8 @@ set -e
 # ==============================================================================
 # MPAY Docker 容器入口分发脚本
 # 1. 运行时目录检查与属主校准 (www-data)
-# 2. 环境变量预填充与 .env 初始化
-# 3. 可选自动化建表与管理员初始化 (AUTO_INSTALL=true)
+# 2. 环境变量同步与 .env 更新
+# 3. 可选全自动建表与管理员初始化 (AUTO_INSTALL=true)
 # 4. 根据 CONTAINER_MODE 启动相应服务角色
 # ==============================================================================
 
@@ -24,9 +24,10 @@ chown -R www-data:www-data "${RUNTIME_DIR}" "${STORAGE_DIR}"
 chmod 775 "${RUNTIME_DIR}"
 chmod 755 "${STORAGE_DIR}"
 
-# 2. 若未挂载 .env 且指定了环境变量，按 .example.env 模板生成基础 .env
-if [ ! -f "${APP_DIR}/.env" ]; then
-    echo "[entrypoint] 正在根据环境变量生成初始 .env 配置文件..."
+# 2. 同步环境变量到 .env 配置文件
+# 若指定了数据库环境变量或不存在 .env，重新生成 .env 以确保配置生效
+if [ -n "${DB_HOST}" ] || [ ! -f "${APP_DIR}/.env" ]; then
+    echo "[entrypoint] 正在同步环境变量到 .env 配置文件..."
     cat <<EOF > "${APP_DIR}/.env"
 ; MPAY Docker 自动生成的环境配置
 APP_DEBUG = ${APP_DEBUG:-false}
@@ -44,45 +45,48 @@ EOF
     chmod 664 "${APP_DIR}/.env"
 fi
 
-# 3. 可选全自动初始化流程 (AUTO_INSTALL=true 且尚未安装)
+# 3. 可选全自动初始化流程 (AUTO_INSTALL=true)
 if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
-    if [ ! -f "${RUNTIME_DIR}/install.lock" ]; then
-        echo "[entrypoint] 检测到 AUTO_INSTALL=true，正在等待数据库就绪..."
-        DB_TARGET_HOST="${DB_HOST:-127.0.0.1}"
-        DB_TARGET_PORT="${DB_PORT:-3306}"
-        DB_TARGET_NAME="${DB_NAME:-mpay_v1}"
-        DB_TARGET_USER="${DB_USER:-mpay_v1}"
-        DB_TARGET_PASS="${DB_PASS:-}"
-
-        php -r '
-        $host = getenv("DB_HOST") ?: "127.0.0.1";
-        $port = getenv("DB_PORT") ?: 3306;
-        $name = getenv("DB_NAME") ?: "mpay_v1";
-        $user = getenv("DB_USER") ?: "mpay_v1";
-        $pass = getenv("DB_PASS") ?: "";
-        $maxAttempts = 30;
-        for ($i = 1; $i <= $maxAttempts; $i++) {
-            try {
-                $pdo = new PDO("mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4", $user, $pass, [
-                    PDO::ATTR_TIMEOUT => 2,
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-                ]);
-                echo "[entrypoint] 数据库连接成功！\n";
-                exit(0);
-            } catch (\Throwable $e) {
-                echo "[entrypoint] 等待数据库就绪 ($i/{$maxAttempts}): " . $e->getMessage() . "\n";
-                sleep(2);
-            }
+    echo "[entrypoint] 检测到 AUTO_INSTALL=true，正在等待数据库就绪..."
+    php -r '
+    $host = getenv("DB_HOST") ?: "127.0.0.1";
+    $port = getenv("DB_PORT") ?: 3306;
+    $name = getenv("DB_NAME") ?: "mpay_v1";
+    $user = getenv("DB_USER") ?: "mpay_v1";
+    $pass = getenv("DB_PASS") ?: "";
+    $maxAttempts = 30;
+    for ($i = 1; $i <= $maxAttempts; $i++) {
+        try {
+            $pdo = new PDO("mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4", $user, $pass, [
+                PDO::ATTR_TIMEOUT => 2,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]);
+            echo "[entrypoint] 数据库连接成功！\n";
+            exit(0);
+        } catch (\Throwable $e) {
+            echo "[entrypoint] 等待数据库就绪 ($i/{$maxAttempts}): " . $e->getMessage() . "\n";
+            sleep(2);
         }
-        exit(1);
-        '
+    }
+    exit(1);
+    '
 
-        echo "[entrypoint] 执行数据迁移 (system:migrate)..."
-        su -s /bin/sh www-data -c "php ${APP_DIR}/think system:migrate"
+    # 执行数据迁移建表（幂等安全，已建表自动跳过）
+    echo "[entrypoint] 执行数据迁移 (system:migrate)..."
+    su -s /bin/sh www-data -c "php ${APP_DIR}/think system:migrate"
 
+    # 检查数据库初始化状态
+    INIT_STATUS=$(su -s /bin/sh www-data -c "php ${APP_DIR}/think system:initialize --status" 2>/dev/null || true)
+    if echo "${INIT_STATUS}" | grep -q '"phase":"initialized"'; then
+        echo "[entrypoint] 数据库已完成初始化，跳过管理员创建"
+        if [ ! -f "${RUNTIME_DIR}/install.lock" ]; then
+            echo '{"installed_at":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > "${RUNTIME_DIR}/install.lock"
+            chown www-data:www-data "${RUNTIME_DIR}/install.lock"
+        fi
+    else
         if [ -n "${ADMIN_USER}" ] && [ -n "${ADMIN_PASS}" ]; then
             echo "[entrypoint] 执行系统初始化 (system:initialize)..."
-            INIT_JSON="/tmp/mpay_init_$$.json"
+            INIT_JSON="${RUNTIME_DIR}/mpay_init_$$.json"
             cat <<EOF > "${INIT_JSON}"
 {
     "username": "${ADMIN_USER}",

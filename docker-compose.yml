@@ -33,9 +33,6 @@ services:
     extra_hosts:
       # 支持连接宿主机已有外部数据库（如 host.docker.internal:3306）
       - "host.docker.internal:host-gateway"
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   mysql:
     image: mysql:8.0

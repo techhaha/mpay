@@ -26,6 +26,9 @@ Thumbs.db
 __pycache__/
 *.py[cod]
 /.env.*
+docker-compose.env
+docker.env
+!docker-compose.env.example
 /runtime/*
 !/runtime/.gitignore
 /public/storage/

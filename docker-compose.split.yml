@@ -51,9 +51,6 @@ services:
       - "host.docker.internal:host-gateway"
     expose:
       - "9000"
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   worker:
     build:
@@ -79,9 +76,6 @@ services:
       - mpay_runtime:/var/www/html/runtime
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on:
-      mysql:
-        condition: service_healthy
 
   mysql:
     image: mysql:8.0

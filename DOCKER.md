@@ -348,18 +348,13 @@ Docker 部署在默认配置下使用以下三个命名数据卷保存重要数�
   ```
 
 ### 2. 免本地编译直接使用预构建镜像
-在目标生产服务器上，如果不想在本地耗费 CPU/内存编译 PHP 扩展和 Composer 依赖，可直接在 `docker-compose.yml` 中使用预构建镜像：
+`docker-compose.yml` 与 `docker-compose.split.yml` 中的镜像参数均已支持环境变量动态适配（`image: ${IMAGE_NAME:-mpay:latest}`）。
 
-```yaml
-services:
-  app:
-    # 注释 build 字段，直接指定预构建镜像：
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    image: ghcr.io/nothing248/mpay:latest
-    container_name: mpay-app
-    ...
+在生产服务器上，如果无需本地编译，直接在 `docker-compose.env` 中指定镜像仓库地址即可，**无需改动任何 yml 文件**：
+
+```ini
+# 在 docker-compose.env 中配置远程镜像地址
+IMAGE_NAME=ghcr.io/nothing248/mpay:latest
 ```
 
 使用命令一键秒级拉取与运行：

@@ -12,6 +12,11 @@ on:
       - 'docs/**'
       - '*.md'
       - '.gitignore'
+      - 'docker-compose*.yml'
+      - 'docker-compose*.yaml'
+      - 'docker-compose*.env*'
+      - '*.env'
+      - '*.env.*'
   pull_request:
     branches:
       - v1
@@ -20,13 +25,18 @@ on:
       - 'docs/**'
       - '*.md'
       - '.gitignore'
-  workflow_dispatch:
-    inputs:
-      push_image:
-        description: '是否推送镜像到镜像仓库'
-        required: true
-        type: boolean
-        default: true
+      - 'docker-compose*.yml'
+      - 'docker-compose*.yaml'
+      - 'docker-compose*.env*'
+      - '*.env'
+      - '*.env.*'
+workflow_dispatch:
+  inputs:
+    push_image:
+      description: '是否推送镜像到镜像仓库'
+      required: true
+      type: boolean
+      default: true
 
 env:
   REGISTRY: ghcr.io
@@ -68,7 +78,7 @@ jobs:
 
       - name: 提取 Docker 镜像元数据与标签 (Metadata)
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v5 
         with:
           images: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}

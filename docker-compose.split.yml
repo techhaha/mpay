@@ -9,7 +9,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mpay:latest
+    image: ${IMAGE_NAME:-mpay:latest}
     container_name: mpay-split-web
     restart: unless-stopped
     ports:
@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mpay:latest
+    image: ${IMAGE_NAME:-mpay:latest}
     container_name: mpay-split-fpm
     restart: unless-stopped
     environment:
@@ -59,7 +59,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mpay:latest
+    image: ${IMAGE_NAME:-mpay:latest}
     container_name: mpay-split-worker
     restart: unless-stopped
     environment:

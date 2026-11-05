@@ -3,7 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mpay:latest
+    image: ${IMAGE_NAME:-mpay:latest}
     container_name: mpay-app
     restart: unless-stopped
     ports:

@@ -36,7 +36,6 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-        required: false
 
   mysql:
     image: mysql:8.0

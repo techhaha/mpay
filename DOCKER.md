@@ -37,13 +37,19 @@
 
 ### 1. 准备配置文件
 
-进入项目根目录，从模板复制环境配置文件：
+进入项目根目录，从模板复制环境配置文件。
+
+> 💡 **提示**：Docker Compose 默认会自动读取当前目录下的 `.env` 文件。因此**推荐直接复制为 `.env`**（已被 Git 严格忽略，避免泄露密码）；若复制为自定义名称 `docker-compose.env`，在执行 `docker compose` 时需带上 `--env-file` 参数。
 
 ```bash
+# 推荐做法：直接复制为 .env（Compose 默认自动加载）
+cp docker-compose.env.example .env
+
+# 或者复制为 docker-compose.env（需配合 --env-file 参数使用）
 cp docker-compose.env.example docker-compose.env
 ```
 
-按需修改 `docker-compose.env` 中的密码和端口（如默认 `APP_PORT=8080`，`DB_PASS=你的密码`）。
+按需修改文件中的密码和端口（如默认 `APP_PORT=8080`，`DB_PASS=你的密码`）。
 
 ---
 
@@ -51,7 +57,11 @@ cp docker-compose.env.example docker-compose.env
 
 1. **启动容器**：
    ```bash
+   # 若配置文件命名为 .env：
    docker compose up -d
+
+   # 若配置文件命名为 docker-compose.env：
+   docker compose --env-file docker-compose.env up -d
    ```
 
 2. **在浏览器打开安装向导**：

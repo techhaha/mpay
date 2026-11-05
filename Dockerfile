@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 ARG PHP_VERSION=8.4
 FROM php:${PHP_VERSION}-fpm-bookworm
 
@@ -17,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwebp-dev \
     libfreetype6-dev \
     libgmp-dev \
+    libonig-dev \
     libzip-dev \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd \

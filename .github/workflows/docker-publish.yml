@@ -32,6 +32,11 @@ on:
       - '*.env.*'
   workflow_dispatch:
     inputs:
+      platforms:
+        description: '构建目标平台 (默认双架构；日常快速构建/预热缓存可填 linux/amd64)'
+        required: false
+        type: string
+        default: 'linux/amd64,linux/arm64'
       push_image:
         description: '是否推送镜像到镜像仓库'
         required: true
@@ -95,9 +100,13 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ github.event.inputs.platforms || 'linux/amd64,linux/arm64' }}
           push: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_image != 'false') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            type=gha,scope=build
+            type=gha
+          cache-to: ${{ github.event_name != 'pull_request' && (github.event.inputs.push_image != 'false') && format('type=registry,ref={0}/{1}:buildcache,mode=max', env.REGISTRY, env.IMAGE_NAME) || 'type=gha,mode=max,scope=build' }}

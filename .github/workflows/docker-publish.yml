@@ -30,13 +30,13 @@ on:
       - 'docker-compose*.env*'
       - '*.env'
       - '*.env.*'
-workflow_dispatch:
-  inputs:
-    push_image:
-      description: '是否推送镜像到镜像仓库'
-      required: true
-      type: boolean
-      default: true
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: '是否推送镜像到镜像仓库'
+        required: true
+        type: boolean
+        default: true
 
 env:
   REGISTRY: ghcr.io

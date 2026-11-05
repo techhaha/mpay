@@ -17,6 +17,7 @@
 - [六、数据持久化与备份恢复](#六数据持久化与备份恢复)
 - [七、MPAY Premium 动态码免输入扩展加载说明](#七mpay-premium-动态码免输入扩展加载说明)
 - [八、常见问题排查 (FAQ)](#八常见问题排查-faq)
+- [九、自动 CI/CD 与预构建镜像使用](#九自动-cicd-与预构建镜像使用)
 
 ---
 
@@ -328,3 +329,49 @@ Docker 部署在默认配置下使用以下三个命名数据卷保存重要数�
    ```bash
    docker compose --env-file docker-compose.env exec app php think system:doctor
    ```
+
+---
+
+## 九、自动 CI/CD 与预构建镜像使用
+
+本项目已配置基于 **GitHub Actions** 的全自动镜像构建与发布流水线（位于 `.github/workflows/docker-publish.yml`）。
+
+### 1. 流水线自动化特性
+- **自动触发条件**：
+  - 代码推送到主分支（`v1` 或 `main`）时，自动构建并发布 `latest` 及分支标签；
+  - 发布版本 Tag（如 `v1.0.0`）时，自动打上语义化版本标签发布；
+  - 支持在 GitHub 仓库 Actions 页面手动点击 `workflow_dispatch` 一键触发。
+- **跨平台多架构支持**：原生支持 `linux/amd64` 与 `linux/arm64`（Apple Silicon、AWS Graviton 等），各架构服务器直接拉取运行。
+- **免费原生发布目标**：默认推送到 GitHub Packages 原生容器仓库：
+  ```text
+  ghcr.io/nothing248/mpay:latest
+  ```
+
+### 2. 免本地编译直接使用预构建镜像
+在目标生产服务器上，如果不想在本地耗费 CPU/内存编译 PHP 扩展和 Composer 依赖，可直接在 `docker-compose.yml` 中使用预构建镜像：
+
+```yaml
+services:
+  app:
+    # 注释 build 字段，直接指定预构建镜像：
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    image: ghcr.io/nothing248/mpay:latest
+    container_name: mpay-app
+    ...
+```
+
+使用命令一键秒级拉取与运行：
+```bash
+docker compose --env-file docker-compose.env pull
+docker compose --env-file docker-compose.env up -d
+```
+
+### 3. 可选：推送到 Docker Hub
+若需要同时推送到公共 Docker Hub，只需在 GitHub 仓库设置（Settings → Secrets and variables → Actions）中添加以下两个密钥：
+- `DOCKERHUB_USERNAME`：Docker Hub 用户名
+- `DOCKERHUB_TOKEN`：Docker Hub 访问令牌（Access Token）
+
+Actions 将在每次发布时自动同步推送到 Docker Hub。
+

@@ -6,16 +6,19 @@
 
 services:
   web:
-    image: nginx:alpine
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mpay:latest
     container_name: mpay-split-web
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8080}:80"
+    environment:
+      - CONTAINER_MODE=web
     volumes:
       # 挂载专用拆分 Nginx 虚拟主机配置（fastcgi_pass 指向 fpm:9000）
       - ./docker/nginx/split.conf:/etc/nginx/conf.d/default.conf:ro
-      # 挂载宿主机代码的 public 目录以直接由 Web 服务器快速提供静态资源
-      - .:/var/www/html:ro
       # 挂载持久化上传图片目录与运行维护标识
       - mpay_storage:/var/www/html/public/storage:ro
       - mpay_runtime:/var/www/html/runtime:ro

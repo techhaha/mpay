@@ -13,16 +13,29 @@ APP_DIR="/var/www/html"
 RUNTIME_DIR="${APP_DIR}/runtime"
 STORAGE_DIR="${APP_DIR}/public/storage"
 
+# 如果外部传入了自定义命令（如 php think ..., bash, sh），且不是默认的 supervisord 命令，直接执行
+if [ "$#" -gt 0 ] && [ "$1" != "/usr/bin/supervisord" ]; then
+    exec "$@"
+fi
+
+MODE="${CONTAINER_MODE:-all-in-one}"
+
+# 0. 若作为独立 Web 前端运行（拆分微服务架构），直接启动 Nginx
+if [ "${MODE}" = "web" ] || [ "${MODE}" = "nginx" ]; then
+    echo "[entrypoint] 启动 MPAY 独立 Nginx Web 前端服务..."
+    exec /usr/sbin/nginx -g "daemon off;"
+fi
+
 # 1. 确保必要持久化目录存在并修正属主
 mkdir -p "${RUNTIME_DIR}/workers" \
          "${RUNTIME_DIR}/access" \
          "${RUNTIME_DIR}/session" \
          "${RUNTIME_DIR}/log" \
-         "${STORAGE_DIR}"
+         "${STORAGE_DIR}" 2>/dev/null || true
 
-chown -R www-data:www-data "${RUNTIME_DIR}" "${STORAGE_DIR}"
-chmod 775 "${RUNTIME_DIR}"
-chmod 755 "${STORAGE_DIR}"
+chown -R www-data:www-data "${RUNTIME_DIR}" "${STORAGE_DIR}" 2>/dev/null || true
+chmod 775 "${RUNTIME_DIR}" 2>/dev/null || true
+chmod 755 "${STORAGE_DIR}" 2>/dev/null || true
 
 # 2. 同步环境变量到 .env 配置文件
 # 若指定了数据库环境变量或不存在 .env，重新生成 .env 以确保配置生效
@@ -41,8 +54,8 @@ DB_USER = ${DB_USER:-mpay_v1}
 DB_PASS = ${DB_PASS:-}
 DEFAULT_LANG = ${DEFAULT_LANG:-zh-cn}
 EOF
-    chown www-data:www-data "${APP_DIR}/.env"
-    chmod 664 "${APP_DIR}/.env"
+    chown www-data:www-data "${APP_DIR}/.env" 2>/dev/null || true
+    chmod 664 "${APP_DIR}/.env" 2>/dev/null || true
 fi
 
 # 3. 可选全自动初始化流程 (AUTO_INSTALL=true)
@@ -81,7 +94,7 @@ if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
         echo "[entrypoint] 数据库已完成初始化，跳过管理员创建"
         if [ ! -f "${RUNTIME_DIR}/install.lock" ]; then
             echo '{"installed_at":"'$(date -u +"%Y-%m-%dT%H:%M:%SZ")'"}' > "${RUNTIME_DIR}/install.lock"
-            chown www-data:www-data "${RUNTIME_DIR}/install.lock"
+            chown www-data:www-data "${RUNTIME_DIR}/install.lock" 2>/dev/null || true
         fi
     else
         if [ -n "${ADMIN_USER}" ] && [ -n "${ADMIN_PASS}" ]; then
@@ -96,7 +109,7 @@ if [ "${AUTO_INSTALL}" = "true" ] || [ "${AUTO_INSTALL}" = "1" ]; then
 }
 EOF
             chmod 600 "${INIT_JSON}"
-            chown www-data:www-data "${INIT_JSON}"
+            chown www-data:www-data "${INIT_JSON}" 2>/dev/null || true
             su -s /bin/sh www-data -c "php ${APP_DIR}/think system:initialize --input=${INIT_JSON}"
             rm -f "${INIT_JSON}"
             echo "[entrypoint] 系统全自动初始化完成！"
@@ -107,13 +120,6 @@ EOF
 fi
 
 # 4. 指令与模式调度分发
-# 如果外部传入了自定义命令（如 php think ..., bash, sh），且不是默认的 supervisord 命令，直接执行
-if [ "$#" -gt 0 ] && [ "$1" != "/usr/bin/supervisord" ]; then
-    exec "$@"
-fi
-
-# 根据环境变量 CONTAINER_MODE 选择运行模式
-MODE="${CONTAINER_MODE:-all-in-one}"
 echo "[entrypoint] 启动 MPAY 容器，当前运行模式: ${MODE}"
 
 case "${MODE}" in

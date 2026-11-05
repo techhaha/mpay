@@ -190,7 +190,11 @@ server {
 对于需要容器职责严格单一（Microservices）的生产场景，可使用专用的拆分编排：
 
 ```bash
+# 启动所有服务
 docker compose --env-file docker-compose.env -f docker-compose.split.yml up -d
+
+# 启动部分服务
+docker compose --env-file docker-compose.env -f docker-compose.split.yml up -d web fpm worker
 ```
 
 拆分编排包含四个服务：

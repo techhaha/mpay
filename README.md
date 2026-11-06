@@ -11,6 +11,7 @@
 <p align="center">
   <a href="docs/wiki/V1-01-开始阅读.md"><strong>新手上手路线</strong></a> ·
   <a href="#online-demo"><strong>在线演示</strong></a> ·
+  <a href="#video-tutorials"><strong>视频教程</strong></a> ·
   <a href="#web-install"><strong>网页安装</strong></a> ·
   <a href="#screenshots">界面预览</a> ·
   <a href="https://gitee.com/technical-laohu/mpay/wikis/Home">Gitee 文档</a> ·
@@ -55,6 +56,17 @@
 | 要使用天阙、拉卡拉、星驿付、付呗或易宝免输入收款 | [安装扩展](docs/wiki/V1-34-动态码收款插件.md#安装-mpay-premium-扩展) → [平台配置](docs/wiki/V1-34-动态码收款插件.md#配置各平台) → [常见问题](docs/wiki/V1-34-动态码收款插件.md#故障排查与边界) |
 | 商城需要填写支付接口 | [业务网站接入](docs/wiki/V1-15-业务网站接入.md) · [易支付 V1 接口参考](docs/wiki/V1-16-易支付V1接口参考.md) |
 | 买家已付款，订单或商城没更新 | [订单与收款回调](docs/wiki/V1-09-订单与到账流水.md) · [商户通知排查](docs/wiki/V1-10-商户通知与人工处理.md) |
+
+<a id="video-tutorials"></a>
+
+## 🎥 视频教程
+
+建议按“安装 → 通道配置”的顺序观看，并结合上方图文教程操作。
+
+| 教程 | 适用场景 | 视频地址 |
+| --- | --- | --- |
+| MPAY V1.3.7 安装教程 | 首次安装与部署 MPAY V1 | [哔哩哔哩观看](https://www.bilibili.com/video/BV1En4q6BE2p/) |
+| 微信、支付宝、银行卡收款通道配置教程 | 安装完成后配置所需收款通道 | [哔哩哔哩观看](https://www.bilibili.com/video/BV1fn4q6qEA1/) |
 
 ## ⚙️ 功能概览
 

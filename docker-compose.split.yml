@@ -1,0 +1,111 @@
+# ==============================================================================
+# MPAY 独立组件拆分部署编排（Microservices Split）
+# 包含独立的 Nginx 容器、PHP-FPM 容器、Worker 后台任务容器与可选 MySQL
+# 使用命令：docker compose -f docker-compose.split.yml up -d
+# ==============================================================================
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-mpay:latest}
+    container_name: mpay-split-web
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    environment:
+      - CONTAINER_MODE=web
+    volumes:
+      # 挂载专用拆分 Nginx 虚拟主机配置（fastcgi_pass 指向 fpm:9000）
+      - ./docker/nginx/split.conf:/etc/nginx/conf.d/default.conf:ro
+      # 挂载持久化上传图片目录与运行维护标识
+      - mpay_storage:/var/www/html/public/storage:ro
+      - mpay_runtime:/var/www/html/runtime:ro
+    depends_on:
+      - fpm
+
+  fpm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-mpay:latest}
+    container_name: mpay-split-fpm
+    restart: unless-stopped
+    environment:
+      # 仅作为 PHP-FPM 引擎运行
+      - CONTAINER_MODE=fpm
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - MPAY_ENV=${MPAY_ENV:-production}
+      - DEFAULT_LANG=${DEFAULT_LANG:-zh-cn}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-mpay_v1}
+      - DB_USER=${DB_USER:-mpay_v1}
+      - DB_PASS=${DB_PASS:-mpay_secret_password}
+      - AUTO_INSTALL=${AUTO_INSTALL:-false}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-}
+      - INIT_APP_NAME=${INIT_APP_NAME:-默认应用}
+    volumes:
+      - mpay_storage:/var/www/html/public/storage
+      - mpay_runtime:/var/www/html/runtime
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "9000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-mpay:latest}
+    container_name: mpay-split-worker
+    restart: unless-stopped
+    environment:
+      # 仅作为后台任务守护运行（payment:watch 与 payment:work）
+      - CONTAINER_MODE=worker
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - MPAY_ENV=${MPAY_ENV:-production}
+      - DEFAULT_LANG=${DEFAULT_LANG:-zh-cn}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-mpay_v1}
+      - DB_USER=${DB_USER:-mpay_v1}
+      - DB_PASS=${DB_PASS:-mpay_secret_password}
+    volumes:
+      # 必须与 FPM 共享同一个 storage 与 runtime 卷以实现状态协同与文件锁交互
+      - mpay_storage:/var/www/html/public/storage
+      - mpay_runtime:/var/www/html/runtime
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  mysql:
+    image: mysql:8.0
+    container_name: mpay-split-mysql
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_strong_password}
+      MYSQL_DATABASE: ${DB_NAME:-mpay_v1}
+      MYSQL_USER: ${DB_USER:-mpay_v1}
+      MYSQL_PASSWORD: ${DB_PASS:-mpay_secret_password}
+    volumes:
+      - mpay_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  mpay_storage:
+    name: mpay_storage
+  mpay_runtime:
+    name: mpay_runtime
+  mpay_db:
+    name: mpay_db

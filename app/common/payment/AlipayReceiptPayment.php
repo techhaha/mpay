@@ -413,6 +413,9 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
             throw new UnsupportedPaymentOperationException();
         }
         $record = $this->receipt($payload, $context['channel_id']);
+        if (array_key_exists('listening', $record)) {
+            return $record;
+        }
         return [
             $this->receiptResult(
                 $this->locateReceipt($record, $context['channel_id'], $context['received_at']),
@@ -444,8 +447,14 @@ final class AlipayReceiptPayment extends BasePayment implements PaymentInterface
         } catch (JsonException) {
             throw new ReceiptMessageException('invalid_message');
         }
+        if (!is_array($content)) {
+            throw new ReceiptMessageException('invalid_message');
+        }
+        $heartbeat = $this->notificationValidator->heartbeat($content, $message['from']);
+        if ($heartbeat !== null) {
+            return $heartbeat;
+        }
         if (
-            !is_array($content) ||
             !is_string($content['title'] ?? null) ||
             !is_string($content['msg'] ?? null)
         ) {

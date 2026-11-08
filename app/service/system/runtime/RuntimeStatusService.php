@@ -3,12 +3,51 @@ declare(strict_types=1);
 
 namespace app\service\system\runtime;
 
+use RuntimeException;
 use think\App;
+use think\Cache;
 
-/** 读取本机工作者心跳的有限快照；共享锁配合现有 CLI 写锁，不探测 PID、不把心跳当设备或平台在线。 */
+/** 工作者及已认证客户端的运行快照；心跳不证明支付应用登录或实际收款能力。 */
 final class RuntimeStatusService
 {
-    public function __construct(private readonly App $app) {}
+    // 客户端约 60 秒上报，允许三个周期；仅用于运行展示，不控制通道或订单。
+    public const LISTENER_TIMEOUT_SECONDS = 180;
+
+    public function __construct(private readonly App $app, private readonly Cache $cache) {}
+
+    /** 每通道只覆盖最新快照，使用服务端接收时间；不写数据库或逐条回调日志。 */
+    public function recordListener(
+        string $channelId,
+        string $configurationId,
+        int $configurationVersion,
+        int $receivedAt,
+        array $heartbeat,
+    ): void {
+        $saved = $this->cache->store('receipt')->set('listener.heartbeat.' . $channelId, [
+            'configuration_id' => $configurationId,
+            'config_version' => $configurationVersion,
+            'received_at' => $receivedAt,
+            'listening' => $heartbeat['listening'],
+            'package_name' => $heartbeat['package_name'],
+            'device_name' => $heartbeat['device_name'],
+            'client' => $heartbeat['client'],
+        ], 0);
+        if (!$saved) {
+            throw new RuntimeException('监听状态保存失败');
+        }
+    }
+
+    /** 当前配置以外的快照不当作当前状态，缓存缺失表示尚无上报。 */
+    public function listener(string $channelId, string $configurationId, int $configurationVersion): ?array
+    {
+        $state = $this->cache->store('receipt')->get('listener.heartbeat.' . $channelId);
+        return is_array($state)
+            && ($state['configuration_id'] ?? null) === $configurationId
+            && ($state['config_version'] ?? null) === $configurationVersion
+            && is_int($state['received_at'] ?? null)
+            && is_bool($state['listening'] ?? null)
+            ? $state : null;
+    }
 
     /**
      * 无目录、不可读、格式异常或扫描超限均不能宣称正常；不读取文件名白名单以外的内容。

@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 namespace app\common\constant;
 
-/** 采集缓存摘要的状态；心跳、设备在线和订单支付状态均不由此枚举推断。 */
+/** 通道运行展示状态；客户端心跳与采集各按实际观测赋值，不决定订单支付状态。 */
 final class ReceiptRuntimeConstant
 {
     public const IDLE = 0;
@@ -15,6 +15,9 @@ final class ReceiptRuntimeConstant
     public const PROTOCOL_ERROR = 7;
     public const PUSH = 9;
     public const PAUSED = 10;
+    public const LISTENING = 11;
+    public const LISTENER_STOPPED = 12;
+    public const HEARTBEAT_TIMEOUT = 13;
 
     public const LABELS = [
         self::IDLE => '等待采集',
@@ -24,8 +27,11 @@ final class ReceiptRuntimeConstant
         self::RATE_LIMITED => '平台限流，等待重试',
         self::SCOPE_ERROR => '收款范围不一致',
         self::PROTOCOL_ERROR => '来源协议或数据异常',
-        self::PUSH => '等待认证推送',
+        self::PUSH => '等待通知推送',
         self::PAUSED => '采集暂停',
+        self::LISTENING => '心跳正常',
+        self::LISTENER_STOPPED => '未在监听',
+        self::HEARTBEAT_TIMEOUT => '心跳超时',
     ];
 
     /** 故障分类只用于运行显示，不能据此改变支付状态。 */

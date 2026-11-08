@@ -1,4 +1,4 @@
-/** 运行页面只读取任务事实；诊断按需触发，不从心跳推断设备在线，也不提供进程控制入口。 */
+/** 运行页面只读取任务事实；诊断按需触发，客户端心跳不代表支付平台在线，也不提供进程控制入口。 */
 MpayAdmin.ready(function () {
     'use strict';
     const UI = MpayAdmin,
@@ -13,6 +13,9 @@ MpayAdmin.ready(function () {
     const collectionTones = {
         0: 'blue',
         1: 'green',
+        11: 'green',
+        12: 'gray',
+        13: 'orange',
         3: 'orange',
         4: 'orange',
         5: 'orange',
@@ -58,7 +61,7 @@ MpayAdmin.ready(function () {
                 '待发送通知': data.notifications.pending,
                 '发送中通知': data.notifications.sending,
                 '停止自动重试': data.notifications.exhausted,
-                '未知采集状态': data.unknown_states,
+                '未知运行状态': data.unknown_states,
                 ...data.packages,
             })
                 .map(([name, value]) => '<dt>' + E(name) + '</dt><dd>' + E(value) + '</dd>')
@@ -97,7 +100,7 @@ MpayAdmin.ready(function () {
             done(result, curr) {
                 page = curr;
             },
-            emptyText: '暂无采集记录',
+            emptyText: '暂无运行记录',
             cols: [
                 [
                     {
@@ -114,24 +117,23 @@ MpayAdmin.ready(function () {
                             UI.badge(row.status_label, collectionTones[row.status] || 'gray'),
                     },
                     {
-                        title: '最近错误',
+                        title: '最近异常／说明',
                         minWidth: 280,
-                        templet: (row) =>
-                            row.last_error
+                        templet: (row) => {
+                            const error = row.last_error
                                 ? '<div class="admin-runtime-error"><span class="admin-runtime-error-message" title="' +
-                                  E(row.last_error.message) +
-                                  '">' +
-                                  E(row.last_error.message) +
-                                  '</span>' +
-                                  (row.recovered_at ? UI.badge('已恢复', 'green') : '') +
-                                  '</div>'
-                                : '—',
+                                  E(row.last_error.message) + '">' + E(row.last_error.message) + '</span>' +
+                                  (row.recovered_at ? UI.badge('已恢复', 'green') : '') + '</div>'
+                                : '';
+                            const heartbeat = row.heartbeat_note ? '<div>' + E(row.heartbeat_note) + '</div>' : '';
+                            return error + heartbeat || '—';
+                        },
                     },
                     {
-                        field: 'last_success_at',
-                        title: '最近查单成功',
+                        field: 'last_activity_at',
+                        title: '最近活动',
                         width: 200,
-                        templet: (row) => E(row.last_success_at || '暂无记录'),
+                        templet: (row) => E(row.last_activity_at || '暂无记录'),
                     },
                     {
                         field: 'pending_count',
@@ -142,7 +144,7 @@ MpayAdmin.ready(function () {
                     },
                     {
                         field: 'consecutive_failures',
-                        title: '连续失败批次',
+                        title: '连续失败',
                         width: 140,
                         align: 'center',
                         templet: (row) => E(row.consecutive_failures ?? '—'),
@@ -181,22 +183,31 @@ MpayAdmin.ready(function () {
                   : '')
             : '';
         UI.open({
-            title: '采集详情 · ' + item.name,
+            title: '运行详情 · ' + item.name,
             drawer: true,
             content:
                 UI.badge(item.status_label, collectionTones[item.status] || 'gray') +
                 diagnosis +
+                (item.heartbeat_note ? UI.notice(item.heartbeat_note) : '') +
                 UI.facts({
                     '收款通道': item.name,
                     '通道启用': item.enabled,
                     '待核对订单': item.pending_count,
-                    '最近查单成功': item.last_success_at,
+                    '最近活动': item.last_activity_at,
+                    '活动类型': item.collector ? '最近查单成功' : '最近有效客户端心跳',
                     '最近登录验证': item.last_verified_at,
                     '关联批次确认笔数': item.matched_count,
                     '连续失败批次': item.consecutive_failures,
                     '最近耗时（毫秒）': item.last_duration_ms,
                     '处理说明': item.reason_label,
                 }) +
+                (item.listener ? UI.facts({
+                    '监听应用': item.listener.package_name,
+                    '最近上报设备': item.listener.device_name,
+                    '客户端': item.listener.client,
+                    '上报监听状态': item.listener.listening ? '正在监听' : '未在监听',
+                    '最近心跳': when(item.listener.received_at),
+                }) + UI.notice('心跳仅表示客户端上报情况，不代表支付应用登录或收款能力。') : '') +
                 '<details class="admin-details"><summary>技术信息</summary>' +
                 UI.facts({
                     '插件': item.plugin_code,
@@ -226,7 +237,7 @@ MpayAdmin.ready(function () {
                 database: '数据库',
                 migrations: '安装进度',
                 notification: '通知任务',
-                collection: '采集状态',
+                collection: '通道运行状态',
                 workers: '任务活动',
             };
             const states = {

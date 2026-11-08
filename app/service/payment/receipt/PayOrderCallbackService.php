@@ -25,6 +25,7 @@ use app\service\payment\config\PaymentChannelRevisionService;
 use app\service\payment\order\PayOrderLifecycleService;
 use app\service\payment\plugin\PaymentPluginFactoryService;
 use app\service\payment\plugin\PaymentPluginNotifyResultValidator;
+use app\service\system\runtime\RuntimeStatusService;
 use InvalidArgumentException;
 use PDOException;
 use RuntimeException;
@@ -56,6 +57,7 @@ final class PayOrderCallbackService extends BaseService
         private readonly PaymentPluginNotifyResultValidator $results,
         private readonly SafeLogger $logger,
         private readonly PaymentChannelRevisionService $revisions,
+        private readonly RuntimeStatusService $runtime,
     ) {}
 
     /**
@@ -118,10 +120,24 @@ final class PayOrderCallbackService extends BaseService
             if ($context->payNo !== null) {
                 $input['pay_no'] = $context->payNo;
             }
-            $results = $this->results->validateList(
-                $plugin->notify($request, $input),
-                $context->payNo,
-            );
+            $notificationResult = $plugin->notify($request, $input);
+            if (array_key_exists('listening', $notificationResult)) {
+                if (!is_bool($notificationResult['listening'])) {
+                    throw new UnexpectedValueException('监听状态必须为布尔值');
+                }
+                if ($context->payNo !== null) {
+                    throw new BusinessException('监听心跳请使用通道通知地址', ApiResponseConstant::BAD_REQUEST);
+                }
+                $this->runtime->recordListener(
+                    $channelId,
+                    $context->configurationId,
+                    $context->configurationVersion,
+                    $context->receivedAt->getTimestamp(),
+                    $notificationResult,
+                );
+                return $plugin->notifySuccess();
+            }
+            $results = $this->results->validateList($notificationResult, $context->payNo);
         } catch (DbException | PDOException $error) {
             throw $error;
         } catch (Throwable $error) {

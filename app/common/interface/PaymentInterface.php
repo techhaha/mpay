@@ -67,7 +67,7 @@ interface PaymentInterface extends PayPluginInterface
      * }>} $payload
      * @param array{channel_id:string,received_at:string,pay_no?:string} $context 服务定位的入口及接收时间，不能由外部正文覆盖。
      * @return list<array{status:string,pay_no:string,pay_type:string,paid_amount:int,received_amount:int,
-     *     paid_at:string,chan_order_no:string,chan_trade_no:?string,event_key:?string,raw:array|string}>
+     *     paid_at:string,chan_order_no:string,chan_trade_no:?string,event_key:?string,raw:array|string}>|array{listening:bool,package_name:string,device_name:string,client:string}
      * 所有键必须提供；paid_amount 为原业务金额，received_amount 为实际支付金额。原文不得替代交易核验。
      * paid_at 优先来源时间，缺失使用 context.received_at；已成功重报在锁内保留首次时间。
      * chan_order_no 是稳定业务引用，无来源编号由插件根据稳定来源信息生成；chan_trade_no 仅填真实流水号。
@@ -75,9 +75,10 @@ interface PaymentInterface extends PayPluginInterface
      * 合法采集无匹配，或 HTTP 已认证且明确非入账时返回 []。
      * HTTP 入账无法匹配、认证/格式错误及运行故障必须抛异常，不能当作正常忽略。
      */
+    // HTTP 心跳返回包含 listening 的关联数组；服务仅更新运行快照，成功收款列表合同不变。
     public function notify(Request|array $payload, array $context): array;
 
-    /** 相关结果均确认后，或明确非入账无需确认时返回成功应答；内部采集不调用。 */
+    /** 收款结果均确认后，或已认证心跳/明确非入账无需确认时返回应答；内部采集不调用。 */
     public function notifySuccess(): string|Response;
 
     /** $message 仅接收可公开业务提示，不能传入 SQL、堆栈或秘密。 */

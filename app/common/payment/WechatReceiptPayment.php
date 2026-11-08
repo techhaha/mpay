@@ -420,6 +420,9 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             throw new UnsupportedPaymentOperationException();
         }
         $record = $this->receipt($payload, $context['channel_id']);
+        if (array_key_exists('listening', $record)) {
+            return $record;
+        }
         return [
             $this->receiptResult(
                 $this->locateReceipt($record, $context['channel_id'], $context['received_at']),
@@ -452,6 +455,10 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
         }
         if (!is_array($content)) {
             throw new ReceiptMessageException('invalid_message');
+        }
+        $heartbeat = $this->notificationValidator->heartbeat($content, $message['from']);
+        if ($heartbeat !== null) {
+            return $heartbeat;
         }
         // 同一认证入口接收手机与 PC；认证后按明确的发送方/消息格式解析，不使用外部 source 开关。
         if (in_array($message['from'], [self::PAY_ACCOUNT, self::RECEIPT_ACCOUNT], true)) {

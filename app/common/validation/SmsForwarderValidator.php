@@ -67,6 +67,31 @@ final class SmsForwarderValidator extends Validate
         ];
     }
 
+    /**
+     * 在原来源、签名及时间校验之后识别心跳；false 也是心跳，不增加消息类型字段。
+     * @return array{listening:bool,package_name:string,device_name:string,client:string}|null
+     */
+    public function heartbeat(array $content, string $source): ?array
+    {
+        if (!array_key_exists('listening', $content)) {
+            return null;
+        }
+        if (!is_bool($content['listening']) || ($content['package_name'] ?? null) !== $source) {
+            throw new ReceiptMessageException('invalid_message');
+        }
+        foreach (['device_name', 'client'] as $key) {
+            if (!is_string($content[$key] ?? null)) {
+                throw new ReceiptMessageException('invalid_message');
+            }
+        }
+        return [
+            'listening' => $content['listening'],
+            'package_name' => $source,
+            'device_name' => $content['device_name'],
+            'client' => $content['client'],
+        ];
+    }
+
     /** 原生 max 按字符计数；通知正文需要字节上限。 */
     protected function byteLength(string $value, int $maximum): bool
     {

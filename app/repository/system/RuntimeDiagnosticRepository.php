@@ -66,7 +66,7 @@ final class RuntimeDiagnosticRepository
                 $configurationIds !== [],
                 static fn($query) => $query->whereIn('c.id', $configurationIds),
             )
-            ->field(['c.id', 'ch.name', 'c.plugin_code', 'ch.enabled', 'c.config_version'])
+            ->field(['c.id', 'ch.id AS channel_id', 'ch.name', 'c.plugin_code', 'ch.enabled', 'c.config_version'])
             ->order('c.id', 'desc')
             ->select()
             ->all();

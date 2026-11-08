@@ -558,14 +558,15 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             $fields[$key] = $read('./value/word', $row);
         }
         $timestamp = $message['createTime'];
-        if ($account === self::PAY_ACCOUNT) {
+        // 微信支付公众号同时发送赞赏和个人收款码消息，只有赞赏模板携带“到账时间”。
+        if ($account === self::PAY_ACCOUNT && str_starts_with($title, '二维码赞赏到账')) {
             $pattern = '/^二维码赞赏到账(\d+(?:\.\d{1,2})?)元(?:$|[（(])/u';
             $date = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $fields['到账时间'] ?? '');
             if (!$date || $date->format('Y-m-d H:i:s') !== $fields['到账时间']) {
                 throw new ReceiptMessageException('invalid_message');
             }
             $timestamp = $date->getTimestamp();
-        } elseif (str_starts_with($title, '[店员消息]')) {
+        } elseif ($account === self::RECEIPT_ACCOUNT && str_starts_with($title, '[店员消息]')) {
             $pattern = '/^\[店员消息\]收款到账(\d+(?:\.\d{1,2})?)元$/u';
             if (
                 !str_contains($fields['说明'] ?? '', '已存入店长') ||
@@ -574,12 +575,15 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
                 throw new ReceiptMessageException('unsupported_message');
             }
         } else {
-            $pattern = '/^微信支付收款(\d+(?:\.\d{1,2})?)元(?:$|[（(])/u';
+            $personal = $account === self::PAY_ACCOUNT;
+            $pattern = $personal
+                ? '/^个人收款码到账[¥￥]\s*(\d+(?:\.\d{1,2})?)$/u'
+                : '/^微信支付收款(\d+(?:\.\d{1,2})?)元(?:$|[（(])/u';
             if (
                 !str_contains($fields['备注'] ?? '', '收款成功') ||
                 !str_contains(
                     $fields['备注'] ?? '',
-                    isset($fields['收款店铺']) ? '经营账户' : '零钱',
+                    $personal || !isset($fields['收款店铺']) ? '零钱' : '经营账户',
                 )
             ) {
                 throw new ReceiptMessageException('unsupported_message');

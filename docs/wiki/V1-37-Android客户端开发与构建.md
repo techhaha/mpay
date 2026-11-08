@@ -18,7 +18,7 @@ clients/android/
       ui/             页面、表单、ViewModel、共用卡片和品牌主题
       notification/   系统通知监听、恢复及运行状态通知
       forwarding/     规则匹配、固定请求发送、重试与心跳
-      data/           Room、设置、加密密钥及配置备份
+      data/           Room、设置及配置备份
       platform/       已安装应用、权限及系统设置入口
     assets/rules/     内置规则 JSON
     assets/help/      离线问答
@@ -40,7 +40,8 @@ clients/android/
 - 金额内部使用整数分，协议边界格式化为两位小数的元字符串。
 - Room 保存通道、规则、转发记录三类数据，筛选使用独立列及索引，不解析 JSON 查询。
 - 日志分页加载；界面状态统计与列表共用筛选条件，状态切换不改变统计基数。
-- 密钥通过 Android Keystore 加密；编辑草稿的进程恢复状态不写入明文密钥。
+- 通知密钥作为普通字符串保存在应用私有数据库；编辑和草稿恢复使用真实值，不设留空保留旧值或加解密层。
+- 通道启用仍要求填写密钥；通知签名、ACK、时间窗口、去重和重试保护保持。配置导出仍不包含密钥。
 - 自定义规则采用线性时间 RE2，不加载脚本或远程规则，不覆盖原始通知文字。
 - 原始通知与冻结请求不因改名、改规则、改地址或 APK 升级而改写。
 - 业务说明、字段单位、有效期和系统限制应有注释；配置和帮助随版本维护。
@@ -50,7 +51,7 @@ clients/android/
 | 项目 | 当前固定值 |
 | --- | --- |
 | applicationId | cn.mpay.listener |
-| versionName / versionCode | 1.0.0-rc2 / 2 |
+| versionName / versionCode | 1.0.0-rc3 / 3 |
 | minSdk | 26（Android 8.0） |
 | compileSdk / targetSdk | 35 |
 | Build Tools | 35.0.0 |
@@ -120,7 +121,7 @@ content 示例：
   "amount": "0.50",
   "package_name": "com.tencent.mm",
   "device_name": "收款手机01",
-  "client": "MPAY监听助手/1.0.0-rc2"
+  "client": "MPAY监听助手/1.0.0-rc3"
 }
 ```
 
@@ -154,7 +155,7 @@ content 示例：
   "listening": false,
   "package_name": "com.tencent.mm",
   "device_name": "收款手机01",
-  "client": "MPAY监听助手/1.0.0-rc2"
+  "client": "MPAY监听助手/1.0.0-rc3"
 }
 ```
 
@@ -184,7 +185,7 @@ RuntimeStatusService 统一保存/读取，原 RuntimeQueryService 合并到既�
 
 | 表 | 主要内容 |
 | --- | --- |
-| channels | 地址、加密密钥、应用、规则引用、成功正文、启停及最近心跳 |
+| channels | 地址、明文密钥、应用、规则引用、成功正文、启停及最近心跳 |
 | rules | 内置/自定义规则与版本；APK 更新仅刷新内置规则 |
 | deliveries | 原始通知、金额、目标快照、固定请求、有效期、次数与结果 |
 
@@ -203,12 +204,39 @@ fingerprint 包含系统通知标识、发布时间和原始内容，不以金�
 ### UI 与升级约定
 
 - 功能图标使用 lucide-static 0.468.0 的 37 个离线矢量，统一线宽，移除整包 Material 扩展图标依赖；许可随 APK 的 assets/licenses/Lucide.txt 交付。
-- 统一中性色容器与青绿色交互色，避免菜单、日期及弹层回退到默认紫色；列表分隔线不额外叠加容器间距。
+- 统一中性色容器与青绿色交互色；TextInput 统一上方标签和输入框，密钥仅增加可见性按钮。
+- 分组列表的 Panel 使用 spacing=0、verticalPadding=0，仅保留左右留白。行自身控制高度与上下内边距，首尾不额外增高。普通单行行高至少 56dp，带说明至少 72dp，三行通道至少 88dp，允许大字体自然增高。
+- ListDivider 使用 0.5dp 浅色细线，从文字起始处对齐；无图标行起点为 0，有图标菜单为 35dp，通道为 46dp。组间留白，不在页脚、底部导航、首页统计增加装饰分隔线。
 - 通用 SelectField 使用底部单选列表；日志筛选在一个面板中切换应用、通道和日期，来源应用取已启用通道并按包名去重。
 - 日期保留 Material 日期状态与算法，只替换紧凑标题、颜色与容器；小高度窗口采用内置输入模式。
-- 主导航切换无转场，子页面只滑动，不叠加透明度动画；保留系统字体缩放、安全区和键盘避让。
-- 包名、Keystore 别名及签名不变，versionCode 增为 2。Room schema/version 1 和 DataStore 键不变，不使用清库或破坏性迁移。
+- NavHost 只有一个主页面目的地；首页/日志/我的通过普通 when 直接切换，使用 SaveableStateHolder 保留各页滚动状态，不参与透明度或位移动画。
+- 每个目的地使用同一 PageLayout，完整持有不透明背景、顶部栏、内容及操作区。NavHost 以 240ms 滑动整页；ChildPage 的正文透明度挂在同一 transition 上，与滑动同时完成，不启动额外计时器或逐项动画。
+- 返回只向右退出当前整页，恢复的页面不重复渐显。保留编辑放弃确认、系统返回、窗口裁剪、安全区、字体缩放与键盘避让。
+- APK 包名与发布签名保持，versionCode 增为 3。Room 升至 schema 2，仅将通道密钥列换成 secret，并清空旧密钥、关闭待补密钥通道；不读取/解密旧密钥，不保留旧密钥字段或双读路径。地址、规则、偏好和日志保留，没有整库清理。
 
+动画使用 Compose 自带的过渡状态，依据 [Compose 自定义过渡文档](https://developer.android.com/develop/ui/compose/animation/composables-modifiers#add-custom-animation)，不另建路由或动画调度框架。
+
+
+## 1.0.0-rc3 构建记录
+
+2026-11-08 release 编译与 Android Lint 通过，versionCode 为 3，APK 为 8,898,536 字节。
+最终构建使用原固定镜像、Gradle 缓存与发布签名，证书 SHA-256 保持：
+
+```text
+9a5b4bb07d0e52065e66ceebfa4cdee40edaa3810edcabca749af0f8c2097715
+```
+
+APK SHA-256：
+
+```text
+1dfbef7d129bd5b56755281245548f61d7ee212ebd7845d1191c1adf0f250736
+```
+
+包名、API26 最低版本和 API35 目标版本已核对；签名、ZIP 16KB 及八个原生库 ELF LOAD 段对齐通过。
+生成的 Room schema 2 仅替换通道密钥字段，规则表、日志表及索引保持；没有运行数据库迁移测试。
+本次新增的 Compose 参数规范提示已消除；Lint 无错误，保留原有 6 条非阻断提示。
+没有执行独立单元、仪器、模拟器或真实交易测试，切换效果、首尾行高与覆盖升级由用户真机验收。
+旧开发版密钥不转换，覆盖安装后需重新填写密钥并启用通道。
 
 ## 1.0.0-rc2 构建记录
 
@@ -248,6 +276,6 @@ Lint 没有错误；保留 6 条提示：用户主动请求电池优化豁免、
 APK 的真实通知、后台运行及多机型界面仍待人工验收。
 
 Android 12 及以上显式关闭应用数据的云备份和设备迁移，只通过应用内导出配置，
-避免把本机加密数据直接搬到另一台设备。相关平台依据：
+避免将本机通知和密钥自动复制到其他设备。相关平台依据：
 [Android 自动备份规则](https://developer.android.com/identity/data/autobackup)、
 [自适应应用图标](https://developer.android.com/develop/ui/compose/system/icon_design_adaptive)。

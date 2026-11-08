@@ -1,0 +1,65 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${IMAGE_NAME:-mpay:latest}
+    container_name: mpay-app
+    restart: unless-stopped
+    ports:
+      # 映射 Web HTTP 访问端口
+      - "${APP_PORT:-8080}:80"
+      # 若使用 CONTAINER_MODE=fpm-worker 且需要外部已有 Nginx 直连 FastCGI，请放开下面一行：
+      # - "${FPM_PORT:-9000}:9000"
+    environment:
+      - CONTAINER_MODE=${CONTAINER_MODE:-all-in-one}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - MPAY_ENV=${MPAY_ENV:-production}
+      - DEFAULT_LANG=${DEFAULT_LANG:-zh-cn}
+      - DB_HOST=${DB_HOST:-mysql}
+      - DB_PORT=${DB_PORT:-3306}
+      - DB_NAME=${DB_NAME:-mpay_v1}
+      - DB_USER=${DB_USER:-mpay_v1}
+      - DB_PASS=${DB_PASS:-mpay_secret_password}
+      - AUTO_INSTALL=${AUTO_INSTALL:-false}
+      - ADMIN_USER=${ADMIN_USER:-admin}
+      - ADMIN_PASS=${ADMIN_PASS:-}
+      - INIT_APP_NAME=${INIT_APP_NAME:-默认应用}
+    volumes:
+      # 持久化收款二维码及图片静态资源
+      - mpay_storage:/var/www/html/public/storage
+      # 持久化安装锁、日志、Session及守护心跳
+      - mpay_runtime:/var/www/html/runtime
+    extra_hosts:
+      # 支持连接宿主机已有外部数据库（如 host.docker.internal:3306）
+      - "host.docker.internal:host-gateway"
+
+  mysql:
+    image: mysql:8.0
+    container_name: mpay-mysql
+    restart: unless-stopped
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_bin
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_strong_password}
+      MYSQL_DATABASE: ${DB_NAME:-mpay_v1}
+      MYSQL_USER: ${DB_USER:-mpay_v1}
+      MYSQL_PASSWORD: ${DB_PASS:-mpay_secret_password}
+    volumes:
+      - mpay_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  mpay_storage:
+    name: mpay_storage
+  mpay_runtime:
+    name: mpay_runtime
+  mpay_db:
+    name: mpay_db

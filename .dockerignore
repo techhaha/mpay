@@ -1,0 +1,32 @@
+.git
+.gitignore
+.gitattributes
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# 运行时与私有环境
+.env
+.env.*
+docker-compose.env
+runtime/*
+!runtime/.gitignore
+public/storage/*
+!public/storage/.gitignore
+
+# 临时与构建产物
+node_modules
+package.json
+package-lock.json
+composer.phar
+vendor
+*.log
+
+# 内部文档与无关测试
+tests
+tools
+deploy
+__pycache__
+*.py[cod]
+AGENTS.md

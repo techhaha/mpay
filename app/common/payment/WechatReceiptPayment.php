@@ -565,6 +565,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             $fields[$key] = $read('./value/word', $row);
         }
         $timestamp = $message['createTime'];
+        $remarkField = '付款方备注';
         // 微信支付公众号同时发送赞赏和个人收款码消息，只有赞赏模板携带“到账时间”。
         if ($account === self::PAY_ACCOUNT && str_starts_with($title, '二维码赞赏到账')) {
             $pattern = '/^二维码赞赏到账(\d+(?:\.\d{1,2})?)元(?:$|[（(])/u';
@@ -575,9 +576,12 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             $timestamp = $date->getTimestamp();
         } elseif ($account === self::RECEIPT_ACCOUNT && str_starts_with($title, '[店员消息]')) {
             $pattern = '/^\[店员消息\]收款到账(\d+(?:\.\d{1,2})?)元$/u';
+            $remarkField = '备注';
+            $explain = $fields['说明'] ?? '';
+            // 店员消息可能入零钱，也可能入经营账户（经营码店员），两者都算有效到账。
             if (
-                !str_contains($fields['说明'] ?? '', '已存入店长') ||
-                !str_contains($fields['说明'] ?? '', '零钱')
+                !str_contains($explain, '已存入店长') ||
+                (!str_contains($explain, '零钱') && !str_contains($explain, '经营账户'))
             ) {
                 throw new ReceiptMessageException('unsupported_message');
             }
@@ -632,7 +636,7 @@ final class WechatReceiptPayment extends BasePayment implements PaymentInterface
             throw new ReceiptMessageException('invalid_message');
         }
         $reference = 'WX' . substr(hash('sha256', $channelId . '|' . $key), 0, 40);
-        $remark = $fields['付款方备注'] ?? null;
+        $remark = $fields[$remarkField] ?? null;
         return $this->record($reference, $cents, $timestamp, $remark === '' ? null : $remark);
     }
 
